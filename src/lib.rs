@@ -4,15 +4,14 @@ pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
+    use crate::fasta_io::{reverse_complement, FastaReader};
+    use flate2::bufread::MultiGzDecoder;
+    use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};
-    use std::collections::HashMap;
-    use crate::fasta_io::{FastaReader, reverse_complement};
-    use flate2::bufread::MultiGzDecoder;
 
-    use crate::cseq_db;
+    use crate::cseq_db::{self, CompressedSeqDB};
     use crate::cseq_db::{Fragment, KMERSIZE};
-    
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -25,9 +24,7 @@ mod tests {
             let mut buf = Vec::<u8>::new();
             let _ = r.take(2).read_to_end(&mut buf);
             if buf == [0x1F_u8, 0x8B_u8] {
-                log::info!(
-                    "input file detected as gz-compressed file",
-                );
+                log::info!("input file detected as gz-compressed file",);
                 is_gzfile = true;
             }
         }
@@ -54,7 +51,7 @@ mod tests {
             let rec = rec.unwrap();
             let seqname = String::from_utf8_lossy(&rec.id).into_owned();
             seqs.insert(seqname, rec.seq.clone());
-        };
+        }
         seqs
     }
 
@@ -63,35 +60,33 @@ mod tests {
         let seqs = load_seqs();
         let mut csdb = cseq_db::CompressedSeqDB::new("test/test_data/test_seqs.fa".to_string());
         let _ = csdb.load_seqs();
-        print!("test");
+        //println!("test");
         for seq in csdb.seqs.iter() {
-            println!();
-            println!("{}", seq.name);
-            for shmr in seq.shmmrs.iter() {
-                println!("{}", shmr);
-            }
+            //println!();
+            //println!("{}", seq.name);
             let mut reconstruct_seq = <Vec<u8>>::new();
             let mut p = 0;
             for frg_id in seq.seq_frags.iter() {
-                println!("{}:{}", frg_id, csdb.frags[*frg_id as usize]);
+                //println!("{}:{}", frg_id, csdb.frags[*frg_id as usize]);
                 match csdb.frags.get(*frg_id as usize).unwrap() {
                     Fragment::Prefix(b) => {
                         reconstruct_seq.extend_from_slice(&b[..]);
-                        println!("p: {} {}", p, p+b.len());
+                        //println!("p: {} {}", p, p + b.len());
                         p += b.len();
                     }
                     Fragment::Suffix(b) => {
                         reconstruct_seq.extend_from_slice(&b[..]);
-                        println!("p: {} {}", p, p+b.len());
+                        //println!("p: {} {}", p, p + b.len());
                         p += b.len();
                     }
                     Fragment::Internal(b) => {
                         reconstruct_seq.extend_from_slice(&b[KMERSIZE as usize..]);
-                        println!("p: {} {}", p, p+b.len());
+                        //println!("p: {} {}", p, p + b.len());
                         p += b.len();
                     }
                     Fragment::AlnSegments((frg_id, reverse, a)) => {
-                        if let Fragment::Internal(base_seq) = csdb.frags.get(*frg_id as usize).unwrap()
+                        if let Fragment::Internal(base_seq) =
+                            csdb.frags.get(*frg_id as usize).unwrap()
                         {
                             let mut bs = base_seq.clone();
                             if *reverse == true {
@@ -99,17 +94,17 @@ mod tests {
                             }
                             let seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
                             reconstruct_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
-                        println!("p: {} {}", p, p+seq.len());
-                        p += seq.len();
+                            //println!("p: {} {}", p, p + seq.len());
+                            p += seq.len();
                         }
                     }
                 }
             }
             let orig_seq = seqs.get(&seq.name).unwrap();
-            if reconstruct_seq != *orig_seq  {
-                println!("{}", seq.name);
-                println!("{:?}", reconstruct_seq);
-                println!("{:?}", orig_seq);
+            if reconstruct_seq != *orig_seq {
+                //println!("{}", seq.name);
+                //println!("{:?}", reconstruct_seq);
+                //println!("{:?}", orig_seq);
                 for i in 0..reconstruct_seq.len() {
                     if orig_seq[i] != reconstruct_seq[i] {
                         println!("{} {} {} X", i, orig_seq[i], reconstruct_seq[i]);
@@ -119,6 +114,19 @@ mod tests {
                 }
             };
             assert_eq!(reconstruct_seq, *orig_seq);
+
+            let shmmrs = seq.shmmrs.clone();
+            let mut px: u128 = 0;
+            for shmmr in shmmrs.into_iter() {
+                let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
+                //println!("spr {:?}", shmmr_pair);
+                if csdb.frag_map.contains_key(&shmmr_pair) {
+                    for (fid, sid) in csdb.frag_map.get(&shmmr_pair).unwrap() {
+                        println!("matches: {} {} {}", seq.id, fid, sid);
+                    }
+                }
+                px = (shmmr.x >> 8) as u128;
+            }
         }
     }
 }

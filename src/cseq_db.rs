@@ -40,7 +40,7 @@ impl<'a> fmt::Display for Fragment {
 
 pub type ShmmrPair = u128;
 pub type Fragments = Vec<Fragment>;
-pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<u32>>;
+pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32)>>;
 
 pub struct CompressedSeq {
     pub name: String,
@@ -141,7 +141,7 @@ impl CompressedSeqDB {
         let mut px: u128 = 0;
 
         for shmmr in shmmrs.iter() {
-            let next_pos = shmmr.pos()+1;
+            let next_pos = shmmr.pos() + 1;
             if pos == 0 {
                 let frg = seq[pos as usize..next_pos as usize].to_vec();
                 self.frags.push(Fragment::Prefix(frg));
@@ -153,11 +153,12 @@ impl CompressedSeqDB {
             }
             let mut aligned = false;
             let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
-            
+            //println!("shmmr_pair: {} {} {:?}",px,  shmmr.x >> 8, shmmr_pair);
+
             if try_compress && self.frag_map.contains_key(&shmmr_pair) {
                 let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
                 for t_frg_id in e.iter() {
-                    let base_frg = self.frags.get(*t_frg_id as usize).unwrap();
+                    let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
                     if let Fragment::Internal(b) = base_frg {
                         let base_frg = b;
                         let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
@@ -166,9 +167,9 @@ impl CompressedSeqDB {
                             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
                             let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
                             self.frags
-                                .push(Fragment::AlnSegments((*t_frg_id, false, aln_segs))); // false for the original strand
+                                .push(Fragment::AlnSegments((t_frg_id.0, false, aln_segs))); // false for the original strand
                             seq_frags.push(frg_id);
-                            e.push(frg_id);
+                            e.push((frg_id, id));
                             frg_id += 1;
                             aligned = true;
                             break; // we aligned to the first one of the fragments
@@ -185,7 +186,7 @@ impl CompressedSeqDB {
                 if self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
-                        let base_frg = self.frags.get(*t_frg_id as usize).unwrap();
+                        let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
                         if let Fragment::Internal(b) = base_frg {
                             let base_frg = &reverse_complement(&b);
                             let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
@@ -194,9 +195,9 @@ impl CompressedSeqDB {
                                 let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
                                 let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
                                 self.frags
-                                    .push(Fragment::AlnSegments((*t_frg_id, true, aln_segs))); // true for reverse complement
+                                    .push(Fragment::AlnSegments((t_frg_id.0, true, aln_segs))); // true for reverse complement
                                 seq_frags.push(frg_id);
-                                e.push(frg_id);
+                                e.push((frg_id, id));
                                 frg_id += 1;
                                 aligned = true;
                                 break; // we aligned to the first one of the fragments
@@ -213,8 +214,11 @@ impl CompressedSeqDB {
                 self.frags.push(Fragment::Internal(frg));
                 seq_frags.push(frg_id);
                 let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
-                let e = self.frag_map.entry(shmmr_pair).or_insert(Vec::<u32>::new());
-                e.push(frg_id);
+                let e = self
+                    .frag_map
+                    .entry(shmmr_pair)
+                    .or_insert(Vec::<(u32, u32)>::new());
+                e.push((frg_id, id));
                 frg_id += 1;
             };
 
