@@ -1,6 +1,7 @@
 use crate::fasta_io::{reverse_complement, FastaReader};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
 use flate2::bufread::MultiGzDecoder;
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
@@ -131,16 +132,17 @@ impl CompressedSeqDB {
         &mut self,
         name: String,
         id: u32,
-        seq: Vec<u8>,
+        seq: &Vec<u8>,
+        shmmrs: Vec<MM128>,
         try_compress: bool,
     ) -> CompressedSeq {
-        let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
+        //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut pos = 0;
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
         let mut px: u128 = 0;
 
-        for shmmr in shmmrs.iter() {
+        for shmmr in shmmrs.iter() { // TODO: parallelize this
             let next_pos = shmmr.pos() + 1;
             if pos == 0 {
                 let frg = seq[pos as usize..next_pos as usize].to_vec();
@@ -274,13 +276,29 @@ impl CompressedSeqDB {
 
         let mut fastx_reader = FastaReader::new(fastx_buf, &self.filepath)?;
         let mut sid = 0;
+
+        let mut seqs: Vec<(u32, String, Vec<u8>)> = Vec::new();
         while let Some(rec) = fastx_reader.next_rec() {
             let rec = rec.unwrap();
             let seqname = String::from_utf8_lossy(&rec.id).into_owned();
-            let compress_seq = self.seq_to_compressed(seqname, sid, rec.seq, true);
-            self.seqs.push(compress_seq);
+            seqs.push((sid, seqname, rec.seq));
             sid += 1;
         }
+
+        let all_shmmers = seqs
+            .par_iter()
+            .map(|(sid, seqname, seq)| {
+                let shmmrs = sequence_to_shmmrs(*sid, &seq, 80, KMERSIZE, 4);
+                (*sid, shmmrs)
+            })
+            .collect::<Vec<(u32, Vec<MM128>)>>();
+
+        seqs.iter()
+            .zip(all_shmmers)
+            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
+                let compress_seq = self.seq_to_compressed(seqname.clone(), *sid, seq, shmmrs, true);
+                self.seqs.push(compress_seq);
+            });
 
         Ok(())
     }
