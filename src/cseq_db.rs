@@ -132,7 +132,7 @@ impl CompressedSeqDB {
         name: String,
         id: u32,
         seq: Vec<u8>,
-        _try_compress: bool,
+        try_compress: bool,
     ) -> CompressedSeq {
         let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut pos = 0;
@@ -153,8 +153,8 @@ impl CompressedSeqDB {
             }
             let mut aligned = false;
             let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
-            //let e = self.frag_map.entry(shmmr_pair).or_insert(Vec::<u32>::new());
-            if self.frag_map.contains_key(&shmmr_pair) {
+            
+            if try_compress && self.frag_map.contains_key(&shmmr_pair) {
                 let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
                 for t_frg_id in e.iter() {
                     let base_frg = self.frags.get(*t_frg_id as usize).unwrap();
@@ -179,7 +179,7 @@ impl CompressedSeqDB {
                 }
             };
 
-            if !aligned {
+            if try_compress && !aligned {
                 // try reverse complement
                 let shmmr_pair = ((shmmr.x >> 8) as u128) << 64 | px;
                 if self.frag_map.contains_key(&shmmr_pair) {
@@ -208,7 +208,7 @@ impl CompressedSeqDB {
                 }
             };
 
-            if !aligned {
+            if !aligned || !try_compress {
                 let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
                 self.frags.push(Fragment::Internal(frg));
                 seq_frags.push(frg_id);
