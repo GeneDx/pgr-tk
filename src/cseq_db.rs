@@ -41,7 +41,7 @@ impl<'a> fmt::Display for Fragment {
 
 pub type ShmmrPair = u128;
 pub type Fragments = Vec<Fragment>;
-pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32)>>;
+pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32, u8)>>;
 
 pub struct CompressedSeq {
     pub name: String,
@@ -178,7 +178,7 @@ impl CompressedSeqDB {
                             self.frags
                                 .push(Fragment::AlnSegments((t_frg_id.0, false, aln_segs))); // false for the original strand
                             seq_frags.push(frg_id);
-                            e.push((frg_id, id, pos, next_pos));
+                            e.push((frg_id, id, pos, next_pos, 0));
                             frg_id += 1;
                             aligned = true;
                             break; // we aligned to the first one of the fragments
@@ -212,7 +212,7 @@ impl CompressedSeqDB {
                                 self.frags
                                     .push(Fragment::AlnSegments((t_frg_id.0, true, aln_segs))); // true for reverse complement
                                 seq_frags.push(frg_id);
-                                e.push((frg_id, id, pos, next_pos));
+                                e.push((frg_id, id, pos, next_pos, 1));
                                 frg_id += 1;
                                 aligned = true;
                                 break; // we aligned to the first one of the fragments
@@ -232,8 +232,8 @@ impl CompressedSeqDB {
                 let e = self
                     .frag_map
                     .entry(shmmr_pair)
-                    .or_insert(Vec::<(u32, u32, u32, u32)>::new());
-                e.push((frg_id, id, pos, next_pos));
+                    .or_insert(Vec::<(u32, u32, u32, u32, u8)>::new());
+                e.push((frg_id, id, pos, next_pos, 0));
                 frg_id += 1;
             };
 
@@ -325,6 +325,7 @@ impl CompressedSeqDB {
                                     Fragment::AlnSegments((t_frg_id.0, false, aln_segs)),
                                     bgn,
                                     end,
+                                    0
                                 ));
                                 aligned = true;
                                 break; // we aligned to the first one of the fragments
@@ -354,7 +355,7 @@ impl CompressedSeqDB {
                                         &deltas,
                                         m.end0 as usize,
                                         m.end1 as usize,
-                                        &frg,
+                                        &frg
                                     );
                                     /*
                                     if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
@@ -373,6 +374,7 @@ impl CompressedSeqDB {
                                         Fragment::AlnSegments((t_frg_id.0, true, aln_segs)),
                                         bgn,
                                         end,
+                                        1
                                     ));
                                     aligned = true;
                                     break; // we aligned to the first one of the fragments
@@ -388,7 +390,7 @@ impl CompressedSeqDB {
                     let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
                     let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
                     //assert!(frg.len() > KMERSIZE as usize);
-                    out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end));
+                    out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end, 0));
                 };
                 out_frag
             })
@@ -396,13 +398,13 @@ impl CompressedSeqDB {
 
         // TODO: parallize by sharding the key
         internal_frags.iter().for_each(|v| match v {
-            Some((shmmr, frg, bgn, end)) => {
+            Some((shmmr, frg, bgn, end, orientation)) => {
                 if !self.frag_map.contains_key(shmmr) {
                     self.frag_map
-                        .insert(*shmmr, Vec::<(u32, u32, u32, u32)>::new());
+                        .insert(*shmmr, Vec::<(u32, u32, u32, u32, u8)>::new());
                 }
                 let e = self.frag_map.get_mut(shmmr).unwrap();
-                e.push((frg_id, id, *bgn, *end));
+                e.push((frg_id, id, *bgn, *end, *orientation));
                 self.frags.push(frg.clone());
                 seq_frags.push(frg_id);
                 frg_id += 1;
