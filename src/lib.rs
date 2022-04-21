@@ -5,7 +5,7 @@ pub mod shmmrutils;
 #[cfg(test)]
 mod tests {
     use crate::fasta_io::{reverse_complement, FastaReader};
-    use crate::shmmrutils::{match_reads, DeltaPoint, MM128};
+    use crate::shmmrutils::{match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
     use std::collections::HashMap;
     use std::fs::File;
@@ -198,7 +198,6 @@ mod tests {
     }
     #[test]
     fn rc_match() {
-        let seqs = load_seqs();
         let mut csdb = cseq_db::CompressedSeqDB::new("test/test_data/test_rev.fa".to_string());
         let _ = csdb.load_seqs();
         let cs0 = csdb.seqs.get(0).unwrap();
