@@ -325,7 +325,7 @@ impl CompressedSeqDB {
                                     Fragment::AlnSegments((t_frg_id.0, false, aln_segs)),
                                     bgn,
                                     end,
-                                    0
+                                    0,
                                 ));
                                 aligned = true;
                                 break; // we aligned to the first one of the fragments
@@ -355,7 +355,7 @@ impl CompressedSeqDB {
                                         &deltas,
                                         m.end0 as usize,
                                         m.end1 as usize,
-                                        &frg
+                                        &frg,
                                     );
                                     /*
                                     if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
@@ -374,7 +374,7 @@ impl CompressedSeqDB {
                                         Fragment::AlnSegments((t_frg_id.0, true, aln_segs)),
                                         bgn,
                                         end,
-                                        1
+                                        1,
                                     ));
                                     aligned = true;
                                     break; // we aligned to the first one of the fragments
@@ -426,7 +426,81 @@ impl CompressedSeqDB {
         }
     }
 
-    pub fn load_seqs(&mut self) -> Result<(), std::io::Error> {
+    pub fn seq_to_index_parallel(
+        &mut self,
+        name: String,
+        id: u32,
+        shmmrs: Vec<MM128>,
+    ) -> CompressedSeq {
+        //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
+        let mut seq_frags = Vec::<u32>::new();
+        let mut frg_id = self.frags.len() as u32;
+
+        assert!(shmmrs.len() > 0);
+
+        seq_frags.push(frg_id);
+        frg_id += 1;
+
+        let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
+            .iter()
+            .zip(shmmrs[1..shmmrs.len()].iter())
+            .collect::<Vec<_>>();
+
+        let internal_frags = shmmr_pairs
+            .par_iter()
+            .map(|(shmmr0, shmmr1)| {
+                let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
+                let bgn = shmmr0.pos() + 1;
+                let end = shmmr1.pos() + 1;
+                let mut aligned = false;
+                let mut out_frag = None;
+
+                // try to find forward match first
+                if self.frag_map.contains_key(&shmmr_pair) {
+                    out_frag = Some((shmmr_pair, bgn, end, 0));
+                    aligned = true;
+                } else {
+                    let shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
+                    if self.frag_map.contains_key(&shmmr_pair) {
+                        out_frag = Some((shmmr_pair, bgn, end, 1));
+                        aligned = true;
+                    }
+                }
+                if !aligned {
+                    out_frag = Some((shmmr_pair, bgn, end, 0));
+                }
+                out_frag
+            })
+            .collect::<Vec<_>>();
+
+        // TODO: parallize by sharding the key
+        internal_frags.iter().for_each(|v| match v {
+            Some((shmmr, bgn, end, orientation)) => {
+                if !self.frag_map.contains_key(shmmr) {
+                    self.frag_map
+                        .insert(*shmmr, Vec::<(u32, u32, u32, u32, u8)>::new());
+                }
+                let e = self.frag_map.get_mut(shmmr).unwrap();
+                e.push((frg_id, id, *bgn, *end, *orientation));
+                seq_frags.push(frg_id);
+                frg_id += 1;
+            }
+            None => {}
+        });
+
+        // suffix
+        //let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
+        seq_frags.push(frg_id);
+
+        CompressedSeq {
+            name,
+            id,
+            shmmrs,
+            seq_frags,
+        }
+    }
+
+    fn read_seqs(&mut self) -> Result<Vec<(u32, String, Vec<u8>)>, std::io::Error> {
         let file = File::open(&self.filepath)?;
         let mut reader = BufReader::new(file);
         let mut is_gzfile = false;
@@ -470,7 +544,13 @@ impl CompressedSeqDB {
             seqs.push((sid, seqname, rec.seq));
             sid += 1;
         }
+        Ok(seqs)
+    }
 
+    fn get_shmmrs_from_seqs(
+        &mut self,
+        seqs: &Vec<(u32, String, Vec<u8>)>,
+    ) -> Vec<(u32, Vec<MM128>)> {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _seqname, seq)| {
@@ -478,12 +558,33 @@ impl CompressedSeqDB {
                 (*sid, shmmrs)
             })
             .collect::<Vec<(u32, Vec<MM128>)>>();
+        all_shmmers
+    }
+
+    pub fn load_seqs(&mut self) -> Result<(), std::io::Error> {
+        let seqs = self.read_seqs()?;
+
+        let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
 
         seqs.iter()
             .zip(all_shmmers)
             .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
                 let compress_seq =
                     self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
+                self.seqs.push(compress_seq);
+            });
+
+        Ok(())
+    }
+    pub fn load_index(&mut self) -> Result<(), std::io::Error> {
+        let seqs = self.read_seqs()?;
+
+        let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
+
+        seqs.iter()
+            .zip(all_shmmers)
+            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
+                let compress_seq = self.seq_to_index_parallel(seqname.clone(), *sid, shmmrs);
                 self.seqs.push(compress_seq);
             });
 
