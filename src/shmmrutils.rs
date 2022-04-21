@@ -36,7 +36,7 @@ fn track_delta_point(
     let mut k = k_final;
     while d > 0 {
         let dpt = delta_pts.get(&(d, k)).unwrap();
-        if dpt.x > s && dpt.x < e {
+        if dpt.x >= s && dpt.x <= e {
             dpts.push(*dpt);
         }
         d -= 1;
@@ -132,9 +132,7 @@ pub fn match_reads(
             x1 = x;
             y1 = y;
 
-            while (x as usize) < len0 - 1
-                && (y as usize) < len1 - 1
-                && seq0[x as usize] == seq1[y as usize]
+            while (x as usize) < len0 && (y as usize) < len1 && seq0[x as usize] == seq1[y as usize]
             {
                 x += 1;
                 y += 1;
@@ -148,8 +146,10 @@ pub fn match_reads(
                 }
                 // we set the ends here to avoid bad sequences
                 // this way, we are sure that, at least, 8 bases are aligned
+                /*
                 rtn.end0 = x;
                 rtn.end1 = y;
+                */
             }
 
             if (x - x1) > longest_match {
@@ -163,10 +163,12 @@ pub fn match_reads(
             if (x + y) as i32 > best_m {
                 best_m = (x + y) as i32;
             }
-            if (x as usize) >= len0 - 1 || (y as usize) >= len1 - 1 {
+            if (x as usize) >= len0 || (y as usize) >= len1 {
                 matched = true;
                 d_final = d;
                 k_final = k;
+                rtn.end0 = x;
+                rtn.end1 = y;
                 break;
             }
         }
@@ -367,11 +369,25 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
 }
 
 pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Vec<MM128> {
+    /*
     let base2bits: [u64; 256] = [
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 4, 4,
+        4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    ];
+    */
+    // alternative encode that may have better hash behavior A, C, G, T = 0b01, 0b00, 0b10, 0b11 
+    let base2bits: [u64; 256] = [
+        1, 0, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 1, 4, 0, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 1, 4, 0, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -403,18 +419,18 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
         // println!("C {} {} {}", seq[pos], pos, c);
         if c < 4 {
             fmmer.0 <<= 1;
-            fmmer.0 |= c & 0x1;
+            fmmer.0 |= c & 0b01;
             fmmer.0 &= mask;
             fmmer.1 <<= 1;
-            fmmer.1 |= (c & 0x2) >> 1;
+            fmmer.1 |= (c & 0b10) >> 1;
             fmmer.1 &= mask;
 
             let rc = 0x3 ^ c;
             rmmer.0 >>= 1;
-            rmmer.0 |= (rc & 0x1) << shift;
+            rmmer.0 |= (rc & 0b01) << shift;
             rmmer.0 &= mask;
             rmmer.1 >>= 1;
-            rmmer.1 |= ((rc & 0x2) >> 1) << shift;
+            rmmer.1 |= ((rc & 0b10) >> 1) << shift;
             rmmer.1 &= mask;
         }
         if fmmer == rmmer {

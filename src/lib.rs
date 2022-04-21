@@ -9,8 +9,9 @@ mod tests {
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};
+    use crate::shmmrutils::{match_reads, DeltaPoint};
 
-    use crate::cseq_db::{self, CompressedSeqDB};
+    use crate::cseq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
     use crate::cseq_db::{Fragment, KMERSIZE};
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
@@ -65,24 +66,24 @@ mod tests {
             //println!();
             //println!("{}", seq.name);
             let mut reconstruct_seq = <Vec<u8>>::new();
-            let mut p = 0;
+            let mut _p = 0;
             for frg_id in seq.seq_frags.iter() {
                 //println!("{}:{}", frg_id, csdb.frags[*frg_id as usize]);
                 match csdb.frags.get(*frg_id as usize).unwrap() {
                     Fragment::Prefix(b) => {
                         reconstruct_seq.extend_from_slice(&b[..]);
                         //println!("p: {} {}", p, p + b.len());
-                        p += b.len();
+                        _p += b.len();
                     }
                     Fragment::Suffix(b) => {
                         reconstruct_seq.extend_from_slice(&b[..]);
                         //println!("p: {} {}", p, p + b.len());
-                        p += b.len();
+                        _p += b.len();
                     }
                     Fragment::Internal(b) => {
                         reconstruct_seq.extend_from_slice(&b[KMERSIZE as usize..]);
                         //println!("p: {} {}", p, p + b.len());
-                        p += b.len();
+                        _p += b.len();
                     }
                     Fragment::AlnSegments((frg_id, reverse, a)) => {
                         if let Fragment::Internal(base_seq) =
@@ -95,7 +96,7 @@ mod tests {
                             let seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
                             reconstruct_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
                             //println!("p: {} {}", p, p + seq.len());
-                            p += seq.len();
+                            _p += seq.len();
                         }
                     }
                 }
@@ -129,4 +130,50 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn reconstruct_test1() {
+        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT".as_bytes().to_vec();
+        let frg = "TTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATTT".as_bytes().to_vec();
+        //let frg = "TTATATTTATTTATATATATTTATATAGTTTATATATATATTTATATATAAATATATA".as_bytes().to_vec();
+        let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
+        if let Some(m) = m {
+            let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
+            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
+            let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
+            if frg != re_seq || true {
+                println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
+                println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
+                println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
+                println!("{:?}", deltas);
+                println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(&base_frg, &aln_segs) ));
+                println!("{:?}", aln_segs);
+            }
+            assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
+        }
+    }
+
+
+    #[test]
+    fn reconstruct_test2() {
+        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT".as_bytes().to_vec();
+        let frg = "TTTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATT".as_bytes().to_vec();
+        //let frg = "TTATATTTATTTATATATATTTATATAGTTTATATATATATTTATATATAAATATATA".as_bytes().to_vec();
+        let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
+        if let Some(m) = m {
+            let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
+            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
+            let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
+            if frg != re_seq || true {
+                println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
+                println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
+                println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
+                println!("{:?}", deltas);
+                println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(&base_frg, &aln_segs) ));
+                println!("{:?}", aln_segs);
+            }
+            assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
+        }
+
+    }    
 }

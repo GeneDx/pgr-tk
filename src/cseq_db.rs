@@ -59,7 +59,8 @@ pub struct CompressedSeqDB {
 
 pub fn deltas_to_aln_segs(
     deltas: &Vec<DeltaPoint>,
-    base_frg: &Vec<u8>,
+    endx: usize,
+    endy: usize,
     frg: &Vec<u8>,
 ) -> Vec<AlnSegment> {
     let mut aln_segs = Vec::<AlnSegment>::new();
@@ -69,9 +70,13 @@ pub fn deltas_to_aln_segs(
         return aln_segs;
     }
 
-    let mut x = base_frg.len();
-    let mut y;
-    // note: x - y = k
+    let mut x = endx;
+    let mut y = endy;
+
+    for yy in (y..frg.len()).rev() {
+        aln_segs.push(AlnSegment::Insertion(frg[yy]));
+    }
+
     for d in deltas.iter() {
         let x1 = d.x as usize;
         let y1 = d.y as usize;
@@ -164,10 +169,12 @@ impl CompressedSeqDB {
                     if let Fragment::Internal(b) = base_frg {
                         let base_frg = b;
                         let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
+                        assert!(frg.len() > KMERSIZE as usize);
                         let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                         if let Some(m) = m {
                             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                            let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
+                            let aln_segs =
+                                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
                             self.frags
                                 .push(Fragment::AlnSegments((t_frg_id.0, false, aln_segs))); // false for the original strand
                             seq_frags.push(frg_id);
@@ -192,10 +199,16 @@ impl CompressedSeqDB {
                         if let Fragment::Internal(b) = base_frg {
                             let base_frg = &reverse_complement(&b);
                             let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
+                            //assert!(frg.len() > KMERSIZE as usize);
                             let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                             if let Some(m) = m {
                                 let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                                let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
+                                let aln_segs = deltas_to_aln_segs(
+                                    &deltas,
+                                    m.end0 as usize,
+                                    m.end1 as usize,
+                                    &frg,
+                                );
                                 self.frags
                                     .push(Fragment::AlnSegments((t_frg_id.0, true, aln_segs))); // true for reverse complement
                                 seq_frags.push(frg_id);
@@ -249,10 +262,8 @@ impl CompressedSeqDB {
         try_compress: bool,
     ) -> CompressedSeq {
         //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
-        let mut pos = 0;
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
-        let mut px: u128 = 0;
 
         assert!(shmmrs.len() > 0);
         // prefix
@@ -276,18 +287,37 @@ impl CompressedSeqDB {
                 let mut aligned = false;
                 let mut out_frag = None;
 
-                if try_compress && self.frag_map.contains_key(&shmmr_pair) {
+                if end - bgn > 64 && try_compress && self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
                         let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
                         if let Fragment::Internal(b) = base_frg {
                             let base_frg = b;
+                            //assert!(base_frg.len() > KMERSIZE as usize);
                             let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+
+                            //assert!(frg.len() > KMERSIZE as usize);
                             let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                             if let Some(m) = m {
                                 let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                                let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
+                                let aln_segs = deltas_to_aln_segs(
+                                    &deltas,
+                                    m.end0 as usize,
+                                    m.end1 as usize,
+                                    &frg,
+                                );
+                                /*
+                                if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
+                                    println!("{} {}", String::from_utf8_lossy(base_frg), base_frg.len());
+                                    println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
+                                    println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
 
+                                    println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(base_frg, &aln_segs) ));
+                                    println!("{:?}", aln_segs);
+                                    println!("{:?}", deltas);
+                                }
+                                assert_eq!(frg, reconstruct_seq_from_aln_segs(base_frg, &aln_segs));
+                                 */
                                 out_frag = Some((
                                     shmmr_pair,
                                     Fragment::AlnSegments((t_frg_id.0, false, aln_segs)),
@@ -301,7 +331,7 @@ impl CompressedSeqDB {
                     }
                 };
 
-                if try_compress && !aligned {
+                if end - bgn > 64 && try_compress && !aligned {
                     // try reverse complement
                     let shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
                     if self.frag_map.contains_key(&shmmr_pair) {
@@ -310,11 +340,26 @@ impl CompressedSeqDB {
                             let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
                             if let Fragment::Internal(b) = base_frg {
                                 let base_frg = &reverse_complement(&b);
+                                //assert!(base_frg.len() > KMERSIZE as usize);
                                 let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+                                //assert!(frg.len() > KMERSIZE as usize);
                                 let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                                 if let Some(m) = m {
                                     let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                                    let aln_segs = deltas_to_aln_segs(&deltas, base_frg, &frg);
+                                    let aln_segs = deltas_to_aln_segs(
+                                        &deltas,
+                                        m.end0 as usize,
+                                        m.end1 as usize,
+                                        &frg,
+                                    );
+                                    /*
+                                    if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
+                                        println!("{}", String::from_utf8_lossy(base_frg));
+                                        println!("{}", String::from_utf8_lossy(&frg));
+                                        println!("{:?}", aln_segs);
+                                    }
+                                    assert_eq!(frg, reconstruct_seq_from_aln_segs(base_frg, &aln_segs));
+                                    */
                                     out_frag = Some((
                                         shmmr_pair,
                                         Fragment::AlnSegments((t_frg_id.0, true, aln_segs)),
@@ -332,6 +377,7 @@ impl CompressedSeqDB {
                 if !aligned || !try_compress {
                     let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
                     let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+                    //assert!(frg.len() > KMERSIZE as usize);
                     out_frag = Some((shmmr_pair, Fragment::Internal(frg)));
                 };
                 out_frag
@@ -413,7 +459,7 @@ impl CompressedSeqDB {
 
         let all_shmmers = seqs
             .par_iter()
-            .map(|(sid, seqname, seq)| {
+            .map(|(sid, _seqname, seq)| {
                 let shmmrs = sequence_to_shmmrs(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
