@@ -426,12 +426,7 @@ impl CompressedSeqDB {
         }
     }
 
-    pub fn seq_to_index_parallel(
-        &mut self,
-        name: String,
-        id: u32,
-        shmmrs: Vec<MM128>,
-    ) -> CompressedSeq {
+    pub fn seq_to_index(&mut self, name: String, id: u32, shmmrs: Vec<MM128>) -> CompressedSeq {
         //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
@@ -580,11 +575,16 @@ impl CompressedSeqDB {
         let seqs = self.read_seqs()?;
 
         let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
+        let seq_names = seqs
+            .iter()
+            .map(|(sid, n, s)| n.clone())
+            .collect::<Vec<String>>();
 
-        seqs.iter()
+        seq_names
+            .iter()
             .zip(all_shmmers)
-            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
-                let compress_seq = self.seq_to_index_parallel(seqname.clone(), *sid, shmmrs);
+            .for_each(|(seq_name, (sid, shmmrs))| {
+                let compress_seq = self.seq_to_index(seq_name.clone(), sid, shmmrs);
                 self.seqs.push(compress_seq);
             });
 
