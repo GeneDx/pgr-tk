@@ -5,7 +5,7 @@ pub mod shmmrutils;
 #[cfg(test)]
 mod tests {
     use crate::fasta_io::{reverse_complement, FastaReader};
-    use crate::shmmrutils::{match_reads, DeltaPoint};
+    use crate::shmmrutils::{match_reads, DeltaPoint, MM128};
     use flate2::bufread::MultiGzDecoder;
     use std::collections::HashMap;
     use std::fs::File;
@@ -115,20 +115,28 @@ mod tests {
                 }
             };
             assert_eq!(reconstruct_seq, *orig_seq);
-
+            /*
             let shmmrs = seq.shmmrs.clone();
             let mut px: u128 = 0;
             for shmmr in shmmrs.into_iter() {
                 let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
                 //println!("spr {:?}", shmmr_pair);
                 if csdb.frag_map.contains_key(&shmmr_pair) {
-                    for (fid, sid) in csdb.frag_map.get(&shmmr_pair).unwrap() {
-                        println!("matches: {} {} {}", seq.id, fid, sid);
+                    for (fid, sid, bgn, end) in csdb.frag_map.get(&shmmr_pair).unwrap() {
+                        println!("matches: {} {} {} {} {}", shmmr_pair, fid, sid, bgn, end);
                     }
                 }
                 px = (shmmr.x >> 8) as u128;
             }
+            */
         }
+        /*
+        for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
+            for ids in frg_ids {
+                println!("M {:032X} {} {} {} {}", shmmr_pair, ids.0, ids.1, ids.2, ids.3);
+            }
+        }
+        */
     }
 
     #[test]
@@ -187,5 +195,30 @@ mod tests {
             }
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
+    }
+    #[test]
+    fn rc_match() {
+        let seqs = load_seqs();
+        let mut csdb = cseq_db::CompressedSeqDB::new("test/test_data/test_rev.fa".to_string());
+        let _ = csdb.load_seqs();
+        let cs0 = csdb.seqs.get(0).unwrap();
+        let cs1 = csdb.seqs.get(1).unwrap();
+        let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8 ).collect::<Vec<u64>>();
+        let shmmr1 = cs1.shmmrs.iter().rev().map(|m| m.x >> 8 ).collect::<Vec<u64>>();
+        assert!(shmmr0.len()>0);
+        /* 
+        for seq in csdb.seqs {
+            for shmmr in seq.shmmrs {
+                println!("S {} {}", seq.id, shmmr.x >> 8);
+            }
+        }
+        for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
+            for ids in frg_ids {
+                println!("M {:032X} {} {} {} {}", shmmr_pair, ids.0, ids.1, ids.2, ids.3);
+            }
+        }
+        */
+        assert_eq!(shmmr0, shmmr1);
+
     }
 }

@@ -216,7 +216,7 @@ pub fn match_reads(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct MM128 {
     pub x: u64,
     pub y: u64,
@@ -369,25 +369,11 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
 }
 
 pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Vec<MM128> {
-    /*
     let base2bits: [u64; 256] = [
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-    ];
-    */
-    // alternative encode that may have better hash behavior A, C, G, T = 0b01, 0b00, 0b10, 0b11
-    let base2bits: [u64; 256] = [
-        1, 0, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 1, 4, 0, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4,
-        4, 4, 4, 4, 4, 4, 4, 1, 4, 0, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -412,9 +398,10 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
         y: u64::MAX,
     };
     loop {
-        if pos >= seq.len() {
+        if pos >= seq.len() as usize {
             break;
         }
+
         let c = base2bits[seq[pos] as usize];
         // println!("C {} {} {}", seq[pos], pos, c);
         if c < 4 {
@@ -445,9 +432,12 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
         if rmmer.0 < fmmer.0 {
             forward = false;
         }
+
         let mmer_hash = match forward {
-            true => u64hash(fmmer.0) ^ u64hash(fmmer.1) ^ 0x0,
-            false => u64hash(rmmer.0) ^ u64hash(rmmer.1) ^ 0x0,
+            true => u64hash(fmmer.0) ^ u64hash(fmmer.1 ^ 0xAD12CF59),
+            false => u64hash(rmmer.0) ^ u64hash(rmmer.1 ^ 0xAD12CF59),
+            //true => u64hash(fmmer.0) ^ u64hash(fmmer.1) ^ 0x0,
+            //false => u64hash(rmmer.0) ^ u64hash(rmmer.1) ^ 0x0,
         };
         let strand: u64 = if forward { 0 } else { 1 };
         let m = MM128 {
@@ -455,7 +445,7 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
             y: (rid as u64) << 32 | (pos as u64) << 1 | strand,
         };
         rbuf.push(m);
-        // println!("MM {} {} {} {}", rid, m, fmmer.0, fmmer.1);
+        //println!("mdist: {}", mdist);
         if mdist == (w - 1) as usize {
             min_mer = rbuf.get_min();
             for i in 0..rbuf.size as usize {
@@ -463,15 +453,15 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
                 if mm.x == min_mer.x {
                     shmmrs.push(mm);
                     min_mer = mm;
-                    // println!("MM0 {} {}", rid, mm);
+                    //println!("dgb1: {} {}", pos, mm.x >> 8);
                 }
             }
             mdist = pos - ((min_mer.y & 0xFFFFFFFF) >> 1) as usize;
             pos += 1;
             continue;
-        } else if m.x <= min_mer.x && pos >= w as usize {
+        } else if m.x <= min_mer.x && pos >= (w + k) as usize && pos < seq.len() - (w -k) as usize {
             shmmrs.push(m);
-            // println!("MM1 {} {}", rid, m);
+            //println!("dbg0: {} {}", pos, m.x >> 8);
             min_mer = m;
             mdist = 0;
             pos += 1;
