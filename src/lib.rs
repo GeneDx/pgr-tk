@@ -5,11 +5,11 @@ pub mod shmmrutils;
 #[cfg(test)]
 mod tests {
     use crate::fasta_io::{reverse_complement, FastaReader};
+    use crate::shmmrutils::{match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};
-    use crate::shmmrutils::{match_reads, DeltaPoint};
 
     use crate::cseq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
     use crate::cseq_db::{Fragment, KMERSIZE};
@@ -133,8 +133,12 @@ mod tests {
 
     #[test]
     fn reconstruct_test1() {
-        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT".as_bytes().to_vec();
-        let frg = "TTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATTT".as_bytes().to_vec();
+        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT"
+            .as_bytes()
+            .to_vec();
+        let frg = "TTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATTT"
+            .as_bytes()
+            .to_vec();
         //let frg = "TTATATTTATTTATATATATTTATATAGTTTATATATATATTTATATATAAATATATA".as_bytes().to_vec();
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
@@ -146,18 +150,24 @@ mod tests {
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
                 println!("{:?}", deltas);
-                println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(&base_frg, &aln_segs) ));
+                println!(
+                    "{}",
+                    String::from_utf8_lossy(&reconstruct_seq_from_aln_segs(&base_frg, &aln_segs))
+                );
                 println!("{:?}", aln_segs);
             }
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
     }
 
-
     #[test]
     fn reconstruct_test2() {
-        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT".as_bytes().to_vec();
-        let frg = "TTTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATT".as_bytes().to_vec();
+        let base_frg = "TATTTATATTTATTTATATATATTTATATATTTATATATATATTTATATATAAATAT"
+            .as_bytes()
+            .to_vec();
+        let frg = "TTTTTTATTTTTTTAATTAATTAATTATTTATTTATTTATTTATTTATTTATTTATT"
+            .as_bytes()
+            .to_vec();
         //let frg = "TTATATTTATTTATATATATTTATATAGTTTATATATATATTTATATATAAATATATA".as_bytes().to_vec();
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
@@ -169,11 +179,13 @@ mod tests {
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
                 println!("{:?}", deltas);
-                println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(&base_frg, &aln_segs) ));
+                println!(
+                    "{}",
+                    String::from_utf8_lossy(&reconstruct_seq_from_aln_segs(&base_frg, &aln_segs))
+                );
                 println!("{:?}", aln_segs);
             }
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
-
-    }    
+    }
 }
