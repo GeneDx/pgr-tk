@@ -1,11 +1,11 @@
-use crate::fasta_io::{reverse_complement, FastaReader};
+use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
 use flate2::bufread::MultiGzDecoder;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader, Read};
 
 pub const KMERSIZE: u32 = 56;
 
@@ -18,6 +18,11 @@ pub enum AlnSegment {
     FullMatch,
     Match(u32, u32),
     Insertion(u8),
+}
+
+enum GZFastaReader {
+    GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
+    RegularFile(FastaReader<BufReader<BufReader<File>>>),
 }
 
 #[derive(Clone)]
@@ -51,7 +56,6 @@ pub struct CompressedSeq {
 }
 
 pub struct CompressedSeqDB {
-    pub filepath: String,
     pub seqs: Vec<CompressedSeq>,
     pub frag_map: ShmmrToFrags,
     pub frags: Fragments,
@@ -121,12 +125,11 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegme
 }
 
 impl CompressedSeqDB {
-    pub fn new(filepath: String) -> Self {
+    pub fn new() -> Self {
         let seqs = Vec::<CompressedSeq>::new();
         let frag_map = ShmmrToFrags::default();
         let frags = Vec::<Fragment>::new();
         CompressedSeqDB {
-            filepath,
             seqs,
             frag_map,
             frags,
@@ -495,8 +498,11 @@ impl CompressedSeqDB {
         }
     }
 
-    fn read_seqs(&mut self) -> Result<Vec<(u32, String, Vec<u8>)>, std::io::Error> {
-        let file = File::open(&self.filepath)?;
+    fn _read_seqs(
+        &mut self,
+        filepath: String,
+    ) -> Result<Vec<(u32, String, Vec<u8>)>, std::io::Error> {
+        let file = File::open(&filepath)?;
         let mut reader = BufReader::new(file);
         let mut is_gzfile = false;
         {
@@ -504,20 +510,17 @@ impl CompressedSeqDB {
             let mut buf = Vec::<u8>::new();
             let _ = r.take(2).read_to_end(&mut buf);
             if buf == [0x1F_u8, 0x8B_u8] {
-                log::info!(
-                    "input file: {} detected as gz-compressed file",
-                    self.filepath
-                );
+                log::info!("input file: {} detected as gz-compressed file", filepath);
                 is_gzfile = true;
             }
         }
         drop(reader);
 
-        let file = File::open(&self.filepath)?;
+        let file = File::open(&filepath)?;
         let mut reader = BufReader::new(file);
         let gz_buf = &mut BufReader::new(MultiGzDecoder::new(&mut reader));
 
-        let file = File::open(&self.filepath)?;
+        let file = File::open(&filepath)?;
         let reader = BufReader::new(file);
         let std_buf = &mut BufReader::new(reader);
 
@@ -529,17 +532,53 @@ impl CompressedSeqDB {
             std_buf
         };
 
-        let mut fastx_reader = FastaReader::new(fastx_buf, &self.filepath)?;
+        let fastx_reader = FastaReader::new(fastx_buf, &filepath)?;
         let mut sid = 0;
 
         let mut seqs: Vec<(u32, String, Vec<u8>)> = Vec::new();
-        while let Some(rec) = fastx_reader.next_rec() {
+        fastx_reader.for_each(|rec| {
             let rec = rec.unwrap();
             let seqname = String::from_utf8_lossy(&rec.id).into_owned();
             seqs.push((sid, seqname, rec.seq));
             sid += 1;
-        }
+        });
         Ok(seqs)
+    }
+
+    fn get_fastx_reader(&mut self, filepath: String) -> Result<GZFastaReader, std::io::Error> {
+        let file = File::open(&filepath)?;
+        let mut reader = BufReader::new(file);
+        let mut is_gzfile = false;
+        {
+            let r = reader.by_ref();
+            let mut buf = Vec::<u8>::new();
+            let _ = r.take(2).read_to_end(&mut buf);
+            if buf == [0x1F_u8, 0x8B_u8] {
+                log::info!("input file: {} detected as gz-compressed file", filepath);
+                is_gzfile = true;
+            }
+        }
+        drop(reader);
+
+        let file = File::open(&filepath)?;
+        let reader = BufReader::new(file);
+        let gz_buf = BufReader::new(MultiGzDecoder::new(reader));
+
+        let file = File::open(&filepath)?;
+        let reader = BufReader::new(file);
+        let std_buf = BufReader::new(reader);
+
+        if is_gzfile {
+            drop(std_buf);
+            Ok(GZFastaReader::GZFile(
+                FastaReader::new(gz_buf, &filepath).unwrap(),
+            ))
+        } else {
+            drop(gz_buf);
+            Ok(GZFastaReader::RegularFile(
+                FastaReader::new(std_buf, &filepath).unwrap(),
+            ))
+        }
     }
 
     fn get_shmmrs_from_seqs(
@@ -556,8 +595,58 @@ impl CompressedSeqDB {
         all_shmmers
     }
 
-    pub fn load_seqs(&mut self) -> Result<(), std::io::Error> {
-        let seqs = self.read_seqs()?;
+    fn load_seq_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
+        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut sid = 0;
+        loop {
+            let mut count = 0;
+            let mut end_ext_loop = false;
+            seqs.clear();
+
+            loop {
+                if let Some(rec) = reader.next() {
+                    let rec = rec.unwrap();
+                    let seqname = String::from_utf8_lossy(&rec.id).into_owned();
+                    seqs.push((sid, seqname, rec.seq));
+                    sid += 1;
+                } else {
+                    end_ext_loop = true;
+                    break;
+                }
+                count += 1;
+                if count > 128 {
+                    break;
+                }
+            }
+
+            let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
+            seqs.iter()
+                .zip(all_shmmers)
+                .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
+                    let compress_seq =
+                        self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
+                    self.seqs.push(compress_seq);
+                });
+            if end_ext_loop {
+                break;
+            }
+        }
+        ();
+    }
+
+    pub fn load_seqs(&mut self, filepath: String) -> Result<(), std::io::Error> {
+        match self.get_fastx_reader(filepath)? {
+            GZFastaReader::GZFile(reader) => self.load_seq_from_reader(&mut reader.into_iter()),
+
+            GZFastaReader::RegularFile(reader) => {
+                self.load_seq_from_reader(&mut reader.into_iter())
+            }
+        };
+
+        Ok(())
+        /*
+        let seqs = self.read_seqs(filepath)?;
+        //let fastx_reader = self.get_fastx_reader()?;
 
         let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
 
@@ -570,23 +659,61 @@ impl CompressedSeqDB {
             });
 
         Ok(())
+        */
     }
-    pub fn load_index(&mut self) -> Result<(), std::io::Error> {
-        let seqs = self.read_seqs()?;
 
-        let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
-        let seq_names = seqs
-            .iter()
-            .map(|(sid, n, s)| n.clone())
-            .collect::<Vec<String>>();
+    fn load_index_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
+        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut sid = 0;
+        loop {
+            let mut count = 0;
+            let mut end_ext_loop = false;
+            seqs.clear();
 
-        seq_names
-            .iter()
-            .zip(all_shmmers)
-            .for_each(|(seq_name, (sid, shmmrs))| {
-                let compress_seq = self.seq_to_index(seq_name.clone(), sid, shmmrs);
-                self.seqs.push(compress_seq);
-            });
+            loop {
+                if let Some(rec) = reader.next() {
+                    let rec = rec.unwrap();
+                    let seqname = String::from_utf8_lossy(&rec.id).into_owned();
+                    seqs.push((sid, seqname, rec.seq));
+                    sid += 1;
+                } else {
+                    end_ext_loop = true;
+                    break;
+                }
+                count += 1;
+                if count > 128 {
+                    break;
+                }
+            }
+
+            let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
+            let seq_names = seqs
+                .iter()
+                .map(|(_sid, n, _s)| n.clone())
+                .collect::<Vec<String>>();
+
+            seq_names
+                .iter()
+                .zip(all_shmmers)
+                .for_each(|(seq_name, (sid, shmmrs))| {
+                    let compress_seq = self.seq_to_index(seq_name.clone(), sid, shmmrs);
+                    self.seqs.push(compress_seq);
+                });
+            if end_ext_loop {
+                break;
+            }
+        }
+        ();
+    }
+
+    pub fn load_index(&mut self, filepath: String) -> Result<(), std::io::Error> {
+        match self.get_fastx_reader(filepath)? {
+            GZFastaReader::GZFile(reader) => self.load_index_from_reader(&mut reader.into_iter()),
+
+            GZFastaReader::RegularFile(reader) => {
+                self.load_index_from_reader(&mut reader.into_iter())
+            }
+        };
 
         Ok(())
     }

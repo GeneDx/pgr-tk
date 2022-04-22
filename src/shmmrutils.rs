@@ -459,7 +459,8 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
             mdist = pos - ((min_mer.y & 0xFFFFFFFF) >> 1) as usize;
             pos += 1;
             continue;
-        } else if m.x <= min_mer.x && pos >= (w + k) as usize && pos < seq.len() - (w -k) as usize {
+        } else if m.x <= min_mer.x && pos >= (w + k) as usize && pos < seq.len() - (w - k) as usize
+        {
             shmmrs.push(m);
             //println!("dbg0: {} {}", pos, m.x >> 8);
             min_mer = m;

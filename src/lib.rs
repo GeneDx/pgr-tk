@@ -57,10 +57,17 @@ mod tests {
     }
 
     #[test]
+    pub fn gz_file_read_test() {
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
+        println!("{:?}", csdb.seqs[0].seq_frags);
+    }
+
+    #[test]
     fn load_seq_test() {
         let seqs = load_seqs();
-        let mut csdb = cseq_db::CompressedSeqDB::new("test/test_data/test_seqs.fa".to_string());
-        let _ = csdb.load_seqs();
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
         //println!("test");
         for seq in csdb.seqs.iter() {
             //println!();
@@ -198,14 +205,19 @@ mod tests {
     }
     #[test]
     fn rc_match() {
-        let mut csdb = cseq_db::CompressedSeqDB::new("test/test_data/test_rev.fa".to_string());
-        let _ = csdb.load_seqs();
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_seqs("test/test_data/test_rev.fa".to_string());
         let cs0 = csdb.seqs.get(0).unwrap();
         let cs1 = csdb.seqs.get(1).unwrap();
-        let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8 ).collect::<Vec<u64>>();
-        let shmmr1 = cs1.shmmrs.iter().rev().map(|m| m.x >> 8 ).collect::<Vec<u64>>();
-        assert!(shmmr0.len()>0);
-        /* 
+        let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
+        let shmmr1 = cs1
+            .shmmrs
+            .iter()
+            .rev()
+            .map(|m| m.x >> 8)
+            .collect::<Vec<u64>>();
+        assert!(shmmr0.len() > 0);
+        /*
         for seq in csdb.seqs {
             for shmmr in seq.shmmrs {
                 println!("S {} {}", seq.id, shmmr.x >> 8);
@@ -218,6 +230,5 @@ mod tests {
         }
         */
         assert_eq!(shmmr0, shmmr1);
-
     }
 }
