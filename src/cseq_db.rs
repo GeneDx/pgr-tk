@@ -53,6 +53,7 @@ pub struct CompressedSeq {
     pub id: u32,
     pub shmmrs: Vec<MM128>,
     pub seq_frags: Vec<u32>,
+    pub len: usize,
 }
 
 pub struct CompressedSeqDB {
@@ -253,6 +254,7 @@ impl CompressedSeqDB {
             id,
             shmmrs,
             seq_frags,
+            len: seq.len(),
         }
     }
 
@@ -426,10 +428,17 @@ impl CompressedSeqDB {
             id,
             shmmrs,
             seq_frags,
+            len: seq.len(),
         }
     }
 
-    pub fn seq_to_index(&mut self, name: String, id: u32, shmmrs: Vec<MM128>) -> CompressedSeq {
+    pub fn seq_to_index(
+        &mut self,
+        name: String,
+        id: u32,
+        seqlen: usize,
+        shmmrs: Vec<MM128>,
+    ) -> CompressedSeq {
         //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
@@ -495,6 +504,7 @@ impl CompressedSeqDB {
             id,
             shmmrs,
             seq_frags,
+            len: seqlen,
         }
     }
 
@@ -689,14 +699,14 @@ impl CompressedSeqDB {
             let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
             let seq_names = seqs
                 .iter()
-                .map(|(_sid, n, _s)| n.clone())
-                .collect::<Vec<String>>();
+                .map(|(_sid, n, s)| (n.clone(), s.len()))
+                .collect::<Vec<(String, usize)>>();
 
             seq_names
                 .iter()
                 .zip(all_shmmers)
-                .for_each(|(seq_name, (sid, shmmrs))| {
-                    let compress_seq = self.seq_to_index(seq_name.clone(), sid, shmmrs);
+                .for_each(|((seq_name, seqlen), (sid, shmmrs))| {
+                    let compress_seq = self.seq_to_index(seq_name.clone(), sid, *seqlen, shmmrs);
                     self.seqs.push(compress_seq);
                 });
             if end_ext_loop {
