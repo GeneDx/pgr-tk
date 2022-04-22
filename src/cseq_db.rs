@@ -443,7 +443,16 @@ impl CompressedSeqDB {
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
-        assert!(shmmrs.len() > 0);
+        //assert!(shmmrs.len() > 0);
+        if shmmrs.len() == 0 {
+            return CompressedSeq {
+                name,
+                id,
+                shmmrs,
+                seq_frags,
+                len: seqlen,
+            }
+        }
 
         seq_frags.push(frg_id);
         frg_id += 1;
