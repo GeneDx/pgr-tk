@@ -45,7 +45,7 @@ impl<'a> fmt::Display for Fragment {
     }
 }
 
-pub type ShmmrPair = u128;
+pub type ShmmrPair = (u64, u64);
 pub type Fragments = Vec<Fragment>;
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32, u8)>>;
 
@@ -150,7 +150,7 @@ impl CompressedSeqDB {
         let mut pos = 0;
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
-        let mut px: u128 = 0;
+        let mut px: u64 = 0;
 
         for shmmr in shmmrs.iter() {
             let next_pos = shmmr.pos() + 1;
@@ -159,12 +159,12 @@ impl CompressedSeqDB {
                 self.frags.push(Fragment::Prefix(frg));
                 seq_frags.push(frg_id);
                 frg_id += 1;
-                px = (shmmr.x >> 8) as u128;
+                px = shmmr.x >> 8;
                 pos = next_pos;
                 continue;
             }
             let mut aligned = false;
-            let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
+            let shmmr_pair = (px,  shmmr.x >> 8);
             //println!("shmmr_pair: {} {} {:?}",px,  shmmr.x >> 8, shmmr_pair);
 
             if try_compress && self.frag_map.contains_key(&shmmr_pair) {
@@ -196,7 +196,7 @@ impl CompressedSeqDB {
 
             if try_compress && !aligned {
                 // try reverse complement
-                let shmmr_pair = ((shmmr.x >> 8) as u128) << 64 | px;
+                let shmmr_pair = (shmmr.x >> 8, px);
                 if self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
@@ -233,7 +233,7 @@ impl CompressedSeqDB {
                 let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
                 self.frags.push(Fragment::Internal(frg));
                 seq_frags.push(frg_id);
-                let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
+                let shmmr_pair = (px, shmmr.x >> 8);
                 let e = self
                     .frag_map
                     .entry(shmmr_pair)
@@ -242,7 +242,7 @@ impl CompressedSeqDB {
                 frg_id += 1;
             };
 
-            px = (shmmr.x >> 8) as u128;
+            px = shmmr.x >> 8;
             pos = next_pos;
         }
 
@@ -287,7 +287,7 @@ impl CompressedSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
+                let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
                 let frg_len = end - bgn;
@@ -344,7 +344,7 @@ impl CompressedSeqDB {
 
                 // if there is no forward match (!aligned) then try the reverse complement match
                 if frg_len > 64 && try_compress && !aligned {
-                    let shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
+                    let shmmr_pair = (shmmr1.x >> 8, shmmr0.x >> 8);
                     if self.frag_map.contains_key(&shmmr_pair) {
                         let e = self.frag_map.get(&shmmr_pair).unwrap();
                         for t_frg_id in e.iter() {
@@ -393,7 +393,7 @@ impl CompressedSeqDB {
                 };
 
                 if !aligned || !try_compress {
-                    let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
+                    let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                     let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
                     //assert!(frg.len() > KMERSIZE as usize);
                     out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end, 0));
@@ -456,6 +456,7 @@ impl CompressedSeqDB {
         }
 
         seq_frags.push(frg_id);
+        self.frags.push(Fragment::Prefix(vec![]));
         frg_id += 1;
 
         let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
@@ -466,7 +467,7 @@ impl CompressedSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
+                let shmmr_pair = (shmmr0.x >> 8 , shmmr1.x >> 8);
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
 
@@ -474,7 +475,7 @@ impl CompressedSeqDB {
                 if self.frag_map.contains_key(&shmmr_pair) {
                     return (shmmr_pair, bgn, end, 0);
                 } else {
-                    let rev_shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
+                    let rev_shmmr_pair = (shmmr1.x >> 8, shmmr0.x >> 8);
                     if self.frag_map.contains_key(&rev_shmmr_pair) {
                         return (rev_shmmr_pair, bgn, end, 1);
                     } else {
@@ -491,12 +492,14 @@ impl CompressedSeqDB {
                 let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
                 e.push((frg_id, id, *bgn, *end, *orientation));
                 seq_frags.push(frg_id);
+                self.frags.push(Fragment::Internal(vec![]));
                 frg_id += 1;
             });
 
         // suffix
         //let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
         seq_frags.push(frg_id);
+        self.frags.push(Fragment::Suffix(vec![]));
 
         CompressedSeq {
             name,
