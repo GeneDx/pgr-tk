@@ -1,3 +1,10 @@
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+pub mod agc_io;
 pub mod cseq_db;
 pub mod fasta_io;
 pub mod shmmrutils;
@@ -230,5 +237,80 @@ mod tests {
         }
         */
         assert_eq!(shmmr0, shmmr1);
+    }
+    #[test]
+    fn raw_agc_test() {
+        use crate::{
+            agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
+            agc_n_sample, agc_open,
+        };
+        use libc::{c_char, puts, strlen};
+        use std::ffi::CStr;
+        use std::ffi::CString;
+        use std::{mem, slice, str};
+        let mut c = 0_i32;
+        unsafe {
+            let mut agc_file = agc_open(
+                CString::new("test/test_data/test.agc").unwrap().into_raw(),
+                c,
+            );
+            let mut c = 0_i32;
+            let n_samples = agc_n_sample(agc_file);
+            println!("agc_test n_sample: {:?}", n_samples);
+            let mut n_samples: i32 = n_samples;
+            let samples: *mut *mut ::std::os::raw::c_char =
+                agc_list_sample(agc_file, &mut n_samples);
+            let sample = *(samples.add(1));
+            println!(
+                "agc_test list_sample: {:?}",
+                str::from_utf8_unchecked(slice::from_raw_parts(
+                    sample as *const u8,
+                    strlen(sample) + 1
+                ))
+            );
+            let mut n_contig = agc_n_ctg(agc_file, sample);
+            println!("agc_test n_contig: {:?}", n_contig);
+            let contigs: *mut *mut ::std::os::raw::c_char =
+                agc_list_ctg(agc_file, sample, &mut n_contig);
+            let ctg = *(contigs.add(1));
+            println!(
+                "agc_test list_ctg: {:?}",
+                str::from_utf8_unchecked(slice::from_raw_parts(ctg as *const u8, strlen(ctg) + 1))
+            );
+            let ctg_len = agc_get_ctg_len(agc_file, sample, ctg);
+            println!("agc_test ctg_len: {:?}", ctg_len);
+            let seq_buf: *mut i8 = libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
+            agc_get_ctg_seq(agc_file, sample, ctg, 0, ctg_len, seq_buf);
+            let seq = str::from_utf8_unchecked(slice::from_raw_parts(
+                seq_buf as *const u8,
+                strlen(seq_buf),
+            ));
+            println!("agc_test seq: {}", seq);
+        }
+    }
+
+    #[test]
+    fn act_io_test() {
+        use crate::agc_io::{AGCFile, *};
+
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let seq = agcfile.get_sub_seq(
+            "test_agc_ref".to_string(),
+            "NA21309#1#JAHEPC010000026.1:3279880-3319873".to_string(),
+            500,
+            1000,
+        );
+        assert!(seq.len()==500);
+        //println!("seq_read_test: {}", String::from_utf8_lossy(&seq[..]));
+
+        agcfile.into_iter().for_each(|s| {
+            if let Ok(r) = s {
+                println!("{} {}", String::from_utf8_lossy(&r.id[..]), r.seq.len());
+            }
+        });
+
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_index_from_agcfile("test/test_data/test.agc".to_string());
+        println!("index size: {}", csdb.frag_map.len());
     }
 }

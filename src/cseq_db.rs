@@ -1,3 +1,4 @@
+use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
 use flate2::bufread::MultiGzDecoder;
@@ -451,7 +452,7 @@ impl CompressedSeqDB {
                 shmmrs,
                 seq_frags,
                 len: seqlen,
-            }
+            };
         }
 
         seq_frags.push(frg_id);
@@ -638,19 +639,23 @@ impl CompressedSeqDB {
                 }
             }
 
-            let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
-            seqs.iter()
-                .zip(all_shmmers)
-                .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
-                    let compress_seq =
-                        self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
-                    self.seqs.push(compress_seq);
-                });
+            self.load_seqs_from_seq_vec(&seqs);
             if end_ext_loop {
                 break;
             }
         }
         ();
+    }
+
+    fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, String, Vec<u8>)>) {
+        let all_shmmers = self.get_shmmrs_from_seqs(seqs);
+        seqs.iter()
+            .zip(all_shmmers)
+            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
+                let compress_seq =
+                    self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
+                self.seqs.push(compress_seq);
+            });
     }
 
     pub fn load_seqs(&mut self, filepath: String) -> Result<(), std::io::Error> {
@@ -705,24 +710,27 @@ impl CompressedSeqDB {
                 }
             }
 
-            let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
-            let seq_names = seqs
-                .iter()
-                .map(|(_sid, n, s)| (n.clone(), s.len()))
-                .collect::<Vec<(String, usize)>>();
-
-            seq_names
-                .iter()
-                .zip(all_shmmers)
-                .for_each(|((seq_name, seqlen), (sid, shmmrs))| {
-                    let compress_seq = self.seq_to_index(seq_name.clone(), sid, *seqlen, shmmrs);
-                    self.seqs.push(compress_seq);
-                });
+            self.load_index_from_seq_vec(&seqs);
             if end_ext_loop {
                 break;
             }
         }
         ();
+    }
+
+    fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, String, Vec<u8>)>) {
+        let all_shmmers = self.get_shmmrs_from_seqs(seqs);
+        let seq_names = seqs
+            .iter()
+            .map(|(_sid, n, s)| (n.clone(), s.len()))
+            .collect::<Vec<(String, usize)>>();
+        seq_names
+            .iter()
+            .zip(all_shmmers)
+            .for_each(|((seq_name, seqlen), (sid, shmmrs))| {
+                let compress_seq = self.seq_to_index(seq_name.clone(), sid, *seqlen, shmmrs);
+                self.seqs.push(compress_seq);
+            });
     }
 
     pub fn load_index(&mut self, filepath: String) -> Result<(), std::io::Error> {
@@ -734,6 +742,12 @@ impl CompressedSeqDB {
             }
         };
 
+        Ok(())
+    }
+
+    pub fn load_index_from_agcfile(&mut self, filepath: String) -> Result<(), std::io::Error> {
+        let agcfile = AGCFile::new(filepath);
+        self.load_index_from_reader(&mut agcfile.into_iter());
         Ok(())
     }
 }
