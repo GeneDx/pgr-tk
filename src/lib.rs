@@ -244,17 +244,16 @@ mod tests {
             agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
             agc_n_sample, agc_open,
         };
-        use libc::{c_char, puts, strlen};
-        use std::ffi::CStr;
+        use libc::{strlen};
+        
         use std::ffi::CString;
         use std::{mem, slice, str};
-        let mut c = 0_i32;
+        let c: i32 = 0_i32;
         unsafe {
-            let mut agc_file = agc_open(
+            let agc_file = agc_open(
                 CString::new("test/test_data/test.agc").unwrap().into_raw(),
                 c,
             );
-            let mut c = 0_i32;
             let n_samples = agc_n_sample(agc_file);
             println!("agc_test n_sample: {:?}", n_samples);
             let mut n_samples: i32 = n_samples;
