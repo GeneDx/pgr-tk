@@ -146,126 +146,6 @@ impl CompressedSeqDB {
         shmmrs: Vec<MM128>,
         try_compress: bool,
     ) -> CompressedSeq {
-        let mut pos = 0;
-        let mut seq_frags = Vec::<u32>::new();
-        let mut frg_id = self.frags.len() as u32;
-        let mut px: u64 = 0;
-
-        for shmmr in shmmrs.iter() {
-            let next_pos = shmmr.pos() + 1;
-            if pos == 0 {
-                let frg = seq[pos as usize..next_pos as usize].to_vec();
-                self.frags.push(Fragment::Prefix(frg));
-                seq_frags.push(frg_id);
-                frg_id += 1;
-                px = shmmr.x >> 8;
-                pos = next_pos;
-                continue;
-            }
-            let mut aligned = false;
-            let shmmr_pair = (px, shmmr.x >> 8);
-            //println!("shmmr_pair: {} {} {:?}",px,  shmmr.x >> 8, shmmr_pair);
-
-            if try_compress && self.frag_map.contains_key(&shmmr_pair) {
-                let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
-                for t_frg_id in e.iter() {
-                    let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
-                    if let Fragment::Internal(b) = base_frg {
-                        let base_frg = b;
-                        let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
-                        assert!(frg.len() > KMERSIZE as usize);
-                        let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
-                        if let Some(m) = m {
-                            let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                            let aln_segs =
-                                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
-                            self.frags
-                                .push(Fragment::AlnSegments((t_frg_id.0, false, aln_segs))); // false for the original strand
-                            seq_frags.push(frg_id);
-                            e.push((frg_id, id, pos, next_pos, 0));
-                            frg_id += 1;
-                            aligned = true;
-                            break; // we aligned to the first one of the fragments
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-            };
-
-            if try_compress && !aligned {
-                // try reverse complement
-                let shmmr_pair = (shmmr.x >> 8, px);
-                if self.frag_map.contains_key(&shmmr_pair) {
-                    let e = self.frag_map.get_mut(&shmmr_pair).unwrap();
-                    for t_frg_id in e.iter() {
-                        let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
-                        if let Fragment::Internal(b) = base_frg {
-                            let base_frg = &reverse_complement(&b);
-                            let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
-                            //assert!(frg.len() > KMERSIZE as usize);
-                            let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
-                            if let Some(m) = m {
-                                let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                                let aln_segs = deltas_to_aln_segs(
-                                    &deltas,
-                                    m.end0 as usize,
-                                    m.end1 as usize,
-                                    &frg,
-                                );
-                                self.frags
-                                    .push(Fragment::AlnSegments((t_frg_id.0, true, aln_segs))); // true for reverse complement
-                                seq_frags.push(frg_id);
-                                e.push((frg_id, id, pos, next_pos, 1));
-                                frg_id += 1;
-                                aligned = true;
-                                break; // we aligned to the first one of the fragments
-                            } else {
-                                continue;
-                            }
-                        }
-                    }
-                }
-            };
-
-            if !aligned || !try_compress {
-                let frg = seq[(pos - KMERSIZE) as usize..next_pos as usize].to_vec();
-                self.frags.push(Fragment::Internal(frg));
-                seq_frags.push(frg_id);
-                let shmmr_pair = (px, shmmr.x >> 8);
-                let e = self
-                    .frag_map
-                    .entry(shmmr_pair)
-                    .or_insert(Vec::<(u32, u32, u32, u32, u8)>::new());
-                e.push((frg_id, id, pos, next_pos, 0));
-                frg_id += 1;
-            };
-
-            px = shmmr.x >> 8;
-            pos = next_pos;
-        }
-
-        let frg = seq[pos as usize..].to_vec();
-        self.frags.push(Fragment::Suffix(frg));
-        seq_frags.push(frg_id);
-
-        CompressedSeq {
-            name,
-            id,
-            shmmrs,
-            seq_frags,
-            len: seq.len(),
-        }
-    }
-
-    pub fn seq_to_compressed_parallel(
-        &mut self,
-        name: String,
-        id: u32,
-        seq: &Vec<u8>,
-        shmmrs: Vec<MM128>,
-        try_compress: bool,
-    ) -> CompressedSeq {
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
@@ -597,7 +477,7 @@ impl CompressedSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _seqname, seq)| {
-                let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
+                let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 3);
                 (*sid, shmmrs)
             })
             .collect::<Vec<(u32, Vec<MM128>)>>();
@@ -642,7 +522,7 @@ impl CompressedSeqDB {
             .zip(all_shmmers)
             .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
                 let compress_seq =
-                    self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
+                    self.seq_to_compressed(seqname.clone(), *sid, seq, shmmrs, true);
                 self.seqs.push(compress_seq);
             });
     }
