@@ -469,41 +469,30 @@ impl CompressedSeqDB {
                 let shmmr_pair = ((shmmr0.x >> 8) as u128) << 64 | (shmmr1.x >> 8) as u128;
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
-                let mut aligned = false;
-                let mut out_frag = None;
 
                 // try to find forward match first
                 if self.frag_map.contains_key(&shmmr_pair) {
-                    out_frag = Some((shmmr_pair, bgn, end, 0));
-                    aligned = true;
+                    return (shmmr_pair, bgn, end, 0);
                 } else {
-                    let shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
-                    if self.frag_map.contains_key(&shmmr_pair) {
-                        out_frag = Some((shmmr_pair, bgn, end, 1));
-                        aligned = true;
+                    let rev_shmmr_pair = ((shmmr1.x >> 8) as u128) << 64 | (shmmr0.x >> 8) as u128;
+                    if self.frag_map.contains_key(&rev_shmmr_pair) {
+                        return (rev_shmmr_pair, bgn, end, 1);
+                    } else {
+                        return (shmmr_pair, bgn, end, 0);
                     }
                 }
-                if !aligned {
-                    out_frag = Some((shmmr_pair, bgn, end, 0));
-                }
-                out_frag
             })
             .collect::<Vec<_>>();
 
         // TODO: parallize by sharding the key
-        internal_frags.iter().for_each(|v| match v {
-            Some((shmmr, bgn, end, orientation)) => {
-                if !self.frag_map.contains_key(shmmr) {
-                    self.frag_map
-                        .insert(*shmmr, Vec::<(u32, u32, u32, u32, u8)>::new());
-                }
-                let e = self.frag_map.get_mut(shmmr).unwrap();
+        internal_frags
+            .iter()
+            .for_each(|(shmmr, bgn, end, orientation)| {
+                let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
                 e.push((frg_id, id, *bgn, *end, *orientation));
                 seq_frags.push(frg_id);
                 frg_id += 1;
-            }
-            None => {}
-        });
+            });
 
         // suffix
         //let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
