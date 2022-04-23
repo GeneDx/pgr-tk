@@ -275,8 +275,64 @@ mod tests {
             }
         });
 
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_index_from_agcfile("test/test_data/test.agc".to_string());
+        let _ = csdb.load_index_from_agcfile(agcfile);
         println!("index size: {}", csdb.frag_map.len());
+    }
+
+
+    #[test]
+    fn query_frag_test() {
+        use crate::agc_io::AGCFile;
+        use cseq_db::{query_fragment};
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_index_from_agcfile(agcfile);
+
+        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let seq = agcfile.next();
+        let r_frags = query_fragment(&csdb.frag_map,&seq.unwrap().unwrap().seq);
+        let mut out = vec![];
+        for res in r_frags {
+            for v in res.2 {
+                //println!("Q {:?} {:?} {:?}", res.0, res.1, v);
+                out.push( (v, res.1, res.0))
+            }
+        }
+        out.sort();
+        for v in out {
+            println!("Q {:?}", v);
+        }
+        //write_shmr_map_bincode(&csdb.frag_map, "test_shmmr.db".to_string());
+
+
+    }
+
+    #[test]
+    fn test_shmmrmap_read_write () {
+        use crate::agc_io::AGCFile;
+        use cseq_db::{ query_fragment, write_shmr_map_file, read_shmr_map_file};
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let mut csdb = cseq_db::CompressedSeqDB::new();
+        let _ = csdb.load_index_from_agcfile(agcfile);
+        write_shmr_map_file(&csdb.frag_map, "test/test_data/test_shmmr.db".to_string());
+        let new_map = read_shmr_map_file("test/test_data/test_shmmr.db".to_string());
+
+        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let seq = agcfile.next();
+        let r_frags = query_fragment(&new_map,&seq.unwrap().unwrap().seq);
+        let mut out = vec![];
+        for res in r_frags {
+            for v in res.2 {
+                //println!("Q {:?} {:?} {:?}", res.0, res.1, v);
+                out.push( (v, res.1, res.0))
+            }
+        }
+        out.sort();
+        for v in out {
+            println!("Q {:?}", v);
+        }
     }
 }

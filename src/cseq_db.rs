@@ -1,14 +1,23 @@
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
-use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
+use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
+use byteorder::{LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
+use std::io::{self, BufReader, Read, Write};
+
 
 pub const KMERSIZE: u32 = 56;
+pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
+    w: 80,
+    k: KMERSIZE,
+    r: 4,
+    min_span: 64,
+    sketch: true,
+};
 
 pub type Bases = Vec<u8>;
 pub type AlnSegments = (u32, bool, Vec<AlnSegment>);
@@ -47,8 +56,8 @@ impl<'a> fmt::Display for Fragment {
 
 pub type ShmmrPair = (u64, u64);
 pub type Fragments = Vec<Fragment>;
-pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32, u8)>>; //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
-
+pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
+pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
 pub struct CompressedSeq {
     pub name: String,
     pub id: u32,
@@ -225,7 +234,7 @@ impl CompressedSeqDB {
                                     m.end1 as usize,
                                     &frg,
                                 );
-                             
+
                                 out_frag = Some((
                                     shmmr_pair,
                                     Fragment::AlnSegments((t_frg_id.0, rc, aln_segs)),
@@ -392,7 +401,7 @@ impl CompressedSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _seqname, seq)| {
-                let shmmrs = sequence_to_shmmrs(*sid, &seq, 80, KMERSIZE, 6);
+                let shmmrs = sequence_to_shmmrs(*sid, &seq, SHMMRSPEC);
                 //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
@@ -501,7 +510,52 @@ impl CompressedSeqDB {
             });
     }
 
-    pub fn load_index(&mut self, filepath: String) -> Result<(), std::io::Error> {
+    fn _write_shmmr_vec_from_reader(
+        &mut self,
+        reader: &mut dyn Iterator<Item = io::Result<SeqRec>>,
+        writer: &mut Vec<u8>,
+    ) {
+        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut sid = 0;
+        loop {
+            let mut count = 0;
+            let mut end_ext_loop = false;
+            seqs.clear();
+
+            loop {
+                if let Some(rec) = reader.next() {
+                    let rec = rec.unwrap();
+                    let seqname = String::from_utf8_lossy(&rec.id).into_owned();
+                    seqs.push((sid, seqname, rec.seq));
+                    sid += 1;
+                } else {
+                    end_ext_loop = true;
+                    break;
+                }
+                count += 1;
+                if count > 128 {
+                    break;
+                }
+            }
+
+            self.get_shmmrs_from_seqs(&seqs)
+                .iter()
+                .map(|(_, v)| v)
+                .for_each(|v| {
+                    v.iter().for_each(|m| {
+                        let _ = writer.write_u64::<LittleEndian>(m.x);
+                        let _ = writer.write_u64::<LittleEndian>(m.y);
+                    });
+                });
+
+            if end_ext_loop {
+                break;
+            }
+        }
+        ();
+    }
+
+    pub fn load_index_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         match self.get_fastx_reader(filepath)? {
             GZFastaReader::GZFile(reader) => self.load_index_from_reader(&mut reader.into_iter()),
 
@@ -513,9 +567,118 @@ impl CompressedSeqDB {
         Ok(())
     }
 
-    pub fn load_index_from_agcfile(&mut self, filepath: String) -> Result<(), std::io::Error> {
-        let agcfile = AGCFile::new(filepath);
+    pub fn load_index_from_agcfile(&mut self, agcfile: AGCFile) -> Result<(), std::io::Error> {
+        //let agcfile = AGCFile::new(filepath);
+
         self.load_index_from_reader(&mut agcfile.into_iter());
         Ok(())
     }
+}
+
+pub fn query_fragment(
+    shmmr_map: &ShmmrToFrags,
+    frag: &Vec<u8>,
+) -> Vec<((u64, u64), (u32, u32, u8), Vec<FragmentSignature>)> {
+    let shmmrs = sequence_to_shmmrs(0, &frag, SHMMRSPEC);
+    let query_results = shmmrs[0..shmmrs.len() - 1]
+        .iter()
+        .zip(shmmrs[1..shmmrs.len()].iter())
+        .map(|(s0, s1)| {
+            let p0 = s0.pos();
+            let p1 = s1.pos();
+            let s0 = s0.x >> 8;
+            let s1 = s1.x >> 8;
+            if s0 < s1 {
+                (s0, s1, p0, p1, 0_u8)
+            } else {
+                (s1, s0, p0, p1, 0_u8)
+            }
+        })
+        .map(|(s0, s1, p0, p1, orientation)| {
+            if let Some(m) = shmmr_map.get(&(s0, s1)) {
+                ((s0, s1), (p0, p1, orientation), m.clone())
+            } else {
+                ((s0, s1), (p0, p1, orientation), vec![])
+            }
+        })
+        .collect::<Vec<_>>();
+    query_results
+}
+
+pub fn write_shmr_map_file(shmmr_map: &ShmmrToFrags, filepath: String) {
+    let mut out_file = File::create(filepath).expect("open fail");
+    let mut buf = Vec::<u8>::new();
+    buf.write_u64::<LittleEndian>(shmmr_map.len() as u64);
+    shmmr_map.into_iter().for_each(|(k,v) | {
+        buf.write_u64::<LittleEndian>(k.0);
+        buf.write_u64::<LittleEndian>(k.1);
+        buf.write_u64::<LittleEndian>(v.len() as u64);
+        v.iter().for_each(|r| {
+            buf.write_u32::<LittleEndian>(r.0);
+            buf.write_u32::<LittleEndian>(r.1);
+            buf.write_u32::<LittleEndian>(r.2);
+            buf.write_u32::<LittleEndian>(r.3);
+            buf.write_u8(r.4);
+        })
+    } );
+    let _ = out_file.write_all(&buf);
+}
+
+
+pub fn read_shmr_map_file(filepath: String) -> ShmmrToFrags {
+
+    let mut in_file = File::open(filepath).expect("open fail");
+    let mut buf = Vec::<u8>::new();
+    let mut u64bytes = [0_u8;8];
+    let mut u32bytes = [0_u8;4];
+    in_file.read_to_end(&mut buf);
+    let mut cursor = 0_usize;
+    u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+    let shmmr_key_len = usize::from_le_bytes(u64bytes);
+    cursor += 8;
+    let mut shmmr_map = ShmmrToFrags::default();
+    (0..shmmr_key_len).into_iter().for_each( |_| {
+
+        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+        let k1 = u64::from_le_bytes(u64bytes);
+        cursor += 8;
+        
+        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+        let k2 = u64::from_le_bytes(u64bytes);
+        cursor += 8;
+
+        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+        let vec_len = usize::from_le_bytes(u64bytes);
+        cursor += 8;
+
+        let value = (0..vec_len).into_iter().map(|_| {
+            let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
+
+            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
+            v.0 = u32::from_le_bytes(u32bytes);
+            cursor += 4;
+            
+            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
+            v.1 = u32::from_le_bytes(u32bytes);
+            cursor += 4;
+            
+            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
+            v.2 = u32::from_le_bytes(u32bytes);
+            cursor += 4;
+            
+            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
+            v.3 = u32::from_le_bytes(u32bytes);
+            cursor += 4;
+
+            v.4 = buf[cursor..cursor+1][0];
+            cursor += 1;
+
+           v 
+        }).collect::<Vec<(u32, u32, u32, u32, u8)>>();
+
+        shmmr_map.insert((k1,  k2), value);
+        
+    });
+
+    shmmr_map
 }
