@@ -1,12 +1,12 @@
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
-use crate::shmmrutils::{match_reads, sequence_to_shmmrs2, DeltaPoint, MM128};
+use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
 use flate2::bufread::MultiGzDecoder;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufReader, Read};
 
 pub const KMERSIZE: u32 = 56;
 
@@ -47,7 +47,7 @@ impl<'a> fmt::Display for Fragment {
 
 pub type ShmmrPair = (u64, u64);
 pub type Fragments = Vec<Fragment>;
-pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32, u8)>>;
+pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<(u32, u32, u32, u32, u8)>>; //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 
 pub struct CompressedSeq {
     pub name: String,
@@ -149,7 +149,25 @@ impl CompressedSeqDB {
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
-        assert!(shmmrs.len() > 0);
+        //assert!(shmmrs.len() > 0);
+        if shmmrs.len() == 0 {
+            let frg = seq[..].to_vec();
+            self.frags.push(Fragment::Prefix(frg));
+            seq_frags.push(frg_id);
+            frg_id += 1;
+
+            let frg = Vec::<u8>::new();
+            self.frags.push(Fragment::Suffix(frg));
+            seq_frags.push(frg_id);
+
+            return CompressedSeq {
+                name,
+                id,
+                shmmrs,
+                seq_frags,
+                len: seq.len(),
+            };
+        }
         // prefix
         let end = (shmmrs[0].pos() + 1) as usize;
         let frg = seq[..end].to_vec();
@@ -165,14 +183,20 @@ impl CompressedSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
+                let s0 = shmmr0.x >> 8;
+                let s1 = shmmr1.x >> 8;
+                let (shmmr_pair, orientation) = if s0 <= s1 {
+                    ((s0, s1), 0_u8)
+                } else {
+                    ((s1, s0), 1_u8)
+                };
+                //let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
                 let frg_len = end - bgn;
                 let mut aligned = false;
                 let mut out_frag = None;
 
-                // try to find forward match first
                 if frg_len > 64 && try_compress && self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
@@ -180,8 +204,17 @@ impl CompressedSeqDB {
                         if let Fragment::Internal(b) = base_frg {
                             let base_frg = b;
                             //assert!(base_frg.len() > KMERSIZE as usize);
-                            let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
-
+                            let frg;
+                            let rc;
+                            if orientation != t_frg_id.4 {
+                                frg = reverse_complement(
+                                    &seq[(bgn - KMERSIZE) as usize..end as usize].to_vec(),
+                                );
+                                rc = true;
+                            } else {
+                                frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+                                rc = false;
+                            }
                             //assert!(frg.len() > KMERSIZE as usize);
                             let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                             if let Some(m) = m {
@@ -192,24 +225,13 @@ impl CompressedSeqDB {
                                     m.end1 as usize,
                                     &frg,
                                 );
-                                /*
-                                if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
-                                    println!("{} {}", String::from_utf8_lossy(base_frg), base_frg.len());
-                                    println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
-                                    println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
-
-                                    println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(base_frg, &aln_segs) ));
-                                    println!("{:?}", aln_segs);
-                                    println!("{:?}", deltas);
-                                }
-                                assert_eq!(frg, reconstruct_seq_from_aln_segs(base_frg, &aln_segs));
-                                 */
+                             
                                 out_frag = Some((
                                     shmmr_pair,
-                                    Fragment::AlnSegments((t_frg_id.0, false, aln_segs)),
+                                    Fragment::AlnSegments((t_frg_id.0, rc, aln_segs)),
                                     bgn,
                                     end,
-                                    0,
+                                    orientation,
                                 ));
                                 aligned = true;
                                 break; // we aligned to the first one of the fragments
@@ -220,61 +242,9 @@ impl CompressedSeqDB {
                     }
                 };
 
-                // if there is no forward match (!aligned) then try the reverse complement match
-                if frg_len > 64 && try_compress && !aligned {
-                    let shmmr_pair = (shmmr1.x >> 8, shmmr0.x >> 8);
-                    if self.frag_map.contains_key(&shmmr_pair) {
-                        let e = self.frag_map.get(&shmmr_pair).unwrap();
-                        for t_frg_id in e.iter() {
-                            let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
-                            if let Fragment::Internal(b) = base_frg {
-                                let base_frg = &reverse_complement(&b);
-                                //assert!(base_frg.len() > KMERSIZE as usize);
-                                let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
-                                //assert!(frg.len() > KMERSIZE as usize);
-                                let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
-                                if let Some(m) = m {
-                                    let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-                                    let aln_segs = deltas_to_aln_segs(
-                                        &deltas,
-                                        m.end0 as usize,
-                                        m.end1 as usize,
-                                        &frg,
-                                    );
-                                    /*
-                                    if frg != reconstruct_seq_from_aln_segs(base_frg, &aln_segs) {
-                                        println!("{} {}", String::from_utf8_lossy(base_frg), base_frg.len());
-                                        println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
-                                        println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
-
-                                        println!("{}", String::from_utf8_lossy(& reconstruct_seq_from_aln_segs(base_frg, &aln_segs) ));
-                                        println!("{:?}", aln_segs);
-                                        println!("{:?}", deltas);
-                                    }
-                                    assert_eq!(frg, reconstruct_seq_from_aln_segs(base_frg, &aln_segs));
-                                    */
-                                    out_frag = Some((
-                                        shmmr_pair,
-                                        Fragment::AlnSegments((t_frg_id.0, true, aln_segs)),
-                                        bgn,
-                                        end,
-                                        1,
-                                    ));
-                                    aligned = true;
-                                    break; // we aligned to the first one of the fragments
-                                } else {
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                };
-
                 if !aligned || !try_compress {
-                    let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                     let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
-                    //assert!(frg.len() > KMERSIZE as usize);
-                    out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end, 0));
+                    out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end, orientation));
                 };
                 out_frag
             })
@@ -344,25 +314,19 @@ impl CompressedSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
+                let s0 = shmmr0.x >> 8;
+                let s1 = shmmr1.x >> 8;
+                let (shmmr_pair, orientation) = if s0 <= s1 {
+                    ((s0, s1), 0_u8)
+                } else {
+                    ((s1, s0), 1_u8)
+                };
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
-
-                // try to find forward match first
-                if self.frag_map.contains_key(&shmmr_pair) {
-                    return (shmmr_pair, bgn, end, 0);
-                } else {
-                    let rev_shmmr_pair = (shmmr1.x >> 8, shmmr0.x >> 8);
-                    if self.frag_map.contains_key(&rev_shmmr_pair) {
-                        return (rev_shmmr_pair, bgn, end, 1);
-                    } else {
-                        return (shmmr_pair, bgn, end, 0);
-                    }
-                }
+                (shmmr_pair, bgn, end, orientation)
             })
             .collect::<Vec<_>>();
 
-        // TODO: parallize by sharding the key
         internal_frags
             .iter()
             .for_each(|(shmmr, bgn, end, orientation)| {
@@ -373,8 +337,6 @@ impl CompressedSeqDB {
                 frg_id += 1;
             });
 
-        // suffix
-        //let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
         seq_frags.push(frg_id);
         self.frags.push(Fragment::Suffix(vec![]));
 
@@ -385,53 +347,6 @@ impl CompressedSeqDB {
             seq_frags,
             len: seqlen,
         }
-    }
-
-    fn _read_seqs(
-        &mut self,
-        filepath: String,
-    ) -> Result<Vec<(u32, String, Vec<u8>)>, std::io::Error> {
-        let file = File::open(&filepath)?;
-        let mut reader = BufReader::new(file);
-        let mut is_gzfile = false;
-        {
-            let r = reader.by_ref();
-            let mut buf = Vec::<u8>::new();
-            let _ = r.take(2).read_to_end(&mut buf);
-            if buf == [0x1F_u8, 0x8B_u8] {
-                log::info!("input file: {} detected as gz-compressed file", filepath);
-                is_gzfile = true;
-            }
-        }
-        drop(reader);
-
-        let file = File::open(&filepath)?;
-        let mut reader = BufReader::new(file);
-        let gz_buf = &mut BufReader::new(MultiGzDecoder::new(&mut reader));
-
-        let file = File::open(&filepath)?;
-        let reader = BufReader::new(file);
-        let std_buf = &mut BufReader::new(reader);
-
-        let fastx_buf: &mut dyn BufRead = if is_gzfile {
-            drop(std_buf);
-            gz_buf
-        } else {
-            drop(gz_buf);
-            std_buf
-        };
-
-        let fastx_reader = FastaReader::new(fastx_buf, &filepath)?;
-        let mut sid = 0;
-
-        let mut seqs: Vec<(u32, String, Vec<u8>)> = Vec::new();
-        fastx_reader.for_each(|rec| {
-            let rec = rec.unwrap();
-            let seqname = String::from_utf8_lossy(&rec.id).into_owned();
-            seqs.push((sid, seqname, rec.seq));
-            sid += 1;
-        });
-        Ok(seqs)
     }
 
     fn get_fastx_reader(&mut self, filepath: String) -> Result<GZFastaReader, std::io::Error> {
@@ -477,7 +392,8 @@ impl CompressedSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _seqname, seq)| {
-                let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 3);
+                let shmmrs = sequence_to_shmmrs(*sid, &seq, 80, KMERSIZE, 6);
+                //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
             .collect::<Vec<(u32, Vec<MM128>)>>();
@@ -521,8 +437,7 @@ impl CompressedSeqDB {
         seqs.iter()
             .zip(all_shmmers)
             .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
-                let compress_seq =
-                    self.seq_to_compressed(seqname.clone(), *sid, seq, shmmrs, true);
+                let compress_seq = self.seq_to_compressed(seqname.clone(), *sid, seq, shmmrs, true);
                 self.seqs.push(compress_seq);
             });
     }
@@ -537,22 +452,6 @@ impl CompressedSeqDB {
         };
 
         Ok(())
-        /*
-        let seqs = self.read_seqs(filepath)?;
-        //let fastx_reader = self.get_fastx_reader()?;
-
-        let all_shmmers = self.get_shmmrs_from_seqs(&seqs);
-
-        seqs.iter()
-            .zip(all_shmmers)
-            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
-                let compress_seq =
-                    self.seq_to_compressed_parallel(seqname.clone(), *sid, seq, shmmrs, true);
-                self.seqs.push(compress_seq);
-            });
-
-        Ok(())
-        */
     }
 
     fn load_index_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {

@@ -486,10 +486,30 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
         .collect::<Vec<MM128>>();
     */
 
-    let shimmers = shmmrs;
-    let shimmers = reduce_shmmr(shimmers, r);
-    let shimmers = reduce_shmmr(shimmers, r);
-    shimmers
+    let shmmrs2 = shmmrs;
+    let shmmrs2 = reduce_shmmr(shmmrs2, r);
+    let shmmrs2 = reduce_shmmr(shmmrs2, r);
+    let mut shmmrs3 = Vec::<MM128>::new();
+    shmmrs2
+        .iter()
+        .enumerate()
+        .into_iter()
+        .for_each(|(i, shmmr)| {
+            if i != 0 && i != shmmrs2.len() - 1 {
+                let p_pos = shmmrs2[i - 1].pos();
+                let pos = shmmrs2[i].pos();
+                let n_pos = shmmrs2[i + 1].pos();
+                let px = shmmrs2[i-1].x;
+                let x = shmmrs2[i].x;
+                let nx = shmmrs2[i+1].x;
+                if pos - p_pos > 128 && n_pos - pos > 128 && px != x && x != nx {
+                    shmmrs3.push(*shmmr);
+                }
+            } else {
+                shmmrs3.push(*shmmr);
+            }
+        });
+    shmmrs3
 }
 
 pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Vec<MM128> {
@@ -577,7 +597,12 @@ pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> V
                 let p_pos = shmmrs[i - 1].pos();
                 let pos = shmmrs[i].pos();
                 let n_pos = shmmrs[i + 1].pos();
-                if pos - p_pos > 128 && n_pos - pos > 128 {
+
+                let px = shmmrs[i-1].x;
+                let x = shmmrs[i].x;
+                let nx = shmmrs[i+1].x;
+
+                if pos - p_pos > 128 && n_pos - pos > 128 && px !=x && x!=nx {
                     shmmrs2.push(*shmmr);
                 }
             } else {

@@ -103,11 +103,11 @@ mod tests {
                         if let Fragment::Internal(base_seq) =
                             csdb.frags.get(*frg_id as usize).unwrap()
                         {
-                            let mut bs = base_seq.clone();
+                            let bs = base_seq.clone();
+                            let mut seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
                             if *reverse == true {
-                                bs = reverse_complement(&bs);
+                                seq = reverse_complement(&seq);
                             }
-                            let seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
                             reconstruct_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
                             //println!("p: {} {}", p, p + seq.len());
                             _p += seq.len();
@@ -129,28 +129,7 @@ mod tests {
                 }
             };
             assert_eq!(reconstruct_seq, *orig_seq);
-            /*
-            let shmmrs = seq.shmmrs.clone();
-            let mut px: u128 = 0;
-            for shmmr in shmmrs.into_iter() {
-                let shmmr_pair = px << 64 | (shmmr.x >> 8) as u128;
-                //println!("spr {:?}", shmmr_pair);
-                if csdb.frag_map.contains_key(&shmmr_pair) {
-                    for (fid, sid, bgn, end) in csdb.frag_map.get(&shmmr_pair).unwrap() {
-                        println!("matches: {} {} {} {} {}", shmmr_pair, fid, sid, bgn, end);
-                    }
-                }
-                px = (shmmr.x >> 8) as u128;
-            }
-            */
         }
-        /*
-        for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
-            for ids in frg_ids {
-                println!("M {:032X} {} {} {} {}", shmmr_pair, ids.0, ids.1, ids.2, ids.3);
-            }
-        }
-        */
     }
 
     #[test]
@@ -224,18 +203,6 @@ mod tests {
             .map(|m| m.x >> 8)
             .collect::<Vec<u64>>();
         assert!(shmmr0.len() > 0);
-        /*
-        for seq in csdb.seqs {
-            for shmmr in seq.shmmrs {
-                println!("S {} {}", seq.id, shmmr.x >> 8);
-            }
-        }
-        for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
-            for ids in frg_ids {
-                println!("M {:032X} {} {} {} {}", shmmr_pair, ids.0, ids.1, ids.2, ids.3);
-            }
-        }
-        */
         assert_eq!(shmmr0, shmmr1);
     }
     #[test]
@@ -290,7 +257,7 @@ mod tests {
 
     #[test]
     fn act_io_test() {
-        use crate::agc_io::{AGCFile};
+        use crate::agc_io::AGCFile;
 
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let seq = agcfile.get_sub_seq(
