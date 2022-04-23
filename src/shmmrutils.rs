@@ -491,3 +491,99 @@ pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Ve
     let shimmers = reduce_shmmr(shimmers, r);
     shimmers
 }
+
+pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, w: u32, k: u32, r: u32) -> Vec<MM128> {
+    let base2bits: [u64; 256] = [
+        0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+    ];
+
+    let mut shmmrs = Vec::<MM128>::new();
+
+    let mut pos = 0;
+    let shift = k - 1;
+    assert!(k <= 56);
+    assert!(w <= 128);
+    assert!(r > 0 && r < 13);
+    let mut fmmer = (0_u64, 0_u64);
+    let mut rmmer = (0_u64, 0_u64);
+    let mask = u64::MAX >> (64 - k);
+    loop {
+        if pos >= seq.len() as usize {
+            break;
+        }
+
+        let c = base2bits[seq[pos] as usize];
+        // println!("C {} {} {}", seq[pos], pos, c);
+        if c < 4 {
+            fmmer.0 <<= 1;
+            fmmer.0 |= c & 0b01;
+            fmmer.0 &= mask;
+            fmmer.1 <<= 1;
+            fmmer.1 |= (c & 0b10) >> 1;
+            fmmer.1 &= mask;
+
+            let rc = 0x3 ^ c;
+            rmmer.0 >>= 1;
+            rmmer.0 |= (rc & 0b01) << shift;
+            rmmer.0 &= mask;
+            rmmer.1 >>= 1;
+            rmmer.1 |= ((rc & 0b10) >> 1) << shift;
+            rmmer.1 &= mask;
+        }
+        if fmmer == rmmer {
+            pos += 1;
+            continue;
+        }
+        if pos < k as usize {
+            pos += 1;
+            continue;
+        }
+        let mut forward = true;
+        if rmmer.0 < fmmer.0 {
+            forward = false;
+        }
+
+        let mmer_hash = match forward {
+            true => u64hash(fmmer.0) ^ u64hash(fmmer.1 ^ 0xAD12CF59),
+            false => u64hash(rmmer.0) ^ u64hash(rmmer.1 ^ 0xAD12CF59),
+        };
+
+        if mmer_hash < u64::MAX >> 4 >> r {
+            let strand: u64 = if forward { 0 } else { 1 };
+            let m = MM128 {
+                x: mmer_hash << 8 | k as u64,
+                y: (rid as u64) << 32 | (pos as u64) << 1 | strand,
+            };
+            shmmrs.push(m);
+        }
+        pos += 1;
+    }
+
+    let mut shmmrs2 = Vec::<MM128>::new();
+    shmmrs
+        .iter()
+        .enumerate()
+        .into_iter()
+        .for_each(|(i, shmmr)| {
+            if i != 0 && i != shmmrs.len() - 1 {
+                let p_pos = shmmrs[i - 1].pos();
+                let pos = shmmrs[i].pos();
+                let n_pos = shmmrs[i + 1].pos();
+                if pos - p_pos > 128 && n_pos - pos > 128 {
+                    shmmrs2.push(*shmmr);
+                }
+            } else {
+                shmmrs2.push(*shmmr);
+            }
+        });
+
+    shmmrs2
+}

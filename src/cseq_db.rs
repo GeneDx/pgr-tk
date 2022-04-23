@@ -1,6 +1,6 @@
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
-use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, MM128};
+use crate::shmmrutils::{match_reads, sequence_to_shmmrs2, DeltaPoint, MM128};
 use flate2::bufread::MultiGzDecoder;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -146,7 +146,6 @@ impl CompressedSeqDB {
         shmmrs: Vec<MM128>,
         try_compress: bool,
     ) -> CompressedSeq {
-        //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut pos = 0;
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
@@ -164,7 +163,7 @@ impl CompressedSeqDB {
                 continue;
             }
             let mut aligned = false;
-            let shmmr_pair = (px,  shmmr.x >> 8);
+            let shmmr_pair = (px, shmmr.x >> 8);
             //println!("shmmr_pair: {} {} {:?}",px,  shmmr.x >> 8, shmmr_pair);
 
             if try_compress && self.frag_map.contains_key(&shmmr_pair) {
@@ -267,7 +266,6 @@ impl CompressedSeqDB {
         shmmrs: Vec<MM128>,
         try_compress: bool,
     ) -> CompressedSeq {
-        //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
@@ -440,7 +438,6 @@ impl CompressedSeqDB {
         seqlen: usize,
         shmmrs: Vec<MM128>,
     ) -> CompressedSeq {
-        //let shmmrs = sequence_to_shmmrs(id, &seq, 80, KMERSIZE, 4);
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
@@ -467,7 +464,7 @@ impl CompressedSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let shmmr_pair = (shmmr0.x >> 8 , shmmr1.x >> 8);
+                let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
 
@@ -600,7 +597,7 @@ impl CompressedSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _seqname, seq)| {
-                let shmmrs = sequence_to_shmmrs(*sid, &seq, 80, KMERSIZE, 8);
+                let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
             .collect::<Vec<(u32, Vec<MM128>)>>();

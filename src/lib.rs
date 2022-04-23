@@ -244,8 +244,8 @@ mod tests {
             agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
             agc_n_sample, agc_open,
         };
-        use libc::{strlen};
-        
+        use libc::strlen;
+
         use std::ffi::CString;
         use std::{mem, slice, str};
         let c: i32 = 0_i32;
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn act_io_test() {
-        use crate::agc_io::{AGCFile, *};
+        use crate::agc_io::{AGCFile};
 
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let seq = agcfile.get_sub_seq(
