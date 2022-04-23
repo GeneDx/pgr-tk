@@ -300,7 +300,7 @@ mod tests {
             500,
             1000,
         );
-        assert!(seq.len()==500);
+        assert!(seq.len() == 500);
         //println!("seq_read_test: {}", String::from_utf8_lossy(&seq[..]));
 
         agcfile.into_iter().for_each(|s| {

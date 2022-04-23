@@ -103,7 +103,8 @@ impl AGCFile {
                 end as i32 - 1,
                 seq_buf,
             );
-            seq = String::from_raw_parts(seq_buf as *mut u8, ctg_len-1, ctg_len); //check this, it takes over the pointer? we don't need to free the point manually?
+            seq = String::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
+            //check this, it takes over the pointer? we don't need to free the point manually?
         }
         seq.as_bytes().to_vec()
     }
@@ -114,10 +115,9 @@ impl AGCFile {
         let bgn = 0;
         let end = *self.ctg_lens.get(&key).unwrap();
         let seq = self.get_sub_seq(sample_name, ctg_name, bgn, end);
-        assert!(seq.len() == end-bgn);
+        assert!(seq.len() == end - bgn);
         seq
     }
-
 }
 
 impl Drop for AGCFile {
