@@ -3,3 +3,4 @@
 */libagc.so
 */test/test_data/test_shmmr.db
 libagc.so
+*/*.pyc
