@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use flate2::bufread::GzDecoder;
+use flate2::bufread::MultiGzDecoder;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufReader, SeekFrom};
@@ -17,6 +17,20 @@ enum Fastx {
 pub struct FastaReader<R> {
     inner: R,
     t: Fastx,
+}
+
+pub fn reverse_complement(seq: &Vec<u8>) -> Vec<u8> {
+    let mut rev_seq = Vec::new();
+    for b in seq.iter().rev() {
+        match b {
+            b'A' => rev_seq.push(b'T'),
+            b'C' => rev_seq.push(b'G'),
+            b'G' => rev_seq.push(b'C'),
+            b'T' => rev_seq.push(b'A'),
+            _ => rev_seq.push(*b),
+        }
+    }
+    rev_seq
 }
 
 impl<R: BufRead> FastaReader<R> {
@@ -113,6 +127,13 @@ impl<R: BufRead> FastaReader<R> {
     }
 }
 
+impl<R: BufRead> Iterator for FastaReader<R> {
+    type Item = io::Result<SeqRec>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_rec()
+    }
+}
+
 fn encode_biseq(s: Vec<u8>) -> Vec<u8> {
     let fourbit_map_f: [u8; 256] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -187,7 +208,7 @@ pub fn build(seq_list_file: &String, out_prefix: &String) -> Result<usize, io::E
 
         let _ = reader.seek(SeekFrom::Start(0));
         if is_gzfile {
-            let fastx_buf = BufReader::new(GzDecoder::new(&mut reader));
+            let fastx_buf = BufReader::new(MultiGzDecoder::new(&mut reader));
             let mut fastx_reader = FastaReader::new(fastx_buf, &input_fn)?;
             while let Some(r) = fastx_reader.next_rec() {
                 let r = r.unwrap();

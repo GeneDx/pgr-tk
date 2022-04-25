@@ -1,5 +1,5 @@
 use crate::agc_io::AGCFile;
-use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
+use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;

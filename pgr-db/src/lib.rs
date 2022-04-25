@@ -6,20 +6,19 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub mod agc_io;
 pub mod seq_db;
-pub mod fasta_io;
 pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
-    use crate::fasta_io::{reverse_complement, FastaReader};
+    use pgr_utils::fasta_io::{reverse_complement, FastaReader};
     use crate::shmmrutils::{match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};
 
-    use crate::cseq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
-    use crate::cseq_db::{Fragment, KMERSIZE};
+    use crate::seq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
+    use crate::seq_db::{Fragment, KMERSIZE};
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -65,25 +64,25 @@ mod tests {
 
     #[test]
     pub fn gz_file_read_test() {
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
-        println!("{:?}", csdb.seqs[0].seq_frags);
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
+        println!("{:?}", sdb.seqs[0].seq_frags);
     }
 
     #[test]
     fn load_seq_test() {
         let seqs = load_seqs();
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
         //println!("test");
-        for seq in csdb.seqs.iter() {
+        for seq in sdb.seqs.iter() {
             //println!();
             //println!("{}", seq.name);
             let mut reconstruct_seq = <Vec<u8>>::new();
             let mut _p = 0;
             for frg_id in seq.seq_frags.iter() {
-                //println!("{}:{}", frg_id, csdb.frags[*frg_id as usize]);
-                match csdb.frags.get(*frg_id as usize).unwrap() {
+                //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
+                match sdb.frags.get(*frg_id as usize).unwrap() {
                     Fragment::Prefix(b) => {
                         reconstruct_seq.extend_from_slice(&b[..]);
                         //println!("p: {} {}", p, p + b.len());
@@ -101,10 +100,10 @@ mod tests {
                     }
                     Fragment::AlnSegments((frg_id, reverse, a)) => {
                         if let Fragment::Internal(base_seq) =
-                            csdb.frags.get(*frg_id as usize).unwrap()
+                            sdb.frags.get(*frg_id as usize).unwrap()
                         {
                             let bs = base_seq.clone();
-                            let mut seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
+                            let mut seq = seq_db::reconstruct_seq_from_aln_segs(&bs, a);
                             if *reverse == true {
                                 seq = reverse_complement(&seq);
                             }
@@ -191,10 +190,10 @@ mod tests {
     }
     #[test]
     fn rc_match() {
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_seqs("test/test_data/test_rev.fa".to_string());
-        let cs0 = csdb.seqs.get(0).unwrap();
-        let cs1 = csdb.seqs.get(1).unwrap();
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_seqs("test/test_data/test_rev.fa".to_string());
+        let cs0 = sdb.seqs.get(0).unwrap();
+        let cs1 = sdb.seqs.get(1).unwrap();
         let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
         let shmmr1 = cs1
             .shmmrs
@@ -276,24 +275,24 @@ mod tests {
         });
 
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_index_from_agcfile(agcfile);
-        println!("index size: {}", csdb.frag_map.len());
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_index_from_agcfile(agcfile);
+        println!("index size: {}", sdb.frag_map.len());
     }
 
 
     #[test]
     fn query_frag_test() {
         use crate::agc_io::AGCFile;
-        use cseq_db::{query_fragment};
+        use seq_db::{query_fragment};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_index_from_agcfile(agcfile);
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_index_from_agcfile(agcfile);
 
         let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let seq = agcfile.next();
-        let r_frags = query_fragment(&csdb.frag_map,&seq.unwrap().unwrap().seq);
+        let r_frags = query_fragment(&sdb.frag_map,&seq.unwrap().unwrap().seq);
         let mut out = vec![];
         for res in r_frags {
             for v in res.2 {
@@ -305,7 +304,7 @@ mod tests {
         for v in out {
             println!("Q {:?}", v);
         }
-        //write_shmr_map_bincode(&csdb.frag_map, "test_shmmr.db".to_string());
+        //write_shmr_map_bincode(&sdb.frag_map, "test_shmmr.db".to_string());
 
 
     }
@@ -313,11 +312,11 @@ mod tests {
     #[test]
     fn test_shmmrmap_read_write () {
         use crate::agc_io::AGCFile;
-        use cseq_db::{ query_fragment, write_shmr_map_file, read_shmr_map_file};
+        use seq_db::{ query_fragment, write_shmr_map_file, read_shmr_map_file};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let mut csdb = cseq_db::CompressedSeqDB::new();
-        let _ = csdb.load_index_from_agcfile(agcfile);
-        write_shmr_map_file(&csdb.frag_map, "test/test_data/test_shmmr.db".to_string());
+        let mut sdb = seq_db::CompressedSeqDB::new();
+        let _ = sdb.load_index_from_agcfile(agcfile);
+        write_shmr_map_file(&sdb.frag_map, "test/test_data/test_shmmr.db".to_string());
         let new_map = read_shmr_map_file("test/test_data/test_shmmr.db".to_string());
 
         let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));

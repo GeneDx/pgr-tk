@@ -1,4 +1,4 @@
-use crate::fasta_io::SeqRec;
+use pgr_utils::fasta_io::SeqRec;
 use crate::{
     agc_close, agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_destroy, agc_list_sample,
     agc_n_ctg, agc_n_sample, agc_open, agc_t,
