@@ -127,7 +127,7 @@ fn load_seq_test() {
     }
 }
 
-fn load_index_from_fastx() {
+fn load_index_from_fastx() -> Result<(), std::io::Error> {
     let mut sdb = seq_db::CompressedSeqDB::new();
     let filelist = File::open("./filelist").unwrap();
 
@@ -136,7 +136,7 @@ fn load_index_from_fastx() {
         let _ = sdb.load_index_from_fastx(fp);
     });
 
-    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
+    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string())?;
 
     for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
@@ -148,7 +148,8 @@ fn load_index_from_fastx() {
                 shmmr_pair.0, shmmr_pair.1, ids.0, ids.1, ids.2, ids.3, ids.4
             );
         }
-    }
+    };
+    Ok(())
 }
 
 
@@ -185,13 +186,13 @@ fn load_index_sb() {
             //println!("{}:{}:{}", sample.name, n, t);
         }
     }
-    let MHCseq = agcfile.get_sub_seq("GCA_000001405.15_GRCh38_no_alt_analysis_set".to_string(), 
+    let seq_mhc = agcfile.get_sub_seq("GCA_000001405.15_GRCh38_no_alt_analysis_set".to_string(), 
     "chr6  AC:CM000668.2  gi:568336018  LN:170805979  rl:Chromosome  M5:5691468a67c7e7a7b5f2a3a683792c29  AS:GRCh38".to_string(), 
     28510120, 33480577);
     // println!("MHC seq len: {}", MHCseq.len());
-    let new_map = read_shmr_map_file("test.db".to_string());
+    let new_map = read_shmr_map_file("test.db".to_string()).unwrap();
     
-    let r_frags = query_fragment(&new_map,&MHCseq);
+    let r_frags = query_fragment(&new_map,&seq_mhc);
     let mut out = vec![];
     for res in r_frags {
         for v in res.2 {

@@ -1,14 +1,13 @@
 use crate::agc_io::AGCFile;
-use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
+use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
-
 
 pub const KMERSIZE: u32 = 56;
 pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
@@ -605,80 +604,86 @@ pub fn query_fragment(
     query_results
 }
 
-pub fn write_shmr_map_file(shmmr_map: &ShmmrToFrags, filepath: String) {
+pub fn write_shmr_map_file(
+    shmmr_map: &ShmmrToFrags,
+    filepath: String,
+) -> Result<(), std::io::Error> {
     let mut out_file = File::create(filepath).expect("open fail");
     let mut buf = Vec::<u8>::new();
-    buf.write_u64::<LittleEndian>(shmmr_map.len() as u64);
-    shmmr_map.into_iter().for_each(|(k,v) | {
-        buf.write_u64::<LittleEndian>(k.0);
-        buf.write_u64::<LittleEndian>(k.1);
-        buf.write_u64::<LittleEndian>(v.len() as u64);
-        v.iter().for_each(|r| {
-            buf.write_u32::<LittleEndian>(r.0);
-            buf.write_u32::<LittleEndian>(r.1);
-            buf.write_u32::<LittleEndian>(r.2);
-            buf.write_u32::<LittleEndian>(r.3);
-            buf.write_u8(r.4);
-        })
-    } );
+    buf.write_u64::<LittleEndian>(shmmr_map.len() as u64)?;
+    shmmr_map
+        .into_iter()
+        .try_for_each(|(k, v)| -> Result<(), std::io::Error> {
+            buf.write_u64::<LittleEndian>(k.0)?;
+            buf.write_u64::<LittleEndian>(k.1)?;
+            buf.write_u64::<LittleEndian>(v.len() as u64)?;
+            v.iter().try_for_each(|r| -> Result<(), std::io::Error> {
+                buf.write_u32::<LittleEndian>(r.0)?;
+                buf.write_u32::<LittleEndian>(r.1)?;
+                buf.write_u32::<LittleEndian>(r.2)?;
+                buf.write_u32::<LittleEndian>(r.3)?;
+                buf.write_u8(r.4)?;
+                Ok(())
+            })
+        })?;
     let _ = out_file.write_all(&buf);
+    Ok(())
 }
 
-
-pub fn read_shmr_map_file(filepath: String) -> ShmmrToFrags {
-
+pub fn read_shmr_map_file(filepath: String) -> Result<ShmmrToFrags, io::Error> {
     let mut in_file = File::open(filepath).expect("open fail");
     let mut buf = Vec::<u8>::new();
-    let mut u64bytes = [0_u8;8];
-    let mut u32bytes = [0_u8;4];
-    in_file.read_to_end(&mut buf);
+    let mut u64bytes = [0_u8; 8];
+    let mut u32bytes = [0_u8; 4];
+    in_file.read_to_end(&mut buf)?;
     let mut cursor = 0_usize;
-    u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+    u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
     let shmmr_key_len = usize::from_le_bytes(u64bytes);
     cursor += 8;
     let mut shmmr_map = ShmmrToFrags::default();
-    (0..shmmr_key_len).into_iter().for_each( |_| {
-
-        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+    (0..shmmr_key_len).into_iter().for_each(|_| {
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
         let k1 = u64::from_le_bytes(u64bytes);
         cursor += 8;
-        
-        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
         let k2 = u64::from_le_bytes(u64bytes);
         cursor += 8;
 
-        u64bytes.clone_from_slice(&buf[cursor..cursor+8]);
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
         let vec_len = usize::from_le_bytes(u64bytes);
         cursor += 8;
 
-        let value = (0..vec_len).into_iter().map(|_| {
-            let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
+        let value = (0..vec_len)
+            .into_iter()
+            .map(|_| {
+                let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
 
-            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
-            v.0 = u32::from_le_bytes(u32bytes);
-            cursor += 4;
-            
-            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
-            v.1 = u32::from_le_bytes(u32bytes);
-            cursor += 4;
-            
-            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
-            v.2 = u32::from_le_bytes(u32bytes);
-            cursor += 4;
-            
-            u32bytes.clone_from_slice(&buf[cursor..cursor+4]);
-            v.3 = u32::from_le_bytes(u32bytes);
-            cursor += 4;
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.0 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
 
-            v.4 = buf[cursor..cursor+1][0];
-            cursor += 1;
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.1 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
 
-           v 
-        }).collect::<Vec<(u32, u32, u32, u32, u8)>>();
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.2 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
 
-        shmmr_map.insert((k1,  k2), value);
-        
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.3 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
+
+                v.4 = buf[cursor..cursor + 1][0];
+                cursor += 1;
+
+                v
+            })
+            .collect::<Vec<(u32, u32, u32, u32, u8)>>();
+
+        shmmr_map.insert((k1, k2), value);
     });
 
-    shmmr_map
+    Ok(shmmr_map)
 }
