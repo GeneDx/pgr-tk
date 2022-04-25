@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufReader, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 
 pub const KMERSIZE: u32 = 56;
 pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
@@ -57,7 +57,7 @@ pub type ShmmrPair = (u64, u64);
 pub type Fragments = Vec<Fragment>;
 pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
-pub struct CompressedSeq {
+pub struct CompactSeq {
     pub name: String,
     pub id: u32,
     pub shmmrs: Vec<MM128>,
@@ -65,12 +65,11 @@ pub struct CompressedSeq {
     pub len: usize,
 }
 
-pub struct CompressedSeqDB {
-    pub seqs: Vec<CompressedSeq>,
+pub struct CompactSeqDB {
+    pub seqs: Vec<CompactSeq>,
     pub frag_map: ShmmrToFrags,
     pub frags: Fragments,
 }
-
 
 fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
     let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
@@ -143,13 +142,12 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegme
     seq
 }
 
-
-impl CompressedSeqDB {
+impl CompactSeqDB {
     pub fn new() -> Self {
-        let seqs = Vec::<CompressedSeq>::new();
+        let seqs = Vec::<CompactSeq>::new();
         let frag_map = ShmmrToFrags::default();
         let frags = Vec::<Fragment>::new();
-        CompressedSeqDB {
+        CompactSeqDB {
             seqs,
             frag_map,
             frags,
@@ -163,7 +161,7 @@ impl CompressedSeqDB {
         seq: &Vec<u8>,
         shmmrs: Vec<MM128>,
         try_compress: bool,
-    ) -> CompressedSeq {
+    ) -> CompactSeq {
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
@@ -178,7 +176,7 @@ impl CompressedSeqDB {
             self.frags.push(Fragment::Suffix(frg));
             seq_frags.push(frg_id);
 
-            return CompressedSeq {
+            return CompactSeq {
                 name,
                 id,
                 shmmrs,
@@ -285,7 +283,7 @@ impl CompressedSeqDB {
         self.frags.push(Fragment::Suffix(frg));
         seq_frags.push(frg_id);
 
-        CompressedSeq {
+        CompactSeq {
             name,
             id,
             shmmrs,
@@ -300,13 +298,13 @@ impl CompressedSeqDB {
         id: u32,
         seqlen: usize,
         shmmrs: Vec<MM128>,
-    ) -> CompressedSeq {
+    ) -> CompactSeq {
         let mut seq_frags = Vec::<u32>::new();
         let mut frg_id = self.frags.len() as u32;
 
         //assert!(shmmrs.len() > 0);
         if shmmrs.len() == 0 {
-            return CompressedSeq {
+            return CompactSeq {
                 name,
                 id,
                 shmmrs,
@@ -353,7 +351,7 @@ impl CompressedSeqDB {
         seq_frags.push(frg_id);
         self.frags.push(Fragment::Suffix(vec![]));
 
-        CompressedSeq {
+        CompactSeq {
             name,
             id,
             shmmrs,
@@ -579,7 +577,22 @@ impl CompressedSeqDB {
     }
 }
 
+impl CompactSeqDB {
+    pub fn write_shmr_map_index(&self, fp_prefix: String) -> Result<(), std::io::Error> {
+        let seq_idx_fp = fp_prefix.clone() + ".idx";
+        let data_fp = fp_prefix + ".mdb";
+        write_shmr_map_file(&self.frag_map, data_fp)?;
+        let mut idx_file = BufWriter::new(File::create(seq_idx_fp).expect("file create error"));
+        self.seqs
+            .iter()
+            .try_for_each(|s| -> Result<(), std::io::Error> {
+                writeln!(idx_file, "{}\t{}\t{}", s.id, s.len, s.name)?;
+                Ok(())
+            })?;
 
+        Ok(())
+    }
+}
 
 pub fn query_fragment(
     shmmr_map: &ShmmrToFrags,

@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     pub fn gz_file_read_test() {
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
         println!("{:?}", sdb.seqs[0].seq_frags);
     }
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn load_seq_test() {
         let seqs = load_seqs();
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
         //println!("test");
         for seq in sdb.seqs.iter() {
@@ -190,7 +190,7 @@ mod tests {
     }
     #[test]
     fn rc_match() {
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_seqs("test/test_data/test_rev.fa".to_string());
         let cs0 = sdb.seqs.get(0).unwrap();
         let cs1 = sdb.seqs.get(1).unwrap();
@@ -275,7 +275,7 @@ mod tests {
         });
 
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_index_from_agcfile(agcfile);
         println!("index size: {}", sdb.frag_map.len());
     }
@@ -287,7 +287,7 @@ mod tests {
         use seq_db::{query_fragment};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_index_from_agcfile(agcfile);
 
         let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
@@ -314,7 +314,7 @@ mod tests {
         use crate::agc_io::AGCFile;
         use seq_db::{ query_fragment, write_shmr_map_file, read_shmr_map_file};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let mut sdb = seq_db::CompressedSeqDB::new();
+        let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_index_from_agcfile(agcfile);
         write_shmr_map_file(&sdb.frag_map, "test/test_data/test_shmmr.db".to_string())?;
         let new_map = read_shmr_map_file("test/test_data/test_shmmr.db".to_string()).unwrap();
