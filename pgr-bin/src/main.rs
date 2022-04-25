@@ -1,11 +1,11 @@
 use flate2::bufread::MultiGzDecoder;
-use pgr_csdb::agc_io::AGCFile;
-use pgr_csdb::fasta_io::{reverse_complement, FastaReader};
+use pgr_db::agc_io::AGCFile;
+use pgr_utils::fasta_io::{reverse_complement, FastaReader};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use pgr_csdb::cseq_db::{self, Fragment, KMERSIZE, read_shmr_map_file, query_fragment};
+use pgr_db::seq_db::{self, Fragment, KMERSIZE, read_shmr_map_file, query_fragment};
 
 pub fn load_seqs() -> HashMap<String, Vec<u8>> {
     let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -52,19 +52,19 @@ pub fn load_seqs() -> HashMap<String, Vec<u8>> {
 
 fn load_seq_test() {
     let seqs = load_seqs();
-    let mut csdb = cseq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompressedSeqDB::new();
     let _ =
-        csdb.load_seqs("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
+        sdb.load_seqs("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
     //println!("test");
-    for seq in csdb.seqs.iter() {
+    for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
         //println!();
         //println!("{}", seq.name);
         let mut reconstruct_seq = <Vec<u8>>::new();
         let mut _p = 0;
         for frg_id in seq.seq_frags.iter() {
-            //println!("{}:{}", frg_id, csdb.frags[*frg_id as usize]);
-            match csdb.frags.get(*frg_id as usize).unwrap() {
+            //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
+            match sdb.frags.get(*frg_id as usize).unwrap() {
                 Fragment::Prefix(b) => {
                     reconstruct_seq.extend_from_slice(&b[..]);
                     //println!("p: {} {}", p, p + b.len());
@@ -81,10 +81,10 @@ fn load_seq_test() {
                     _p += b.len();
                 }
                 Fragment::AlnSegments((frg_id, reverse, a)) => {
-                    if let Fragment::Internal(base_seq) = csdb.frags.get(*frg_id as usize).unwrap()
+                    if let Fragment::Internal(base_seq) = sdb.frags.get(*frg_id as usize).unwrap()
                     {
                         let bs = base_seq.clone();
-                        let mut seq = cseq_db::reconstruct_seq_from_aln_segs(&bs, a);
+                        let mut seq = seq_db::reconstruct_seq_from_aln_segs(&bs, a);
                         if *reverse == true {
                             seq = reverse_complement(&seq);
                         }
@@ -117,7 +117,7 @@ fn load_seq_test() {
         };
         assert_eq!(reconstruct_seq, *orig_seq);
     }
-    for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
+    for (shmmr_pair, frg_ids) in sdb.frag_map.into_iter() {
         for ids in frg_ids {
             println!(
                 "M {:016X} {:016X} {} {} {} {} {}",
@@ -128,20 +128,20 @@ fn load_seq_test() {
 }
 
 fn load_index_from_fastx() {
-    let mut csdb = cseq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompressedSeqDB::new();
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
         let fp = fp.unwrap();
-        let _ = csdb.load_index_from_fastx(fp);
+        let _ = sdb.load_index_from_fastx(fp);
     });
 
-    cseq_db::write_shmr_map_file(&csdb.frag_map, "test.db".to_string());
+    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
 
-    for seq in csdb.seqs.iter() {
+    for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
     }
-    for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
+    for (shmmr_pair, frg_ids) in sdb.frag_map.into_iter() {
         for ids in frg_ids {
             println!(
                 "M {:016X} {:016X} {} {} {} {} {}",
@@ -153,21 +153,21 @@ fn load_index_from_fastx() {
 
 
 fn load_index_from_agcfile() {
-    let mut csdb = cseq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompressedSeqDB::new();
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
         let fp = fp.unwrap();
         let agcfile = AGCFile::new(fp);
-        let _ = csdb.load_index_from_agcfile(agcfile);
+        let _ = sdb.load_index_from_agcfile(agcfile);
     });
 
-    cseq_db::write_shmr_map_file(&csdb.frag_map, "test.db".to_string());
+    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
 
-    for seq in csdb.seqs.iter() {
+    for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
     }
-    for (shmmr_pair, frg_ids) in csdb.frag_map.into_iter() {
+    for (shmmr_pair, frg_ids) in sdb.frag_map.into_iter() {
         for ids in frg_ids {
             println!(
                 "M {:016X} {:016X} {} {} {} {} {}",
