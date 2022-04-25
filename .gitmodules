@@ -1,0 +1,3 @@
+[submodule "agc"]
+	path = agc
+	url = git@github.com:cschin/agc.git
