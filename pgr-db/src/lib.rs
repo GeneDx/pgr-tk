@@ -5,7 +5,7 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub mod agc_io;
-pub mod cseq_db;
+pub mod seq_db;
 pub mod fasta_io;
 pub mod shmmrutils;
 
