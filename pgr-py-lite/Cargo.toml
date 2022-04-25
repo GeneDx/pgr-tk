@@ -1,0 +1,19 @@
+[package]
+name = "pgrlite"
+version = "0.1.0"
+authors = ["Jason Chin <cschin@infoecho.net>"]
+edition = "2018"
+
+
+[lib]
+name = "pgrlite"
+crate-type = ["rlib","cdylib"]
+
+[features]
+default = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = { version = "0.14.1" }
+
+pgr-db = { path = "../pgr-db/" }
+pgr-utils = { path = "../pgr-utils/" }
