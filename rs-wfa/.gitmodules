@@ -1,0 +1,6 @@
+[submodule "WFA"]
+	path = WFA
+	url = https://github.com/cschin/WFA.git
+  shallow = true
+  branch = forPyO3
+  ignore = dirty
