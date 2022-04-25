@@ -5,21 +5,21 @@ use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 
 use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
-use peregrine_utils::fasta_io::FastaReader;
-use peregrine_utils::seqmap::{self, MapIntervalRecord};
-use peregrine_utils::multi_seqmap;
+use pgr_utils::fasta_io::FastaReader;
+use pgr_utils::seqmap::{self, MapIntervalRecord};
+use pgr_utils::multi_seqmap;
 
-use peregrine_utils::shmmrutils::{sequence_to_shmmrs, MM128};
+use pgr_utils::shmmrutils::{sequence_to_shmmrs, MM128};
 use pyo3::Python;
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use flate2::bufread::MultiGzDecoder;
 use std::io::{BufReader, BufRead, Read, Seek, SeekFrom};
-type Shmmrs = peregrine_utils::seqmap::Shmmrs;
+type Shmmrs = pgr_utils::seqmap::Shmmrs;
 use memmap::{Mmap, MmapOptions};
 use rayon::prelude::*;
 
-use peregrine_utils::seqs2variants;
+use pgr_utils::seqs2variants;
 
 trait HasShmmer {
     fn get_shmmr(&self) -> &Shmmrs;

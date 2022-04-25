@@ -22,5 +22,5 @@ rayon = "1.5.0"
 rustc-hash = "1.1.0"
 #libwfa = { git = "https://github.com/cschin/rs-wfa.git", branch="master" }
 libwfa = { path="../rs-wfa/" }
-peregrine-utils = { path = "../utils/" }
+pgr-utils = { path = "../pgr-utils/" }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
