@@ -71,6 +71,15 @@ pub struct CompressedSeqDB {
     pub frags: Fragments,
 }
 
+
+fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
+    let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
+        .iter()
+        .zip(shmmrs[1..shmmrs.len()].iter())
+        .collect::<Vec<_>>();
+    shmmr_pairs
+}
+
 pub fn deltas_to_aln_segs(
     deltas: &Vec<DeltaPoint>,
     endx: usize,
@@ -134,6 +143,7 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegme
     seq
 }
 
+
 impl CompressedSeqDB {
     pub fn new() -> Self {
         let seqs = Vec::<CompressedSeq>::new();
@@ -183,12 +193,7 @@ impl CompressedSeqDB {
         seq_frags.push(frg_id);
         frg_id += 1;
 
-        let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
-            .iter()
-            .zip(shmmrs[1..shmmrs.len()].iter())
-            .collect::<Vec<_>>();
-
-        let internal_frags = shmmr_pairs
+        let internal_frags = pair_shmmrs(&shmmrs)
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
                 let s0 = shmmr0.x >> 8;
@@ -574,17 +579,18 @@ impl CompressedSeqDB {
     }
 }
 
+
+
 pub fn query_fragment(
     shmmr_map: &ShmmrToFrags,
     frag: &Vec<u8>,
 ) -> Vec<((u64, u64), (u32, u32, u8), Vec<FragmentSignature>)> {
     let shmmrs = sequence_to_shmmrs(0, &frag, SHMMRSPEC);
-    let query_results = shmmrs[0..shmmrs.len() - 1]
-        .iter()
-        .zip(shmmrs[1..shmmrs.len()].iter())
+    let query_results = pair_shmmrs(&shmmrs)
+        .par_iter()
         .map(|(s0, s1)| {
-            let p0 = s0.pos();
-            let p1 = s1.pos();
+            let p0 = s0.pos() + 1;
+            let p1 = s1.pos() + 1;
             let s0 = s0.x >> 8;
             let s1 = s1.x >> 8;
             if s0 < s1 {
