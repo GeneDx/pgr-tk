@@ -591,7 +591,7 @@ pub fn query_fragment(
             if s0 < s1 {
                 (s0, s1, p0, p1, 0_u8)
             } else {
-                (s1, s0, p0, p1, 0_u8)
+                (s1, s0, p0, p1, 1_u8)
             }
         })
         .map(|(s0, s1, p0, p1, orientation)| {

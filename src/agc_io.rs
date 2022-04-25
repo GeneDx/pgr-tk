@@ -9,7 +9,7 @@ use std::ffi::CString;
 use std::io;
 use std::mem;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AGCSample {
     pub name: String,
     pub contigs: Vec<(String, usize)>, //name, len count
