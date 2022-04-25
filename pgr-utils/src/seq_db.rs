@@ -1,14 +1,13 @@
 #![allow(dead_code)]
 
-use super::fasta_io::FastaReader;
-use super::shmmrutils::sequence_to_shmmrs;
-use super::shmmrutils::MM128;
+use crate::fasta_io::FastaReader;
+use crate::seqmap::Shmmrs;
+use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec, MM128};
+use flate2::bufread::MultiGzDecoder;
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
-use flate2::bufread::MultiGzDecoder;
-use rayon::prelude::*;
-use super::seqmap::Shmmrs;
 
 pub struct SeqDB {
     pub seqs: Vec<Vec<u8>>,
@@ -104,7 +103,20 @@ impl SeqDB {
             .flat_map(|xv| {
                 let mut out = Vec::<(usize, Vec<MM128>)>::new();
                 for x in xv.iter() {
-                    out.push((x.0, sequence_to_shmmrs(x.0 as u32, x.1, w, k, r)));
+                    out.push((
+                        x.0,
+                        sequence_to_shmmrs(
+                            x.0 as u32,
+                            x.1,
+                            ShmmrSpec {
+                                w,
+                                k,
+                                r,
+                                min_span: 32,
+                                sketch: false,
+                            },
+                        ),
+                    ));
                 }
                 out
             })
@@ -113,17 +125,18 @@ impl SeqDB {
         out.par_sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         self.shmmrs.clear();
         for (_sid, shmmrs) in out {
-            let mut shmmrs_f = Vec::<MM128>::new(); 
+            let mut shmmrs_f = Vec::<MM128>::new();
 
             if shmmrs.len() > 0 {
                 let mut p_shmmr = shmmrs[0];
                 shmmrs_f.push(p_shmmr);
                 shmmrs[1..shmmrs.len()].iter().for_each(|&shmmr| {
-                    if shmmr.x >> 8 != p_shmmr.x >> 8 { // filter out neighboring identical mmers, note this operation is not strand skew symmtrical
+                    if shmmr.x >> 8 != p_shmmr.x >> 8 {
+                        // filter out neighboring identical mmers, note this operation is not strand skew symmtrical
                         p_shmmr = shmmr.clone();
                         shmmrs_f.push(p_shmmr);
                     }
-                }); 
+                });
             }
             self.shmmrs.push(shmmrs_f);
         }

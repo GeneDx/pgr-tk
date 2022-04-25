@@ -9,7 +9,7 @@ use pgr_utils::fasta_io::FastaReader;
 use pgr_utils::seqmap::{self, MapIntervalRecord};
 use pgr_utils::multi_seqmap;
 
-use pgr_utils::shmmrutils::{sequence_to_shmmrs, MM128};
+use pgr_utils::shmmrutils::{sequence_to_shmmrs, MM128, ShmmrSpec};
 use pyo3::Python;
 use rustc_hash::FxHashMap;
 use std::fs::File;
@@ -156,7 +156,7 @@ impl SeqDB {
         self.shmmrs.clear();
         for (sid, seq) in self.seqs.iter().enumerate() {
             //let sid = self.name2id.get(sname).unwrap();
-            let shmmers = sequence_to_shmmrs(sid as u32, seq, w, k, r);
+            let shmmers = sequence_to_shmmrs(sid as u32, seq, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
             self.shmmrs.push(shmmers);
 
             // allow to catch Python interuption whne processed enough sequences
@@ -182,7 +182,7 @@ impl SeqDB {
 
         let mut out = e_seqs
             .par_iter()
-            .map(|&x| (x.0, sequence_to_shmmrs(x.0 as u32, x.1, w, k, r)))
+            .map(|&x| (x.0, sequence_to_shmmrs(x.0 as u32, x.1, ShmmrSpec { w, k, r, min_span: 8, sketch: false })))
             .collect::<Vec<(usize, Vec<MM128>)>>();
 
         out.par_sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -349,7 +349,7 @@ impl ReadDB {
                     .iter()
                     .map(|c| base_map[(*c & 0b0011) as usize])
                     .collect::<Vec<u8>>();
-                (x.0 as usize, sequence_to_shmmrs(x.0 as u32, &seq, w, k, r))
+                (x.0 as usize, sequence_to_shmmrs(x.0 as u32, &seq, ShmmrSpec { w, k, r, min_span: 8, sketch: false }))
             })
             .collect::<Vec<(usize, Vec<MM128>)>>();
 
@@ -439,8 +439,8 @@ fn get_shmmr_dots(
     let mut y = Vec::<u32>::new();
     let seq0v = seq0.to_string_lossy().as_bytes().to_vec();
     let seq1v = seq1.to_string_lossy().as_bytes().to_vec();
-    let shmmr0 = sequence_to_shmmrs(0, &seq0v, w, k, r);
-    let shmmr1 = sequence_to_shmmrs(1, &seq1v, w, k, r);
+    let shmmr0 = sequence_to_shmmrs(0, &seq0v, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
+    let shmmr1 = sequence_to_shmmrs(1, &seq1v, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
     let mut basemmer_x = FxHashMap::<u64, Vec<u32>>::default();
 
     for m in shmmr0 {

@@ -5,7 +5,7 @@ use serde_json;
 use std::char;
 use std::fmt;
 use std::fs::File;
-use std::io::{BufRead};
+use std::io::BufRead;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -187,24 +187,24 @@ impl GFFDB {
         let mut children = IdToChildren::default();
 
         list_of_fields.into_iter().for_each(|fields| {
-                let rec = Rc::new(GFFRecord::from_fields(&fields));
-                records.push(rec.clone());
+            let rec = Rc::new(GFFRecord::from_fields(&fields));
+            records.push(rec.clone());
 
-                if rec.attributes.contains_key("ID") {
-                    let id = rec.attributes.get("ID").unwrap();
-                    id_to_rec.insert(id.clone(), rec.clone());
-                }
-                if rec.attributes.contains_key("Name") {
-                    let name = rec.attributes.get("Name").unwrap();
-                    name_to_rec.insert(name.clone(), rec.clone());
-                }
-                if rec.attributes.contains_key("Parent") {
-                    let parent_id = rec.attributes.get("Parent").unwrap();
-                    children
-                        .entry(parent_id.clone())
-                        .or_insert_with(|| vec![])
-                        .push(rec.clone());
-                }
+            if rec.attributes.contains_key("ID") {
+                let id = rec.attributes.get("ID").unwrap();
+                id_to_rec.insert(id.clone(), rec.clone());
+            }
+            if rec.attributes.contains_key("Name") {
+                let name = rec.attributes.get("Name").unwrap();
+                name_to_rec.insert(name.clone(), rec.clone());
+            }
+            if rec.attributes.contains_key("Parent") {
+                let parent_id = rec.attributes.get("Parent").unwrap();
+                children
+                    .entry(parent_id.clone())
+                    .or_insert_with(|| vec![])
+                    .push(rec.clone());
+            }
         });
 
         GFFDB {

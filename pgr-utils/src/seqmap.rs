@@ -233,8 +233,10 @@ pub fn map_interval_query(
     mq
 }
 
-
-pub fn find_match_chain(matches: &Vec<MapIntervalRecord>, max_count:Option<u32>) -> Vec<MapIntervalRecord> {
+pub fn find_match_chain(
+    matches: &Vec<MapIntervalRecord>,
+    max_count: Option<u32>,
+) -> Vec<MapIntervalRecord> {
     let mut seqpair_count = FxHashMap::<(u32, u32), u32>::default();
     //let mut out = Vec::<MapIntervalRecord>::new();
 
@@ -380,7 +382,7 @@ pub fn get_deltas(
     let hs0 = subseq0;
     let hs1 = subseq1;
 
-    if let Some(ovlp) = super::shmmrutils::match_reads(hs0, hs1, true, 0.02, 32, 24) {
+    if let Some(ovlp) = super::shmmrutils::match_reads(hs0, hs1, true, 0.02, 32, 8, 24) {
         if let Some(mut deltas) = ovlp.deltas {
             if deltas.len() > 0 {
                 deltas.reverse();
@@ -668,7 +670,6 @@ pub fn map_seqs_with_db(seq0_id_length: Vec<[u32; 2]>, shmmrmap: &MapIntervals) 
         })
         .collect::<Vec<[u32; 8]>>()
 }
-
 
 pub fn map_seqs(
     ref_fasta_file: &String,

@@ -240,8 +240,12 @@ mod test {
 
     #[test]
     fn test_get_aln_map() {
-        let seq0 = include_str!("../../test_data/seq0").trim_end().to_string();
-        let seq1 = include_str!("../../test_data/seq1").trim_end().to_string();
+        let seq0 = include_str!("../test/test_data/seq0")
+            .trim_end()
+            .to_string();
+        let seq1 = include_str!("../test/test_data/seq0")
+            .trim_end()
+            .to_string();
         let v = super::get_aln_segements(0, &seq0, 1, &seq1).unwrap();
         let aln_map = get_aln_map(&v, &seq0, &seq1).unwrap();
         let ref_a_seq = aln_map.ref_a_seq;
@@ -253,8 +257,12 @@ mod test {
     }
     #[test]
     fn test_get_aln_fragment() {
-        let seq0 = include_str!("../../test_data/seq0").trim_end().to_string();
-        let seq1 = include_str!("../../test_data/seq1").trim_end().to_string();
+        let seq0 = include_str!("../test/test_data/seq0")
+            .trim_end()
+            .to_string();
+        let seq1 = include_str!("../test/test_data/seq1")
+            .trim_end()
+            .to_string();
         let aln_segs = super::get_aln_segements(0, &seq0, 1, &seq1).unwrap();
         let aln_map = get_aln_map(&aln_segs, &seq0, &seq1).unwrap();
         let aln_segs = aln_segs

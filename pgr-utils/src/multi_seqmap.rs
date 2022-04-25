@@ -14,7 +14,6 @@ use petgraph::graphmap::DiGraphMap;
 use petgraph::unionfind::UnionFind;
 use rayon::{iter::IntoParallelRefIterator, prelude::*};
 
-
 fn load_shmmr_map(mi: &mut MapIntervals, filename: &String) -> Result<(), std::io::Error> {
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
@@ -197,12 +196,7 @@ fn build_shmmer_map_from_query_results(mqr: &Vec<MapIntervalRecord>) -> MapInter
     all_itvl
 }
 
-fn map_interval_query(
-    ivtl: &MapIntervals,
-    sid: u32,
-    bgn: u32,
-    end: u32,
-) -> Vec<MapIntervalRecord> {
+fn map_interval_query(ivtl: &MapIntervals, sid: u32, bgn: u32, end: u32) -> Vec<MapIntervalRecord> {
     let mut q_res: Vec<_> = ivtl
         .get(&sid)
         .unwrap()
@@ -342,7 +336,7 @@ fn get_deltas(
     let hs0 = subseq0;
     let hs1 = subseq1;
 
-    if let Some(ovlp) = super::shmmrutils::match_reads(hs0, hs1, true, 0.02, 32, 24) {
+    if let Some(ovlp) = super::shmmrutils::match_reads(hs0, hs1, true, 0.02, 32, 8, 24) {
         if let Some(mut deltas) = ovlp.deltas {
             if deltas.len() > 0 {
                 deltas.reverse();
@@ -388,7 +382,7 @@ fn generate_deltas(seqdb0: &SeqDB, seqdb1: &SeqDB, m: MapIntervalRecord, k: u32)
     match rev {
         true => {
             subseq0 = seqdb0.seqs[sid0 as usize][(b0 - (k - 1) as usize)..e0].to_vec();
-            
+
             let bb1 = b1 - (k - 2) as usize;
             let ee1 = e1 - (k - 2) as usize;
 
@@ -407,7 +401,6 @@ fn generate_deltas(seqdb0: &SeqDB, seqdb1: &SeqDB, m: MapIntervalRecord, k: u32)
         }
     }
 
- 
     let v = get_deltas(
         &subseq0,
         &subseq1,

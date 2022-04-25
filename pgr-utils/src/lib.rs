@@ -1,12 +1,12 @@
 pub mod fasta_io;
-pub mod sag;
-pub mod seqmap;
-pub mod multi_seqmap;
-pub mod shmmrutils;
-pub mod read_db;
-pub mod seq_db;
-pub mod seqs2variants;
 pub mod gff_db;
+pub mod multi_seqmap;
+pub mod read_db;
+pub mod sag;
+pub mod seq_db;
+pub mod seqmap;
+pub mod seqs2variants;
+pub mod shmmrutils;
 pub use core::mem::MaybeUninit;
 pub use libc::{getrusage, rusage, RUSAGE_SELF, RUSAGE_THREAD};
 

@@ -6,8 +6,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 // use super::seqmap::{self, MapIntervalRecord};
-use super::shmmrutils::{sequence_to_shmmrs, MM128};
-use super::seqmap::Shmmrs;
+use crate::seqmap::Shmmrs;
+use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec, MM128};
 use memmap::{Mmap, MmapOptions};
 use rayon::prelude::*;
 
@@ -95,7 +95,17 @@ impl ReadDB {
                     .collect::<Vec<u8>>();
                 (
                     x.0 as usize,
-                    sequence_to_shmmrs(x.0 as u32, &seq, w, k, r),
+                    sequence_to_shmmrs(
+                        x.0 as u32,
+                        &seq,
+                        ShmmrSpec {
+                            w,
+                            k,
+                            r,
+                            min_span: 32,
+                            sketch: false,
+                        },
+                    ),
                 )
             })
             .collect::<Vec<(usize, Vec<MM128>)>>();
@@ -115,7 +125,6 @@ impl ReadDB {
 
     pub fn get_id_by_seqname(&self, seqname: String) -> u32 {
         self.seqname2id.get(&seqname).unwrap().clone()
-        
     }
 
     pub fn get_seqlen_by_id(&self, sid: u32) -> usize {
@@ -146,9 +155,9 @@ impl ReadDB {
         let l = *self.seqlen.get(&sname).unwrap();
         let base: u8;
         if strand == 0 {
-            base = base_map[ (&self.seqs[b..(b + l)][pos] & 0b0011) as usize ];
+            base = base_map[(&self.seqs[b..(b + l)][pos] & 0b0011) as usize];
         } else {
-            base = base_map[ ( ((&self.seqs[b..(b + l)][pos]) >> 4) & 0b0011) as usize ];
+            base = base_map[(((&self.seqs[b..(b + l)][pos]) >> 4) & 0b0011) as usize];
         }
         base as char
     }
