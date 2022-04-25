@@ -280,7 +280,7 @@ mod test {
 
     #[test]
     fn test_gff_to_db() {
-        let res = super::GFFDB::from_bgzip_file(&Path::new("../test_data/test.gff3.gz"));
+        let res = super::GFFDB::from_bgzip_file(&Path::new("./test/test_data/test.gff3.gz"));
         let gdb = res.unwrap();
         println!("{}", gdb.header.join("\n"));
         let r = gdb.name_to_rec.get(&"FLG".to_string()).unwrap();

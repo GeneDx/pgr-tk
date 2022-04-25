@@ -243,7 +243,7 @@ mod test {
         let seq0 = include_str!("../test/test_data/seq0")
             .trim_end()
             .to_string();
-        let seq1 = include_str!("../test/test_data/seq0")
+        let seq1 = include_str!("../test/test_data/seq1")
             .trim_end()
             .to_string();
         let v = super::get_aln_segements(0, &seq0, 1, &seq1).unwrap();
@@ -251,6 +251,9 @@ mod test {
         let ref_a_seq = aln_map.ref_a_seq;
         let aln_seq = aln_map.aln_seq;
         let tgt_a_seq = aln_map.tgt_a_seq;
+        println!("{}", String::from_utf8_lossy(&ref_a_seq));
+        println!("{}", String::from_utf8_lossy(&aln_seq));
+        println!("{}", String::from_utf8_lossy(&tgt_a_seq));
         assert!(ref_a_seq == b"TCCATTCCCACCAGCAGTGTGTGAAAGTCTGGTACTGGTTCAGCCTGCCGTACTTTAATGATTATTGGTGTCACTCTTTCAAGTAACTTGTTGGTAATA--------AGAAGTCAATTA");
         assert!(  aln_seq == b"|||||||||||||||||||||||||           ||||||||||||||||||||||||||||||||||.||||||||||||||||||||||||||||        ||||||||||||");
         assert!(tgt_a_seq == b"TCCATTCCCACCAGCAGTGTGTGAA-----------GGTTCAGCCTGCCGTACTTTAATGATTATTGGTGACACTCTTTCAAGTAACTTGTTGGTAATATTTATCTAAGAAGTCAATTA");
