@@ -1,4 +1,4 @@
-/target
-Cargo.lock
-libagc.so
-test/test_data/test_shmmr.db
+*/target
+*/Cargo.lock
+*/libagc.so
+*/test/test_data/test_shmmr.db
