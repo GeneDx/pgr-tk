@@ -1,12 +1,8 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub mod agc_io;
 pub mod seq_db;
 pub mod shmmrutils;
+pub mod bindings;
 
 #[cfg(test)]
 mod tests {
@@ -206,7 +202,7 @@ mod tests {
     }
     #[test]
     fn raw_agc_test() {
-        use crate::{
+        use crate::bindings::{
             agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
             agc_n_sample, agc_open,
         };
