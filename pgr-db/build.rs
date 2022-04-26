@@ -33,7 +33,7 @@ fn build_agc() -> Option<()> {
 
     let output = Command::new("make")
         .arg("-f")
-        .arg("makefile")
+        .arg("makefile.release")
         .arg("clean")
         .arg("libagc")
         .current_dir(&agc_path)
@@ -55,6 +55,10 @@ fn main() {
     // shared library.
     println!("cargo:rustc-link-lib=agc");
     println!("cargo:rustc-link-search={}", agc_path.display());
+    println!("cargo:rustc-link-lib=zstd");
+    println!("cargo:rustc-link-search={}/libs", agc_path.display());
+    println!("cargo:rustc-link-lib=stdc++");
+    println!("cargo:rustc-link-search=/usr/lib/gcc/x86_64-linux-gnu/9/");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=wrapper.h");
