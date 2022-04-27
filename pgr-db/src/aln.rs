@@ -1,11 +1,15 @@
 // use rayon::prelude::*;
-use crate::seq_db::{query_fragment, FragmentSignature, ShmmrToFrags};
+use crate::seq_db::{query_fragment, ShmmrToFrags};
 use rustc_hash::FxHashMap;
-use std::{collections::HashSet, fmt::Result};
+use std::collections::HashSet;
 
 pub type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
 
-pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32, penality: f32) -> Vec<(f32, Vec<HitPair>)> {
+pub fn sparse_aln(
+    sp_hits: &mut Vec<HitPair>,
+    max_span: u32,
+    penality: f32,
+) -> Vec<(f32, Vec<HitPair>)> {
     // given a set of hits in the form of (bgn1, end1, orientation1),  (bgn2, end2, orientation2)
     // perform (banded) dynamic programmng to group them into list of hit chains
     sp_hits.sort_by(|a, b| a.0 .0.partial_cmp(&b.0 .0).unwrap());
@@ -27,7 +31,7 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32, penality: f32) -> V
                 break;
             };
             j -= 1;
-           
+
             let pre_hp = sp_hits[j];
             if pre_hp.0 == hp.0 {
                 continue;
@@ -38,12 +42,12 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32, penality: f32) -> V
 
             if hp.0 .2 == hp.1 .2 {
                 // same orientation
-                s -= 0.5
+                s -= penality
                     * ((hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs()
                         + (hp.1 .0 as f32 - pre_hp.1 .1 as f32).abs());
             } else {
                 // oppsite orientation
-                s -= 0.5
+                s -= penality
                     * ((hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs()
                         + (hp.1 .1 as f32 - pre_hp.1 .0 as f32).abs());
             }
@@ -84,15 +88,12 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32, penality: f32) -> V
         let mut track = Vec::<HitPair>::new();
         let mut v = best_v;
         while v.is_some() {
-            match v {
-                Some(hp) => {
-                    if !unvisited_v.contains(&hp) {
-                        break;
-                    };
-                    track.push(hp);
-                    v = *best_pre_v.get(&hp).unwrap_or(&None);
-                }
-                None => (),
+            if let Some(hp) = v {
+                if !unvisited_v.contains(&hp) {
+                    break;
+                };
+                track.push(hp);
+                v = *best_pre_v.get(&hp).unwrap_or(&None);
             }
         }
         if track.len() == 0 {
@@ -123,7 +124,6 @@ pub fn query_fragment_to_hps(
         let sp = d.0;
         let e = sp_count0.entry(sp).or_insert(0);
         *e += 1;
-        let s_frag_coord = d.1;
         d.2.iter().for_each(|v| {
             let key = (sp.0, sp.1, v.1);
             let e = sp_count1.entry(key).or_insert(0);
