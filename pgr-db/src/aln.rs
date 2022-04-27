@@ -1,10 +1,11 @@
 // use rayon::prelude::*;
+use crate::seq_db::{query_fragment, FragmentSignature, ShmmrToFrags};
 use rustc_hash::FxHashMap;
 use std::{collections::HashSet, fmt::Result};
 
 pub type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
 
-pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32) -> Vec<(f32, Vec<HitPair>)> {
+pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32, penality: f32) -> Vec<(f32, Vec<HitPair>)> {
     // given a set of hits in the form of (bgn1, end1, orientation1),  (bgn2, end2, orientation2)
     // perform (banded) dynamic programmng to group them into list of hit chains
     sp_hits.sort_by(|a, b| a.0 .0.partial_cmp(&b.0 .0).unwrap());
@@ -22,8 +23,11 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32) -> Vec<(f32, Vec<Hi
         let mut j = i;
         let mut span_set = HashSet::<(u32, u32, u8)>::new();
         loop {
+            if j == 0 {
+                break;
+            };
             j -= 1;
-
+           
             let pre_hp = sp_hits[j];
             if pre_hp.0 == hp.0 {
                 continue;
@@ -49,9 +53,6 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32) -> Vec<(f32, Vec<Hi
                 best_v = Some(pre_hp);
             }
 
-            if j == 0 {
-                break;
-            };
             if span_set.len() >= max_span as usize {
                 break;
             };
@@ -72,7 +73,7 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32) -> Vec<(f32, Vec<Hi
     while unvisited_v.len() > 0 {
         let mut best_s = 0_f32; // global best score
         let mut best_v: Option<HitPair> = None; // global best vertex
-        // println!("DBG unvisit len; {}", unvisited_v.len());
+                                                // println!("DBG unvisit len; {}", unvisited_v.len());
         unvisited_v.iter().for_each(|hp| {
             let s = v_s.get(&hp).unwrap_or(&0_f32);
             if *s > best_s {
@@ -109,6 +110,54 @@ pub fn sparse_aln(sp_hits: &mut Vec<HitPair>, max_span: u32) -> Vec<(f32, Vec<Hi
     out
 }
 
+pub fn query_fragment_to_hps(
+    shmap: &ShmmrToFrags,
+    frag: &Vec<u8>,
+    penality: f32,
+) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
+    let r = query_fragment(shmap, frag);
+    // group by target seq_id
+    let mut sp_count0 = FxHashMap::<(u64, u64), u32>::default();
+    let mut sp_count1 = FxHashMap::<(u64, u64, u32), u32>::default();
+    r.iter().for_each(|d| {
+        let sp = d.0;
+        let e = sp_count0.entry(sp).or_insert(0);
+        *e += 1;
+        let s_frag_coord = d.1;
+        d.2.iter().for_each(|v| {
+            let key = (sp.0, sp.1, v.1);
+            let e = sp_count1.entry(key).or_insert(0);
+            *e += 1;
+        })
+    });
+
+    let mut sid_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
+    r.into_iter().for_each(|d| {
+        let sp = d.0;
+        if *sp_count0.get(&sp).unwrap_or(&0) > 8 {
+            return;
+        };
+        let left_frag_coor = d.1;
+        d.2.iter().for_each(|v| {
+            let key = (sp.0, sp.1, v.1);
+            if *sp_count1.get(&key).unwrap_or(&0) > 8 {
+                return;
+            };
+            let e = sid_to_hits.entry(v.1).or_insert(vec![]);
+            let right_frag_coor = (v.2, v.3, v.4);
+            e.push((left_frag_coor, right_frag_coor));
+        });
+    });
+
+    let out = sid_to_hits
+        .into_iter()
+        .filter(|(_sid, hps)| hps.len() > 1)
+        .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, 8, penality)))
+        .collect::<Vec<_>>();
+
+    out
+}
+
 #[test]
 
 fn sparse_aln_test() {
@@ -132,6 +181,6 @@ fn sparse_aln_test() {
         }
     });
 
-    let out = sparse_aln(&mut hp, 8);
+    let out = sparse_aln(&mut hp, 8, 0.5_f32);
     out.iter().for_each(|(s, v)| println!("{} {}", s, v.len()));
 }
