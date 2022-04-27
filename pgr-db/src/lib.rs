@@ -3,6 +3,7 @@ pub mod agc_io;
 pub mod seq_db;
 pub mod shmmrutils;
 pub mod bindings;
+pub mod aln;
 
 #[cfg(test)]
 mod tests {

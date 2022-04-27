@@ -1,6 +1,7 @@
 // src/lib.rs
 use pgr_db::agc_io;
 use pgr_db::seq_db::{query_fragment, read_shmr_map_file, FragmentSignature, ShmmrToFrags};
+use pgr_db::aln::{HitPair, self};
 use pgr_utils::fasta_io;
 use pyo3::exceptions;
 use pyo3::prelude::*;
@@ -72,9 +73,19 @@ impl AGCFile {
     }
 }
 
+#[pyfunction]
+
+pub fn sparse_aln(sp_hits: Vec<HitPair>, max_span: u32) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
+    let mut hp = sp_hits.clone();
+    Ok(aln::sparse_aln(&mut hp, max_span))
+}
+
+
 #[pymodule]
+
 fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<ShmmrFragMap>()?;
     m.add_class::<AGCFile>()?;
+    m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     Ok(())
 }

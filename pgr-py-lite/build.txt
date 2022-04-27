@@ -1,0 +1,1 @@
+maturin build --release --skip-auditwheel
