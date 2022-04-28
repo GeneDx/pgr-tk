@@ -136,7 +136,7 @@ impl Iterator for AGCFile {
             let id = ctg_name.as_bytes().to_vec();
             let seq = self.get_seq(sample_name.clone(), ctg_name.clone());
             self.current_ctg += 1;
-            Some(Ok(SeqRec { id, seq }))
+            Some(Ok(SeqRec { source: Some(sample_name.clone()), id, seq }))
         } else {
             None
         }

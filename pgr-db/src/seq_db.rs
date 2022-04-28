@@ -1,6 +1,6 @@
 use crate::agc_io::AGCFile;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt, ByteOrder};
 use flate2::bufread::MultiGzDecoder;
 use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use rayon::prelude::*;
@@ -58,6 +58,7 @@ pub type Fragments = Vec<Fragment>;
 pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
 pub struct CompactSeq {
+    pub source: Option<String>,
     pub name: String,
     pub id: u32,
     pub shmmrs: Vec<MM128>,
@@ -66,6 +67,7 @@ pub struct CompactSeq {
 }
 
 pub struct CompactSeqDB {
+    pub shmmr_spec: ShmmrSpec,
     pub seqs: Vec<CompactSeq>,
     pub frag_map: ShmmrToFrags,
     pub frags: Fragments,
@@ -145,9 +147,11 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegme
 impl CompactSeqDB {
     pub fn new() -> Self {
         let seqs = Vec::<CompactSeq>::new();
+        let shmmr_spec = SHMMRSPEC;
         let frag_map = ShmmrToFrags::default();
         let frags = Vec::<Fragment>::new();
         CompactSeqDB {
+            shmmr_spec,
             seqs,
             frag_map,
             frags,
@@ -156,6 +160,7 @@ impl CompactSeqDB {
 
     pub fn seq_to_compressed(
         &mut self,
+        source: Option<String>,
         name: String,
         id: u32,
         seq: &Vec<u8>,
@@ -177,6 +182,7 @@ impl CompactSeqDB {
             seq_frags.push(frg_id);
 
             return CompactSeq {
+                source,
                 name,
                 id,
                 shmmrs,
@@ -284,6 +290,7 @@ impl CompactSeqDB {
         seq_frags.push(frg_id);
 
         CompactSeq {
+            source,
             name,
             id,
             shmmrs,
@@ -294,6 +301,7 @@ impl CompactSeqDB {
 
     pub fn seq_to_index(
         &mut self,
+        source: Option<String>,
         name: String,
         id: u32,
         seqlen: usize,
@@ -305,6 +313,7 @@ impl CompactSeqDB {
         //assert!(shmmrs.len() > 0);
         if shmmrs.len() == 0 {
             return CompactSeq {
+                source,
                 name,
                 id,
                 shmmrs,
@@ -352,6 +361,7 @@ impl CompactSeqDB {
         self.frags.push(Fragment::Suffix(vec![]));
 
         CompactSeq {
+            source,
             name,
             id,
             shmmrs,
@@ -398,11 +408,11 @@ impl CompactSeqDB {
 
     fn get_shmmrs_from_seqs(
         &mut self,
-        seqs: &Vec<(u32, String, Vec<u8>)>,
+        seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>,
     ) -> Vec<(u32, Vec<MM128>)> {
         let all_shmmers = seqs
             .par_iter()
-            .map(|(sid, _seqname, seq)| {
+            .map(|(sid, _, _, seq)| {
                 let shmmrs = sequence_to_shmmrs(*sid, &seq, SHMMRSPEC);
                 //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
@@ -412,7 +422,7 @@ impl CompactSeqDB {
     }
 
     fn load_seq_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
-        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut seqs = <Vec<(u32, Option<String>, String, Vec<u8>)>>::new();
         let mut sid = 0;
         loop {
             let mut count = 0;
@@ -422,8 +432,9 @@ impl CompactSeqDB {
             loop {
                 if let Some(rec) = reader.next() {
                     let rec = rec.unwrap();
+                    let source = rec.source.clone();
                     let seqname = String::from_utf8_lossy(&rec.id).into_owned();
-                    seqs.push((sid, seqname, rec.seq));
+                    seqs.push((sid, source, seqname, rec.seq));
                     sid += 1;
                 } else {
                     end_ext_loop = true;
@@ -443,12 +454,19 @@ impl CompactSeqDB {
         ();
     }
 
-    fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, String, Vec<u8>)>) {
+    fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
         let all_shmmers = self.get_shmmrs_from_seqs(seqs);
         seqs.iter()
             .zip(all_shmmers)
-            .for_each(|((sid, seqname, seq), (_sid, shmmrs))| {
-                let compress_seq = self.seq_to_compressed(seqname.clone(), *sid, seq, shmmrs, true);
+            .for_each(|((sid, source, seqname, seq), (_sid, shmmrs))| {
+                let compress_seq = self.seq_to_compressed(
+                    source.clone(),
+                    seqname.clone(),
+                    *sid,
+                    seq,
+                    shmmrs,
+                    true,
+                );
                 self.seqs.push(compress_seq);
             });
     }
@@ -466,7 +484,7 @@ impl CompactSeqDB {
     }
 
     fn load_index_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
-        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut seqs = <Vec<(u32, Option<String>, String, Vec<u8>)>>::new();
         let mut sid = 0;
         loop {
             let mut count = 0;
@@ -476,8 +494,9 @@ impl CompactSeqDB {
             loop {
                 if let Some(rec) = reader.next() {
                     let rec = rec.unwrap();
+                    let source = rec.source;
                     let seqname = String::from_utf8_lossy(&rec.id).into_owned();
-                    seqs.push((sid, seqname, rec.seq));
+                    seqs.push((sid, source, seqname, rec.seq));
                     sid += 1;
                 } else {
                     end_ext_loop = true;
@@ -497,19 +516,19 @@ impl CompactSeqDB {
         ();
     }
 
-    fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, String, Vec<u8>)>) {
+    fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
         let all_shmmers = self.get_shmmrs_from_seqs(seqs);
         let seq_names = seqs
             .iter()
-            .map(|(_sid, n, s)| (n.clone(), s.len()))
-            .collect::<Vec<(String, usize)>>();
-        seq_names
-            .iter()
-            .zip(all_shmmers)
-            .for_each(|((seq_name, seqlen), (sid, shmmrs))| {
-                let compress_seq = self.seq_to_index(seq_name.clone(), sid, *seqlen, shmmrs);
+            .map(|(_sid, src, n, s)| (src.clone(), n.clone(), s.len()))
+            .collect::<Vec<(Option<String>, String, usize)>>();
+        seq_names.iter().zip(all_shmmers).for_each(
+            |((source, seq_name, seqlen), (sid, shmmrs))| {
+                let compress_seq =
+                    self.seq_to_index(source.clone(), seq_name.clone(), sid, *seqlen, shmmrs);
                 self.seqs.push(compress_seq);
-            });
+            },
+        );
     }
 
     fn _write_shmmr_vec_from_reader(
@@ -517,7 +536,7 @@ impl CompactSeqDB {
         reader: &mut dyn Iterator<Item = io::Result<SeqRec>>,
         writer: &mut Vec<u8>,
     ) {
-        let mut seqs = <Vec<(u32, String, Vec<u8>)>>::new();
+        let mut seqs = <Vec<(u32, Option<String>, String, Vec<u8>)>>::new();
         let mut sid = 0;
         loop {
             let mut count = 0;
@@ -527,8 +546,9 @@ impl CompactSeqDB {
             loop {
                 if let Some(rec) = reader.next() {
                     let rec = rec.unwrap();
+                    let source = rec.source;
                     let seqname = String::from_utf8_lossy(&rec.id).into_owned();
-                    seqs.push((sid, seqname, rec.seq));
+                    seqs.push((sid, source, seqname, rec.seq));
                     sid += 1;
                 } else {
                     end_ext_loop = true;
@@ -579,14 +599,14 @@ impl CompactSeqDB {
 
 impl CompactSeqDB {
     pub fn write_shmr_map_index(&self, fp_prefix: String) -> Result<(), std::io::Error> {
-        let seq_idx_fp = fp_prefix.clone() + ".idx";
+        let seq_idx_fp = fp_prefix.clone() + ".midx";
         let data_fp = fp_prefix + ".mdb";
-        write_shmr_map_file(&self.frag_map, data_fp)?;
+        write_shmr_map_file(&self.shmmr_spec, &self.frag_map, data_fp)?;
         let mut idx_file = BufWriter::new(File::create(seq_idx_fp).expect("file create error"));
         self.seqs
             .iter()
             .try_for_each(|s| -> Result<(), std::io::Error> {
-                writeln!(idx_file, "{}\t{}\t{}", s.id, s.len, s.name)?;
+                writeln!(idx_file, "{}\t{}\t{}\t{}", s.id, s.len, s.name, s.source.clone().unwrap_or("-".to_string()))?;
                 Ok(())
             })?;
 
@@ -624,11 +644,21 @@ pub fn query_fragment(
 }
 
 pub fn write_shmr_map_file(
+    shmmr_spec: &ShmmrSpec,
     shmmr_map: &ShmmrToFrags,
     filepath: String,
 ) -> Result<(), std::io::Error> {
     let mut out_file = File::create(filepath).expect("open fail");
     let mut buf = Vec::<u8>::new();
+
+    buf.extend("mdb".to_string().into_bytes());
+    
+    buf.write_u32::<LittleEndian>(shmmr_spec.w as u32)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.k as u32)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.r as u32)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.min_span as u32)?;
+    buf.write_u32::<LittleEndian>(if shmmr_spec.sketch {1} else {0} as u32)?;
+
     buf.write_u64::<LittleEndian>(shmmr_map.len() as u64)?;
     shmmr_map
         .into_iter()
@@ -649,13 +679,31 @@ pub fn write_shmr_map_file(
     Ok(())
 }
 
-pub fn read_shmr_map_file(filepath: String) -> Result<ShmmrToFrags, io::Error> {
+pub fn read_shmr_map_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
     let mut in_file = File::open(filepath).expect("open fail");
     let mut buf = Vec::<u8>::new();
+    
     let mut u64bytes = [0_u8; 8];
     let mut u32bytes = [0_u8; 4];
     in_file.read_to_end(&mut buf)?;
     let mut cursor = 0_usize;
+    assert!(buf[0..3] == "mdb".to_string().into_bytes());
+    cursor += 3; // skip "mdb"
+
+    let w = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let k = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let r = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let min_span = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let flag = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let sketch = (flag & 0b01) == 0b01;
+
+    let shmmr_spec = ShmmrSpec {
+        w, k, r, min_span, sketch};
     u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
     let shmmr_key_len = usize::from_le_bytes(u64bytes);
     cursor += 8;
@@ -704,5 +752,5 @@ pub fn read_shmr_map_file(filepath: String) -> Result<ShmmrToFrags, io::Error> {
         shmmr_map.insert((k1, k2), value);
     });
 
-    Ok(shmmr_map)
+    Ok((shmmr_spec,shmmr_map))
 }

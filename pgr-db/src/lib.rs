@@ -313,8 +313,8 @@ mod tests {
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let mut sdb = seq_db::CompactSeqDB::new();
         let _ = sdb.load_index_from_agcfile(agcfile);
-        write_shmr_map_file(&sdb.frag_map, "test/test_data/test_shmmr.db".to_string())?;
-        let new_map = read_shmr_map_file("test/test_data/test_shmmr.db".to_string()).unwrap();
+        write_shmr_map_file(&sdb.shmmr_spec, &sdb.frag_map, "test/test_data/test_shmmr.db".to_string())?;
+        let (_shmmr_spec, new_map) = read_shmr_map_file("test/test_data/test_shmmr.db".to_string()).unwrap();
 
         let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let seq = agcfile.next();
