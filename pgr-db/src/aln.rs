@@ -1,5 +1,6 @@
 // use rayon::prelude::*;
 use crate::seq_db::{query_fragment, ShmmrToFrags};
+use crate::shmmrutils::ShmmrSpec;
 use rustc_hash::FxHashMap;
 use std::collections::HashSet;
 
@@ -114,9 +115,10 @@ pub fn sparse_aln(
 pub fn query_fragment_to_hps(
     shmap: &ShmmrToFrags,
     frag: &Vec<u8>,
+    shmmr_spec: &ShmmrSpec,
     penality: f32,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
-    let r = query_fragment(shmap, frag);
+    let r = query_fragment(shmap, frag, &shmmr_spec);
     // group by target seq_id
     let mut sp_count0 = FxHashMap::<(u64, u64), u32>::default();
     let mut sp_count1 = FxHashMap::<(u64, u64, u32), u32>::default();

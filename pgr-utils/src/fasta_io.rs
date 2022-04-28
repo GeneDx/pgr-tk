@@ -54,7 +54,11 @@ impl<R: BufRead> FastaReader<R> {
                 _ => t = Fastx::FastA,
             }
         }
-        Ok(Self { inner, t , filename: filename.to_string()})
+        Ok(Self {
+            inner,
+            t,
+            filename: filename.to_string(),
+        })
     }
 
     pub fn next_rec(&mut self) -> Option<io::Result<SeqRec>> {
@@ -90,7 +94,11 @@ impl<R: BufRead> FastaReader<R> {
             .filter(|c| *c != b'\n' && *c != b'>' && *c != b'\r')
             .collect();
         let source = Some(self.filename.to_string());
-        let rec = SeqRec { source, id: id, seq: seq };
+        let rec = SeqRec {
+            source,
+            id: id,
+            seq: seq,
+        };
 
         Some(Ok(rec))
     }
@@ -115,7 +123,11 @@ impl<R: BufRead> FastaReader<R> {
             .into_iter()
             .filter(|c| *c != b'\n' && *c != b'\r')
             .collect();
-        let rec = SeqRec {source: Some(self.filename.to_string()), id: id, seq: seq };
+        let rec = SeqRec {
+            source: Some(self.filename.to_string()),
+            id: id,
+            seq: seq,
+        };
         // ignore QV
         let _res = self.inner.read_until(b'+', &mut buf);
         let _res = self.inner.read_until(b'\n', &mut buf);

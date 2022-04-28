@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use pgr_db::seq_db::{self, Fragment, KMERSIZE, read_shmr_map_file, query_fragment};
+use pgr_db::seq_db::{self, query_fragment, read_mdb_file, Fragment, KMERSIZE};
 
 pub fn load_seqs() -> HashMap<String, Vec<u8>> {
     let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -52,9 +52,9 @@ pub fn load_seqs() -> HashMap<String, Vec<u8>> {
 
 fn load_seq_test() {
     let seqs = load_seqs();
-    let mut sdb = seq_db::CompactSeqDB::new();
-    let _ =
-        sdb.load_seqs("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
+    let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
+    let shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
+    let _ = sdb.load_seqs("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
     //println!("test");
     for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
@@ -81,8 +81,7 @@ fn load_seq_test() {
                     _p += b.len();
                 }
                 Fragment::AlnSegments((frg_id, reverse, a)) => {
-                    if let Fragment::Internal(base_seq) = sdb.frags.get(*frg_id as usize).unwrap()
-                    {
+                    if let Fragment::Internal(base_seq) = sdb.frags.get(*frg_id as usize).unwrap() {
                         let bs = base_seq.clone();
                         let mut seq = seq_db::reconstruct_seq_from_aln_segs(&bs, a);
                         if *reverse == true {
@@ -128,7 +127,7 @@ fn load_seq_test() {
 }
 
 fn load_index_from_fastx() -> Result<(), std::io::Error> {
-    let mut sdb = seq_db::CompactSeqDB::new();
+    let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
@@ -148,13 +147,12 @@ fn load_index_from_fastx() -> Result<(), std::io::Error> {
                 shmmr_pair.0, shmmr_pair.1, ids.0, ids.1, ids.2, ids.3, ids.4
             );
         }
-    };
+    }
     Ok(())
 }
 
-
 fn load_index_from_agcfile() {
-    let mut sdb = seq_db::CompactSeqDB::new();
+    let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
@@ -179,19 +177,22 @@ fn load_index_mdb() {
     "chr6  AC:CM000668.2  gi:568336018  LN:170805979  rl:Chromosome  M5:5691468a67c7e7a7b5f2a3a683792c29  AS:GRCh38".to_string(), 
     28510120, 33480577);
     // println!("MHC seq len: {}", MHCseq.len());
-    let (_shmmr_spec, new_map) = read_shmr_map_file("test.db".to_string()).unwrap();
-    
-    let r_frags = query_fragment(&new_map,&seq_mhc);
+    let (_shmmr_spec, new_map) = read_mdb_file("test.db".to_string()).unwrap();
+    let shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
+    let r_frags = query_fragment(&new_map, &seq_mhc, shmmr_spec);
     let mut out = vec![];
     for res in r_frags {
         for v in res.2 {
             //println!("Q {:?} {:?} {:?}", res.0, res.1, v);
-            out.push( (v, res.1, res.0))
+            out.push((v, res.1, res.0))
         }
     }
     out.sort();
     for (v0, v1, _) in out {
-        println!("Q {} {} {} {} {} {} {} {}", v0.0, v0.1, v0.2, v0.3, v0.4, v1.0, v1.1, v1.2);
+        println!(
+            "Q {} {} {} {} {} {} {} {}",
+            v0.0, v0.1, v0.2, v0.3, v0.4, v1.0, v1.1, v1.2
+        );
     }
 }
 

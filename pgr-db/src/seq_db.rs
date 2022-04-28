@@ -1,6 +1,6 @@
 use crate::agc_io::AGCFile;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
-use byteorder::{LittleEndian, WriteBytesExt, ByteOrder};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
 use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use rayon::prelude::*;
@@ -145,9 +145,8 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegme
 }
 
 impl CompactSeqDB {
-    pub fn new() -> Self {
+    pub fn new(shmmr_spec: ShmmrSpec) -> Self {
         let seqs = Vec::<CompactSeq>::new();
-        let shmmr_spec = SHMMRSPEC;
         let frag_map = ShmmrToFrags::default();
         let frags = Vec::<Fragment>::new();
         CompactSeqDB {
@@ -413,7 +412,7 @@ impl CompactSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _, _, seq)| {
-                let shmmrs = sequence_to_shmmrs(*sid, &seq, SHMMRSPEC);
+                let shmmrs = sequence_to_shmmrs(*sid, &seq, &self.shmmr_spec);
                 //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
@@ -606,7 +605,14 @@ impl CompactSeqDB {
         self.seqs
             .iter()
             .try_for_each(|s| -> Result<(), std::io::Error> {
-                writeln!(idx_file, "{}\t{}\t{}\t{}", s.id, s.len, s.name, s.source.clone().unwrap_or("-".to_string()))?;
+                writeln!(
+                    idx_file,
+                    "{}\t{}\t{}\t{}",
+                    s.id,
+                    s.len,
+                    s.name,
+                    s.source.clone().unwrap_or("-".to_string())
+                )?;
                 Ok(())
             })?;
 
@@ -617,8 +623,9 @@ impl CompactSeqDB {
 pub fn query_fragment(
     shmmr_map: &ShmmrToFrags,
     frag: &Vec<u8>,
+    shmmr_spec: &ShmmrSpec,
 ) -> Vec<((u64, u64), (u32, u32, u8), Vec<FragmentSignature>)> {
-    let shmmrs = sequence_to_shmmrs(0, &frag, SHMMRSPEC);
+    let shmmrs = sequence_to_shmmrs(0, &frag, &shmmr_spec);
     let query_results = pair_shmmrs(&shmmrs)
         .par_iter()
         .map(|(s0, s1)| {
@@ -652,12 +659,12 @@ pub fn write_shmr_map_file(
     let mut buf = Vec::<u8>::new();
 
     buf.extend("mdb".to_string().into_bytes());
-    
+
     buf.write_u32::<LittleEndian>(shmmr_spec.w as u32)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.k as u32)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.r as u32)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.min_span as u32)?;
-    buf.write_u32::<LittleEndian>(if shmmr_spec.sketch {1} else {0} as u32)?;
+    buf.write_u32::<LittleEndian>(if shmmr_spec.sketch { 1 } else { 0 } as u32)?;
 
     buf.write_u64::<LittleEndian>(shmmr_map.len() as u64)?;
     shmmr_map
@@ -679,10 +686,10 @@ pub fn write_shmr_map_file(
     Ok(())
 }
 
-pub fn read_shmr_map_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
+pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
     let mut in_file = File::open(filepath).expect("open fail");
     let mut buf = Vec::<u8>::new();
-    
+
     let mut u64bytes = [0_u8; 8];
     let mut u32bytes = [0_u8; 4];
     in_file.read_to_end(&mut buf)?;
@@ -703,7 +710,12 @@ pub fn read_shmr_map_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags),
     let sketch = (flag & 0b01) == 0b01;
 
     let shmmr_spec = ShmmrSpec {
-        w, k, r, min_span, sketch};
+        w,
+        k,
+        r,
+        min_span,
+        sketch,
+    };
     u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
     let shmmr_key_len = usize::from_le_bytes(u64bytes);
     cursor += 8;
@@ -752,5 +764,5 @@ pub fn read_shmr_map_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags),
         shmmr_map.insert((k1, k2), value);
     });
 
-    Ok((shmmr_spec,shmmr_map))
+    Ok((shmmr_spec, shmmr_map))
 }

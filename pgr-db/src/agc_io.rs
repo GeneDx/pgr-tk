@@ -1,9 +1,9 @@
-use pgr_utils::fasta_io::SeqRec;
 use crate::bindings::{
     agc_close, agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_destroy, agc_list_sample,
     agc_n_ctg, agc_n_sample, agc_open, agc_t,
 };
 use libc::strlen;
+use pgr_utils::fasta_io::SeqRec;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io;
@@ -136,7 +136,11 @@ impl Iterator for AGCFile {
             let id = ctg_name.as_bytes().to_vec();
             let seq = self.get_seq(sample_name.clone(), ctg_name.clone());
             self.current_ctg += 1;
-            Some(Ok(SeqRec { source: Some(sample_name.clone()), id, seq }))
+            Some(Ok(SeqRec {
+                source: Some(sample_name.clone()),
+                id,
+                seq,
+            }))
         } else {
             None
         }

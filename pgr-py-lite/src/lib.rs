@@ -2,11 +2,11 @@
 use pgr_db::agc_io;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
-use pgr_utils::fasta_io;
-use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec };
-use pyo3::exceptions;
+// use pgr_utils::fasta_io;
+use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
+// use pyo3::exceptions;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+// use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rustc_hash::FxHashMap;
@@ -24,31 +24,66 @@ impl ShmmrFragMap {
     pub fn new() -> Self {
         let shmmr_to_frags = seq_db::ShmmrToFrags::default();
         let shmmr_spec = None;
-        ShmmrFragMap { shmmr_spec, shmmr_to_frags }
+        ShmmrFragMap {
+            shmmr_spec,
+            shmmr_to_frags,
+        }
     }
 
-    pub fn load_from_file(&mut self, filename: String) -> () {
-        let (shmmr_spec, new_map) = seq_db::read_shmr_map_file(filename).unwrap();
+    pub fn load_from_mdb(&mut self, filename: String) -> () {
+        let (shmmr_spec, new_map) = seq_db::read_mdb_file(filename).unwrap();
         self.shmmr_to_frags = new_map;
         self.shmmr_spec = Some(shmmr_spec);
+    }
+
+    pub fn load_from_fastx(
+        &mut self,
+        filepath: String,
+        w: u32,
+        k: u32,
+        r: u32,
+        min_span: u32,
+    ) -> PyResult<()> {
+        let spec = ShmmrSpec {
+            w,
+            k,
+            r,
+            min_span,
+            sketch: false,
+        };
+        let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
+        sdb.load_index_from_fastx(filepath)?;
+        self.shmmr_to_frags = sdb.frag_map;
+        self.shmmr_spec = Some(spec);
+        Ok(())
     }
 
     pub fn query_fragment(
         &self,
         seq: Vec<u8>,
     ) -> PyResult<Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)>> {
+        let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
-            seq_db::query_fragment(&self.shmmr_to_frags, &seq);
+            seq_db::query_fragment(&self.shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
     }
 
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
-        penality: f32
+        penality: f32,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
-        let res = aln::query_fragment_to_hps(&self.shmmr_to_frags, &seq, penality);
+        let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
+        let res = aln::query_fragment_to_hps(&self.shmmr_to_frags, &seq, shmmr_spec, penality);
         Ok(res)
+    }
+
+    pub fn get_shmmr_spec(&self) -> PyResult<Option<(u32, u32, u32, u32, bool)>> {
+        if let Some(spec) = self.shmmr_spec.as_ref() {
+            Ok(Some((spec.w, spec.k, spec.r, spec.min_span, spec.sketch)))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -88,7 +123,11 @@ impl AGCFile {
 
 #[pyfunction]
 
-pub fn sparse_aln(sp_hits: Vec<HitPair>, max_span: u32, penality: f32) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
+pub fn sparse_aln(
+    sp_hits: Vec<HitPair>,
+    max_span: u32,
+    penality: f32,
+) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
     let mut hp = sp_hits.clone();
     Ok(aln::sparse_aln(&mut hp, max_span, penality))
 }
@@ -100,13 +139,22 @@ fn get_shmmr_dots(
     w: u32,
     k: u32,
     r: u32,
+    min_span: u32,
 ) -> (Vec<u32>, Vec<u32>) {
     let mut x = Vec::<u32>::new();
     let mut y = Vec::<u32>::new();
     //let seq0v = seq0.to_string_lossy().as_bytes().to_vec();
     //let seq1v = seq1.to_string_lossy().as_bytes().to_vec();
-    let shmmr0 = sequence_to_shmmrs(0, &seq0, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
-    let shmmr1 = sequence_to_shmmrs(1, &seq1, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
+    let shmmr_spec = ShmmrSpec {
+        w,
+        k,
+        r,
+        min_span,
+        sketch: false,
+    };
+
+    let shmmr0 = sequence_to_shmmrs(0, &seq0, &shmmr_spec);
+    let shmmr1 = sequence_to_shmmrs(1, &seq1, &shmmr_spec);
     let mut basemmer_x = FxHashMap::<u64, Vec<u32>>::default();
 
     for m in shmmr0 {

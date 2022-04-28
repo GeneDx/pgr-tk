@@ -6,15 +6,15 @@ use pyo3::wrap_pyfunction;
 
 use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
 use pgr_utils::fasta_io::FastaReader;
-use pgr_utils::seqmap::{self, MapIntervalRecord};
 use pgr_utils::multi_seqmap;
+use pgr_utils::seqmap::{self, MapIntervalRecord};
 
-use pgr_utils::shmmrutils::{sequence_to_shmmrs, MM128, ShmmrSpec};
+use flate2::bufread::MultiGzDecoder;
+use pgr_utils::shmmrutils::{sequence_to_shmmrs, ShmmrSpec, MM128};
 use pyo3::Python;
 use rustc_hash::FxHashMap;
 use std::fs::File;
-use flate2::bufread::MultiGzDecoder;
-use std::io::{BufReader, BufRead, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 type Shmmrs = pgr_utils::seqmap::Shmmrs;
 use memmap::{Mmap, MmapOptions};
 use rayon::prelude::*;
@@ -156,7 +156,17 @@ impl SeqDB {
         self.shmmrs.clear();
         for (sid, seq) in self.seqs.iter().enumerate() {
             //let sid = self.name2id.get(sname).unwrap();
-            let shmmers = sequence_to_shmmrs(sid as u32, seq, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
+            let shmmers = sequence_to_shmmrs(
+                sid as u32,
+                seq,
+                ShmmrSpec {
+                    w,
+                    k,
+                    r,
+                    min_span: 8,
+                    sketch: false,
+                },
+            );
             self.shmmrs.push(shmmers);
 
             // allow to catch Python interuption whne processed enough sequences
@@ -182,7 +192,22 @@ impl SeqDB {
 
         let mut out = e_seqs
             .par_iter()
-            .map(|&x| (x.0, sequence_to_shmmrs(x.0 as u32, x.1, ShmmrSpec { w, k, r, min_span: 8, sketch: false })))
+            .map(|&x| {
+                (
+                    x.0,
+                    sequence_to_shmmrs(
+                        x.0 as u32,
+                        x.1,
+                        ShmmrSpec {
+                            w,
+                            k,
+                            r,
+                            min_span: 8,
+                            sketch: false,
+                        },
+                    ),
+                )
+            })
             .collect::<Vec<(usize, Vec<MM128>)>>();
 
         out.par_sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -349,7 +374,20 @@ impl ReadDB {
                     .iter()
                     .map(|c| base_map[(*c & 0b0011) as usize])
                     .collect::<Vec<u8>>();
-                (x.0 as usize, sequence_to_shmmrs(x.0 as u32, &seq, ShmmrSpec { w, k, r, min_span: 8, sketch: false }))
+                (
+                    x.0 as usize,
+                    sequence_to_shmmrs(
+                        x.0 as u32,
+                        &seq,
+                        ShmmrSpec {
+                            w,
+                            k,
+                            r,
+                            min_span: 8,
+                            sketch: false,
+                        },
+                    ),
+                )
             })
             .collect::<Vec<(usize, Vec<MM128>)>>();
 
@@ -439,8 +477,28 @@ fn get_shmmr_dots(
     let mut y = Vec::<u32>::new();
     let seq0v = seq0.to_string_lossy().as_bytes().to_vec();
     let seq1v = seq1.to_string_lossy().as_bytes().to_vec();
-    let shmmr0 = sequence_to_shmmrs(0, &seq0v, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
-    let shmmr1 = sequence_to_shmmrs(1, &seq1v, ShmmrSpec { w, k, r, min_span: 8, sketch: false });
+    let shmmr0 = sequence_to_shmmrs(
+        0,
+        &seq0v,
+        ShmmrSpec {
+            w,
+            k,
+            r,
+            min_span: 8,
+            sketch: false,
+        },
+    );
+    let shmmr1 = sequence_to_shmmrs(
+        1,
+        &seq1v,
+        ShmmrSpec {
+            w,
+            k,
+            r,
+            min_span: 8,
+            sketch: false,
+        },
+    );
     let mut basemmer_x = FxHashMap::<u64, Vec<u32>>::default();
 
     for m in shmmr0 {
@@ -697,12 +755,14 @@ fn generate_deltas_from_read_db(
 }
 
 #[pyfunction]
-fn find_match_chain(mqr: Vec<MapIntervalRecord>, max_count:Option<u32>) -> PyResult<Vec<MapIntervalRecord>> {
+fn find_match_chain(
+    mqr: Vec<MapIntervalRecord>,
+    max_count: Option<u32>,
+) -> PyResult<Vec<MapIntervalRecord>> {
     let matches = &mqr;
     let mqr = seqmap::find_match_chain(matches, max_count);
     Ok(mqr)
 }
-
 
 #[pyfunction]
 fn find_match_chain_m(mqr: Vec<MapIntervalRecord>) -> PyResult<Vec<MapIntervalRecord>> {
@@ -741,10 +801,13 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u
 
 #[pyfunction]
 fn map_seqs_with_db(
-    seq0_id_length: Vec<[u32;2]>,
+    seq0_id_length: Vec<[u32; 2]>,
     shmmrmap: &MapIntervals,
 ) -> PyResult<Vec<MapIntervalRecord>> {
-    Ok(seqmap::map_seqs_with_db(seq0_id_length, &shmmrmap.intervals))
+    Ok(seqmap::map_seqs_with_db(
+        seq0_id_length,
+        &shmmrmap.intervals,
+    ))
 }
 
 #[pyfunction]
