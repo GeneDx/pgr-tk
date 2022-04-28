@@ -6,6 +6,7 @@ use std::io::prelude::*;
 use std::io::{self, BufReader, SeekFrom};
 
 pub struct SeqRec {
+    pub source: Option<String>,
     pub id: Vec<u8>,
     pub seq: Vec<u8>,
 }
@@ -17,6 +18,7 @@ enum Fastx {
 pub struct FastaReader<R> {
     inner: R,
     t: Fastx,
+    filename: String,
 }
 
 pub fn reverse_complement(seq: &Vec<u8>) -> Vec<u8> {
@@ -52,7 +54,7 @@ impl<R: BufRead> FastaReader<R> {
                 _ => t = Fastx::FastA,
             }
         }
-        Ok(Self { inner, t })
+        Ok(Self { inner, t , filename: filename.to_string()})
     }
 
     pub fn next_rec(&mut self) -> Option<io::Result<SeqRec>> {
@@ -87,7 +89,8 @@ impl<R: BufRead> FastaReader<R> {
             .into_iter()
             .filter(|c| *c != b'\n' && *c != b'>' && *c != b'\r')
             .collect();
-        let rec = SeqRec { id: id, seq: seq };
+        let source = Some(self.filename.to_string());
+        let rec = SeqRec { source, id: id, seq: seq };
 
         Some(Ok(rec))
     }
@@ -112,7 +115,7 @@ impl<R: BufRead> FastaReader<R> {
             .into_iter()
             .filter(|c| *c != b'\n' && *c != b'\r')
             .collect();
-        let rec = SeqRec { id: id, seq: seq };
+        let rec = SeqRec {source: Some(self.filename.to_string()), id: id, seq: seq };
         // ignore QV
         let _res = self.inner.read_until(b'+', &mut buf);
         let _res = self.inner.read_until(b'\n', &mut buf);

@@ -17,6 +17,7 @@ pub struct OvlpMatch {
     pub deltas: Option<Vec<DeltaPoint>>,
 }
 
+#[derive(Clone, Debug)]
 pub struct ShmmrSpec {
     pub w: u32,
     pub k: u32,

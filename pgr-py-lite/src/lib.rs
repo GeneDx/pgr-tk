@@ -14,6 +14,7 @@ use rustc_hash::FxHashMap;
 #[pyclass]
 #[derive(Clone)]
 struct ShmmrFragMap {
+    pub shmmr_spec: Option<ShmmrSpec>,
     pub shmmr_to_frags: seq_db::ShmmrToFrags,
 }
 
@@ -22,12 +23,14 @@ impl ShmmrFragMap {
     #[new]
     pub fn new() -> Self {
         let shmmr_to_frags = seq_db::ShmmrToFrags::default();
-        ShmmrFragMap { shmmr_to_frags }
+        let shmmr_spec = None;
+        ShmmrFragMap { shmmr_spec, shmmr_to_frags }
     }
 
     pub fn load_from_file(&mut self, filename: String) -> () {
-        let new_map = seq_db::read_shmr_map_file(filename).unwrap();
+        let (shmmr_spec, new_map) = seq_db::read_shmr_map_file(filename).unwrap();
         self.shmmr_to_frags = new_map;
+        self.shmmr_spec = Some(shmmr_spec);
     }
 
     pub fn query_fragment(
