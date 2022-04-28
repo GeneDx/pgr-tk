@@ -52,7 +52,7 @@ pub fn load_seqs() -> HashMap<String, Vec<u8>> {
 
 fn load_seq_test() {
     let seqs = load_seqs();
-    let mut sdb = seq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompactSeqDB::new();
     let _ =
         sdb.load_seqs("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
     //println!("test");
@@ -128,7 +128,7 @@ fn load_seq_test() {
 }
 
 fn load_index_from_fastx() -> Result<(), std::io::Error> {
-    let mut sdb = seq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompactSeqDB::new();
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
@@ -136,7 +136,7 @@ fn load_index_from_fastx() -> Result<(), std::io::Error> {
         let _ = sdb.load_index_from_fastx(fp);
     });
 
-    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string())?;
+    seq_db::write_shmr_map_file(&sdb.shmmr_spec, &sdb.frag_map, "test.db".to_string())?;
 
     for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
@@ -154,7 +154,7 @@ fn load_index_from_fastx() -> Result<(), std::io::Error> {
 
 
 fn load_index_from_agcfile() {
-    let mut sdb = seq_db::CompressedSeqDB::new();
+    let mut sdb = seq_db::CompactSeqDB::new();
     let filelist = File::open("./filelist").unwrap();
 
     BufReader::new(filelist).lines().into_iter().for_each(|fp| {
@@ -163,22 +163,11 @@ fn load_index_from_agcfile() {
         let _ = sdb.load_index_from_agcfile(agcfile);
     });
 
-    seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
-
-    for seq in sdb.seqs.iter() {
-        println!("S {} {} {}", seq.name, seq.id, seq.len);
-    }
-    for (shmmr_pair, frg_ids) in sdb.frag_map.into_iter() {
-        for ids in frg_ids {
-            println!(
-                "M {:016X} {:016X} {} {} {} {} {}",
-                shmmr_pair.0, shmmr_pair.1, ids.0, ids.1, ids.2, ids.3, ids.4
-            );
-        }
-    }
+    //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
+    sdb.write_shmr_map_index("test".to_string());
 }
 
-fn load_index_sb() {
+fn load_index_mdb() {
     let agcfile = AGCFile::new(String::from("grch38.agc"));
     for sample in agcfile.samples.iter() {
         for contig in sample.contigs.iter() {
@@ -190,7 +179,7 @@ fn load_index_sb() {
     "chr6  AC:CM000668.2  gi:568336018  LN:170805979  rl:Chromosome  M5:5691468a67c7e7a7b5f2a3a683792c29  AS:GRCh38".to_string(), 
     28510120, 33480577);
     // println!("MHC seq len: {}", MHCseq.len());
-    let new_map = read_shmr_map_file("test.db".to_string()).unwrap();
+    let (_shmmr_spec, new_map) = read_shmr_map_file("test.db".to_string()).unwrap();
     
     let r_frags = query_fragment(&new_map,&seq_mhc);
     let mut out = vec![];
@@ -209,6 +198,6 @@ fn load_index_sb() {
 fn main() {
     //load_seq_test();
     //load_index_from_fastx();
-    //load_index_from_agcfile();
-    load_index_sb();
+    load_index_from_agcfile();
+    //load_index_mdb();
 }
