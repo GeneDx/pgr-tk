@@ -2,11 +2,15 @@
 use pgr_db::agc_io;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
+use pyo3::exceptions;
 // use pgr_utils::fasta_io;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 // use pyo3::exceptions;
 use pyo3::prelude::*;
 // use pyo3::types::PyString;
+use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
+use pgr_utils::seqs2variants;
+use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rustc_hash::FxHashMap;
@@ -218,6 +222,128 @@ fn get_shmmr_dots(
     (x, y)
 }
 
+#[pyclass]
+#[derive(Clone)]
+struct AlnSegment {
+    #[pyo3(get, set)]
+    t: u8,
+    #[pyo3(get, set)]
+    ref_loc: (u32, u32, u32),
+    #[pyo3(get, set)]
+    tgt_loc: (u32, u32, u32),
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct AlnMap {
+    #[pyo3(get, set)]
+    pmap: Vec<(u32, u32)>,
+    #[pyo3(get, set)]
+    ref_a_seq: Vec<u8>,
+    #[pyo3(get, set)]
+    tgt_a_seq: Vec<u8>,
+    #[pyo3(get, set)]
+    aln_seq: Vec<u8>,
+}
+
+#[pyfunction]
+fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u8>)> {
+    let alloc = MMAllocator::new(BUFFER_SIZE_8M as u64);
+    let pattern = seq0.to_string();
+    let text = seq1.to_string();
+    let mut penalties = AffinePenalties {
+        match_: 0,
+        mismatch: 4,
+        gap_opening: 6,
+        gap_extension: 2,
+    };
+    let pat_len = pattern.as_bytes().len();
+    let text_len = text.as_bytes().len();
+
+    let mut wavefronts =
+        AffineWavefronts::new_reduced(pat_len, text_len, &mut penalties, 100, 100, &alloc);
+    wavefronts
+        .align(pattern.as_bytes(), text.as_bytes())
+        .unwrap();
+
+    let score = wavefronts.edit_cigar_score(&mut penalties);
+    //let cigar = wavefronts.cigar_bytes_raw();
+    let cigar = wavefronts.cigar_bytes();
+    let cg_str = std::str::from_utf8(&cigar).unwrap();
+
+    Ok((score, cg_str.to_string(), wavefronts.cigar_bytes_raw()))
+}
+
+#[pyfunction]
+fn get_aln_segements(
+    ref_id: u32,
+    ref_seq: &PyString,
+    tgt_id: u32,
+    tgt_seq: &PyString,
+) -> PyResult<Vec<AlnSegment>> {
+    let ref_seq = ref_seq.to_string();
+    let tgt_seq = tgt_seq.to_string();
+    let aln_segs = seqs2variants::get_aln_segements(ref_id, &ref_seq, tgt_id, &tgt_seq);
+
+    match aln_segs {
+        Ok(segs) => Ok(segs
+            .iter()
+            .map(|seg| {
+                let t = match seg.t {
+                    seqs2variants::AlnSegType::Match => b'M',
+                    seqs2variants::AlnSegType::Mismatch => b'X',
+                    seqs2variants::AlnSegType::Insertion => b'I',
+                    seqs2variants::AlnSegType::Deletion => b'D',
+                    seqs2variants::AlnSegType::Unspecified => b'?',
+                };
+                AlnSegment {
+                    t: t,
+                    ref_loc: (seg.ref_loc.id, seg.ref_loc.bgn, seg.ref_loc.len),
+                    tgt_loc: (seg.tgt_loc.id, seg.tgt_loc.bgn, seg.tgt_loc.len),
+                }
+            })
+            .collect()),
+        Err(_) => Err(exceptions::PyException::new_err("alignment failed")),
+    }
+}
+
+#[pyfunction]
+fn get_aln_map(aln_segs: Vec<AlnSegment>, s0: &PyString, s1: &PyString) -> PyResult<AlnMap> {
+    let s0 = s0.to_string();
+    let s1 = s1.to_string();
+    let aln_segs = aln_segs
+        .iter()
+        .map(|s| seqs2variants::AlnSegment {
+            ref_loc: seqs2variants::SeqLocus {
+                id: s.ref_loc.0,
+                bgn: s.ref_loc.1,
+                len: s.ref_loc.2,
+            },
+            tgt_loc: seqs2variants::SeqLocus {
+                id: s.tgt_loc.0,
+                bgn: s.tgt_loc.1,
+                len: s.tgt_loc.2,
+            },
+            t: match s.t {
+                b'M' => seqs2variants::AlnSegType::Match,
+                b'X' => seqs2variants::AlnSegType::Mismatch,
+                b'I' => seqs2variants::AlnSegType::Insertion,
+                b'D' => seqs2variants::AlnSegType::Deletion,
+                _ => seqs2variants::AlnSegType::Unspecified,
+            },
+        })
+        .collect::<seqs2variants::AlnSegments>();
+
+    let aln_map = seqs2variants::get_aln_map(&aln_segs, &s0, &s1).unwrap();
+
+    Ok(AlnMap {
+        pmap: aln_map.pmap,
+        ref_a_seq: aln_map.ref_a_seq,
+        tgt_a_seq: aln_map.tgt_a_seq,
+        aln_seq: aln_map.aln_seq,
+    })
+}
+
 #[pymodule]
 
 fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
@@ -225,5 +351,8 @@ fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
+    m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
+    m.add_function(wrap_pyfunction!(get_aln_segements, m)?)?;
+    m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     Ok(())
 }

@@ -18,3 +18,4 @@ pyo3 = { version = "0.14.1" }
 pgr-db = { path = "../pgr-db/" }
 pgr-utils = { path = "../pgr-utils/" }
 rustc-hash = "1.1.0"
+libwfa = {path = "../rs-wfa"}
