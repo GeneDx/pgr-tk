@@ -570,7 +570,7 @@ pub fn sequence_to_shmmrs1(
                 let px = shmmrs2[i - 1].x;
                 let x = shmmrs2[i].x;
                 let nx = shmmrs2[i + 1].x;
-                if pos - p_pos > min_span && n_pos - pos > min_span && px != x && x != nx {
+                if pos - p_pos >= min_span && n_pos - pos >= min_span && px != x && x != nx {
                     shmmrs3.push(*shmmr);
                 }
             } else {
