@@ -515,7 +515,7 @@ impl CompactSeqDB {
         ();
     }
 
-    fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
+    pub fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
         let all_shmmers = self.get_shmmrs_from_seqs(seqs);
         let seq_names = seqs
             .iter()

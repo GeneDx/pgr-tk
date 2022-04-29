@@ -59,6 +59,33 @@ impl ShmmrFragMap {
         Ok(())
     }
 
+    pub fn load_from_seq_list(
+        &mut self,
+        source: Option<String>,
+        seq_list: Vec<(u32, String, Vec<u8>)>,
+        w: u32,
+        k: u32,
+        r: u32,
+        min_span: u32,
+    ) -> PyResult<()> {
+        let spec = ShmmrSpec {
+            w,
+            k,
+            r,
+            min_span,
+            sketch: false,
+        };
+        let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
+        let seq_vec = seq_list
+            .into_iter()
+            .map(|v| (v.0, source.clone(), v.1, v.2))
+            .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
+        sdb.load_index_from_seq_vec(&seq_vec);
+        self.shmmr_to_frags = sdb.frag_map;
+        self.shmmr_spec = Some(spec);
+        Ok(())
+    }
+
     pub fn query_fragment(
         &self,
         seq: Vec<u8>,
@@ -88,11 +115,15 @@ impl ShmmrFragMap {
     }
 
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
-        let py_out = self.shmmr_to_frags.iter().flat_map(|v| {
-            v.1.iter()
-                .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
-                .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>()
-        }).collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
+        let py_out = self
+            .shmmr_to_frags
+            .iter()
+            .flat_map(|v| {
+                v.1.iter()
+                    .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
+                    .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>()
+            })
+            .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
         Ok(py_out)
     }
 }
