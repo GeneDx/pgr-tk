@@ -15,6 +15,7 @@ use rustc_hash::FxHashMap;
 #[derive(Clone)]
 struct ShmmrFragMap {
     pub shmmr_spec: Option<ShmmrSpec>,
+    #[pyo3(get)]
     pub shmmr_to_frags: seq_db::ShmmrToFrags,
 }
 
@@ -84,6 +85,15 @@ impl ShmmrFragMap {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
+        let py_out = self.shmmr_to_frags.iter().flat_map(|v| {
+            v.1.iter()
+                .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
+                .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>()
+        }).collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
+        Ok(py_out)
     }
 }
 
