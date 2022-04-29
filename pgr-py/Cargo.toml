@@ -24,5 +24,3 @@ rustc-hash = "1.1.0"
 libwfa = { path="../rs-wfa/" }
 pgr-utils = { path = "../pgr-utils/" }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
-
-[workspace] # empty workapce for maturin to build the results inside the package
