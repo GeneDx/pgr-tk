@@ -26,7 +26,7 @@ def u8_to_string(u8):
     return u8.decode("utf-8")
 
 
-class SeqShmmrIndex(object):
+class SeqShmmrIdxDB(object):
 
     def __init__(self, agc_prefix=None, fastx_file_spec=None, seq_list=None, backed_by="AGC"):
         if agc_prefix is not None and backed_by == "AGC":
