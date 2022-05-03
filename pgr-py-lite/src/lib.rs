@@ -21,6 +21,8 @@ struct ShmmrFragMap {
     pub shmmr_spec: Option<ShmmrSpec>,
     #[pyo3(get)]
     pub shmmr_to_frags: seq_db::ShmmrToFrags,
+    #[pyo3(get)]
+    pub seq_index: Option<Vec<(u32, u32, String, Option<String>)>>,
 }
 
 #[pymethods]
@@ -32,6 +34,7 @@ impl ShmmrFragMap {
         ShmmrFragMap {
             shmmr_spec,
             shmmr_to_frags,
+            seq_index: None,
         }
     }
 
@@ -60,6 +63,11 @@ impl ShmmrFragMap {
         sdb.load_index_from_fastx(filepath)?;
         self.shmmr_to_frags = sdb.frag_map;
         self.shmmr_spec = Some(spec);
+        self.seq_index = Some(sdb
+            .seqs
+            .iter()
+            .map(|v| (v.id, v.len as u32, v.name.clone(), v.source.clone()))
+            .collect::<Vec<(u32, u32, String, Option<String>)>>());
         Ok(())
     }
 
@@ -87,6 +95,11 @@ impl ShmmrFragMap {
         sdb.load_index_from_seq_vec(&seq_vec);
         self.shmmr_to_frags = sdb.frag_map;
         self.shmmr_spec = Some(spec);
+        self.seq_index = Some(sdb
+            .seqs
+            .iter()
+            .map(|v| (v.id, v.len as u32, v.name.clone(), v.source.clone()))
+            .collect::<Vec<(u32, u32, String, Option<String>)>>());
         Ok(())
     }
 
