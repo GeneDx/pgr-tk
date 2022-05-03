@@ -470,7 +470,7 @@ impl CompactSeqDB {
             });
     }
 
-    pub fn load_seqs(&mut self, filepath: String) -> Result<(), std::io::Error> {
+    pub fn load_seqs_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         match self.get_fastx_reader(filepath)? {
             GZFastaReader::GZFile(reader) => self.load_seq_from_reader(&mut reader.into_iter()),
 

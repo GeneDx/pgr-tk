@@ -61,7 +61,7 @@ mod tests {
     #[test]
     pub fn gz_file_read_test() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
-        let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs2.fa.gz".to_string());
         println!("{:?}", sdb.seqs[0].seq_frags);
     }
 
@@ -69,7 +69,7 @@ mod tests {
     fn load_seq_test() {
         let seqs = load_seqs();
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
-        let _ = sdb.load_seqs("test/test_data/test_seqs2.fa.gz".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs2.fa.gz".to_string());
         //println!("test");
         for seq in sdb.seqs.iter() {
             //println!();
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn rc_match() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
-        let _ = sdb.load_seqs("test/test_data/test_rev.fa".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/test_rev.fa".to_string());
         let cs0 = sdb.seqs.get(0).unwrap();
         let cs1 = sdb.seqs.get(1).unwrap();
         let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
