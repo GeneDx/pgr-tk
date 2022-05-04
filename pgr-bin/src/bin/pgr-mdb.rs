@@ -1,4 +1,4 @@
-const VERSION_STRING: &'static str = "0.1.0"; // TODO: use git hash
+const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 //use std::path::PathBuf;
 use clap::{self, IntoApp, Parser};
