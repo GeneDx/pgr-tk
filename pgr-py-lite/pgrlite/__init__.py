@@ -19,11 +19,11 @@ def rc(seq):
 
 
 def string_to_u8(s):
-    return s.encode("utf-8")
+    return list(s.encode("utf-8"))
 
 
 def u8_to_string(u8):
-    return u8.decode("utf-8")
+    return bytes(u8).decode("utf-8")
 
 
 class SeqShmmrIdxDB(object):
@@ -92,7 +92,7 @@ class SeqShmmrIdxDB(object):
                 bgn = min(target_coor[0])
                 end = max(target_coor[-1])
                 aln_range.setdefault(sid, [])
-                aln_range[sid].append((bgn, end, end-bgn, orientation))
+                aln_range[sid].append((bgn, end, end-bgn, orientation, aln))
 
         if merge_range_tol > 0:
             for sid, rgns in aln_range.items():
@@ -104,8 +104,8 @@ class SeqShmmrIdxDB(object):
     def merge_regions(self, rgns, tol=1000):
         # rgns is a list of (bgn, end, len, orientation)
         rgns.sort()
-        frgns = [r for r in rgns if r[-1] == 0]
-        rrgns = [r for r in rgns if r[-1] == 1]
+        frgns = [r for r in rgns if r[3] == 0]
+        rrgns = [r for r in rgns if r[3] == 1]
         fwd_rgns = []
         last = None
         for r in frgns:
@@ -117,6 +117,7 @@ class SeqShmmrIdxDB(object):
             if r[0] - last < tol:  # merge
                 fwd_rgns[-1][1] = r[1]
                 fwd_rgns[-1][2] += r[2]
+                fwd_rgns[-1][4] += r[4]
             elif r[1] > fwd_rgns[-1][1]:
                 fwd_rgns.append(r)
             last = r[1]
@@ -132,7 +133,96 @@ class SeqShmmrIdxDB(object):
             if r[0] - last < tol:  # merge
                 rev_rgns[-1][1] = r[1]
                 rev_rgns[-1][2] += r[2]
+                rev_rgns[-1][4] += r[4]
             elif r[1] > rev_rgns[-1][1]:
                 rev_rgns.append(r)
             last = r[1]
         return fwd_rgns + rev_rgns
+
+
+
+def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
+    variant_calls = {}
+    for s in aln_segs:
+        ref_id = s.ref_loc[0]
+        if s.t != ord('M'):
+            if s.t == ord('X'):
+                key = (ref_id, s.ref_loc[1]+ref_bgn+1)
+                ref_bases = rs0[s.ref_loc[1]:s.ref_loc[1]+s.ref_loc[2]]
+                alt_bases = cs0[s.tgt_loc[1]:s.tgt_loc[1]+s.tgt_loc[2]]
+
+            if s.t == ord('I'):
+                p0 = s.ref_loc[1]
+                p1 = s.tgt_loc[1]
+
+                while 1:
+                    if rs0[p0-1] == cs0[p1+s.tgt_loc[2]-1] and rs0[p0-2] == cs0[p1-2]:
+                        p0 = p0 - 1
+                        p1 = p1 - 1
+                    else:
+                        break
+
+                key = (ref_id, p0+ref_bgn)
+                ref_bases = rs0[p0-1:p0+s.ref_loc[2]]
+                alt_bases = cs0[p1-1:p1+s.tgt_loc[2]]
+
+            if s.t == ord('D'):
+
+                p0 = s.ref_loc[1]
+                p1 = s.tgt_loc[1]
+
+                while 1 and p0 > 0 and p1 > 0:
+                    if rs0[p0+s.ref_loc[2]-1] == cs0[p1-1] and rs0[p0-2] == cs0[p1-2]:
+                        p0 = p0 - 1
+                        p1 = p1 - 1
+                    else:
+                        break
+
+                key = (ref_id, p0+ref_bgn)
+                ref_bases = rs0[p0-1:p0+s.ref_loc[2]]
+                alt_bases = cs0[p1-1:p1+s.tgt_loc[2]]
+
+            value = (chr(s.t), ref_bases, alt_bases,
+                    (key[0], key[1], s.ref_loc[2]),
+                    (s.tgt_loc[0], ctg_bgn+s.tgt_loc[1], s.tgt_loc[2]), strand)
+            variant_calls.setdefault(key, {})
+            variant_calls[key][(s.tgt_loc[0], strand)] = value
+
+    return variant_calls
+
+def output_variants_to_vcf_records(variant_calls, ref_name):
+    keys = sorted(list(variant_calls.keys()))
+    vcf_recs = []
+    for k in keys:
+        v = variant_calls[k]
+        ref_id = k[0]
+        gt_set = set()
+        gt = ["."]
+        gt_idx = 0
+        variants = []
+        for kk in v:
+            gt_idx += 1
+            variants.append((gt_idx, v[kk][:3], ref_id))
+       
+        count = {}
+        for v in variants:
+            count.setdefault(v[0], [])
+            count[v[0]].append(v[1])
+            
+        ht = [(str(x[2]), str(x[0])) for x in variants]
+        ht.sort()
+        ht = list(zip(*ht))
+        
+    
+
+        for kk in sorted(count.keys()):
+            ref_base=count[kk][0][1]
+            alt_base=count[kk][0][2]
+            #print(count)
+            if ref_base == alt_base:
+                continue
+          
+            vcf_recs.append(( ref_name,  "{}".format(k[1]), ".", ref_base, alt_base, 
+                  "30", ".", ".", "GT:AD", "./1:0,1:"))
+            
+    return vcf_recs
