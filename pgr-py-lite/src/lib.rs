@@ -1,4 +1,6 @@
 // src/lib.rs
+pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
+
 use pgr_db::agc_io;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
@@ -14,6 +16,11 @@ use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rustc_hash::FxHashMap;
+
+#[pyfunction]
+pub fn pgr_lib_version() -> PyResult<String> {
+    Ok(VERSION_STRING.to_string())    
+}
 
 #[pyclass]
 #[derive(Clone)]
@@ -367,5 +374,6 @@ fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
     m.add_function(wrap_pyfunction!(get_aln_segements, m)?)?;
     m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
+    m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     Ok(())
 }

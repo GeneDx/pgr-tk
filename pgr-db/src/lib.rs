@@ -1,3 +1,5 @@
+pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
+
 pub mod agc_io;
 pub mod aln;
 pub mod bindings;
