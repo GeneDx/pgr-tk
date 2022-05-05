@@ -5,7 +5,6 @@ use crate::bindings::{
 use libc::strlen;
 use pgr_utils::fasta_io::SeqRec;
 use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::IntoParallelRefMutIterator;
 use rayon::iter::ParallelIterator;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -119,10 +118,10 @@ impl AGCFile {
                 end as i32 - 1,
                 seq_buf,
             );
-            seq = String::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
+            seq = <Vec<u8>>::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
             //check this, it takes over the pointer? we don't need to free the point manually?
         }
-        seq.as_bytes().to_vec()
+        seq
     }
 
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> Vec<u8> {
@@ -149,7 +148,7 @@ impl Iterator for AGCFile {
     type Item = io::Result<SeqRec>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let number_decoder = 16_usize;
+        let number_decoder = 128_usize;
 
         if self.current_ctg == self.sample_ctg.len() {
             return None
@@ -159,11 +158,12 @@ impl Iterator for AGCFile {
             self.seq_buf.replace(Some((0, 0, vec![])));
         }
 
-        let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
+        let seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
 
-        let buf_b = seq_buf.0;
+        //let buf_b = seq_buf.0;
         let buf_e = seq_buf.1;
         //println!("{} {}", buf_b, buf_e);
+        self.seq_buf.replace(Some(seq_buf));
 
         if self.current_ctg == buf_e {
             // buffer exhausted
@@ -180,30 +180,34 @@ impl Iterator for AGCFile {
                     .unwrap();
                 next_batch.push((sample_name.clone(), ctg_name.clone(), bgn, end));
             }
+            //let agc_handle = Arc::new(AGCHandle(self.agc_handle.0));
             let agc_handle = Arc::new(AGCHandle(self.agc_handle.0));
 
+            let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
             seq_buf.2 = next_batch
-                .iter()
+                .par_iter()
                 .map(|(s, c, bgn, end)| {
                     //let seq = self.get_seq(s.clone(), c.clone());
                     let c_sample_name: *mut i8 = CString::new(s.as_bytes()).unwrap().into_raw();
                     let c_ctg_name: *mut i8 = CString::new(c.as_bytes()).unwrap().into_raw();
                     let seq;
                     let ctg_len = *end - *bgn + 1;
+                    
                     unsafe {
+                        let new_agc_handle: *mut agc_t = agc_handle.0.clone(); 
                         let seq_buf: *mut i8 =
                             libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
                         agc_get_ctg_seq(
-                            agc_handle.0,
+                            new_agc_handle,
                             c_sample_name,
                             c_ctg_name,
                             *bgn as i32,
                             *end as i32 - 1,
                             seq_buf,
                         );
-                        seq = String::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
+                        seq = <Vec<u8>>::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
                     }
-                    let seq = seq.as_bytes().to_vec();
+                    //let seq = seq.as_bytes().to_vec();
                     SeqRec {
                         source: Some(s.clone()),
                         id: c.as_bytes().to_vec(),
@@ -214,9 +218,10 @@ impl Iterator for AGCFile {
             
             seq_buf.0 = self.current_ctg;
             seq_buf.1 = self.current_ctg + seq_buf.2.len();
+            self.seq_buf.replace(Some(seq_buf));
         } 
-        self.seq_buf.replace(Some(seq_buf));
         
+       
         let seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
         let rtn = Some(Ok(seq_buf.2[self.current_ctg-seq_buf.0].clone()));
         self.seq_buf.replace(Some(seq_buf));
