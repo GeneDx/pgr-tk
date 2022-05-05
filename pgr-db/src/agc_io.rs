@@ -12,6 +12,7 @@ use std::ffi::CString;
 use std::io;
 use std::mem;
 use std::sync::Arc;
+use std::thread;
 
 #[derive(Debug)]
 struct AGCHandle(*mut agc_t);
@@ -32,6 +33,11 @@ pub struct AGCFile {
     pub samples: Vec<AGCSample>,
     pub ctg_lens: HashMap<(String, String), usize>,
     sample_ctg: Vec<(String, String)>,
+}
+
+pub struct AGCFileIter<'a> {
+    agc_file: &'a AGCFile,
+    agc_handles: Vec<AGCHandle>,
     current_ctg: usize,
     seq_buf: RefCell<Option<(usize, usize, Vec<SeqRec>)>>,
 }
@@ -85,8 +91,6 @@ impl AGCFile {
             samples,
             ctg_lens,
             sample_ctg,
-            current_ctg: 0,
-            seq_buf: RefCell::new(None),
         }
     }
 
@@ -143,16 +147,36 @@ impl Drop for AGCFile {
     }
 }
 
-impl Iterator for AGCFile {
+impl<'a> IntoIterator for &'a AGCFile {
+    // can we parallelized this?
+    type Item = io::Result<SeqRec>;
+    type IntoIter = AGCFileIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        AGCFileIter::new(self) 
+    }
+}
+
+impl<'a> AGCFileIter<'a> {
+    pub fn new(agc_file: &'a AGCFile) -> Self {
+        AGCFileIter {
+            agc_file,
+            agc_handles: vec![],
+            current_ctg: 0,
+            seq_buf: RefCell::new(None),
+        }
+    }
+}
+
+impl<'a> Iterator for AGCFileIter<'a> {
     // can we parallelized this?
     type Item = io::Result<SeqRec>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let number_decoder = 128_usize;
 
-        if self.current_ctg == self.sample_ctg.len() {
-            return None
-        } 
+        if self.current_ctg == self.agc_file.sample_ctg.len() {
+            return None;
+        }
 
         if self.seq_buf.borrow().is_none() {
             self.seq_buf.replace(Some((0, 0, vec![])));
@@ -169,19 +193,19 @@ impl Iterator for AGCFile {
             // buffer exhausted
             let mut next_batch = <Vec<(String, String, usize, usize)>>::new();
             for i in self.current_ctg..self.current_ctg + number_decoder {
-                if i == self.sample_ctg.len() {
+                if i == self.agc_file.sample_ctg.len() {
                     break;
                 }
-                let (sample_name, ctg_name) = self.sample_ctg.get(i).unwrap();
+                let (sample_name, ctg_name) = self.agc_file.sample_ctg.get(i).unwrap();
                 let bgn = 0;
                 let end = *self
-                    .ctg_lens
+                    .agc_file.ctg_lens
                     .get(&(sample_name.clone(), ctg_name.clone()))
                     .unwrap();
                 next_batch.push((sample_name.clone(), ctg_name.clone(), bgn, end));
             }
             //let agc_handle = Arc::new(AGCHandle(self.agc_handle.0));
-            let agc_handle = Arc::new(AGCHandle(self.agc_handle.0));
+            let agc_handle = Arc::new(AGCHandle(self.agc_file.agc_handle.0));
 
             let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
             seq_buf.2 = next_batch
@@ -192,9 +216,9 @@ impl Iterator for AGCFile {
                     let c_ctg_name: *mut i8 = CString::new(c.as_bytes()).unwrap().into_raw();
                     let seq;
                     let ctg_len = *end - *bgn + 1;
-                    
+
                     unsafe {
-                        let new_agc_handle: *mut agc_t = agc_handle.0.clone(); 
+                        let new_agc_handle: *mut agc_t = agc_handle.0.clone();
                         let seq_buf: *mut i8 =
                             libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
                         agc_get_ctg_seq(
@@ -215,15 +239,14 @@ impl Iterator for AGCFile {
                     }
                 })
                 .collect::<Vec<SeqRec>>();
-            
+
             seq_buf.0 = self.current_ctg;
             seq_buf.1 = self.current_ctg + seq_buf.2.len();
             self.seq_buf.replace(Some(seq_buf));
-        } 
-        
-       
+        }
+
         let seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
-        let rtn = Some(Ok(seq_buf.2[self.current_ctg-seq_buf.0].clone()));
+        let rtn = Some(Ok(seq_buf.2[self.current_ctg - seq_buf.0].clone()));
         self.seq_buf.replace(Some(seq_buf));
         self.current_ctg += 1;
         rtn

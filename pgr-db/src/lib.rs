@@ -259,8 +259,9 @@ mod tests {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
 
-        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let seq = agcfile.next();
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let mut agc_iter = agcfile.into_iter();
+        let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
         let r_frags = query_fragment(&sdb.frag_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];
@@ -293,7 +294,8 @@ mod tests {
             read_mdb_file("test/test_data/test_shmmr.db".to_string()).unwrap();
 
         let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let seq = agcfile.next();
+        let mut agc_iter = agcfile.into_iter();
+        let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
         let r_frags = query_fragment(&new_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];
