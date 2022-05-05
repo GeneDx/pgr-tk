@@ -60,45 +60,7 @@ fn load_seq_test() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
         //println!();
         //println!("{}", seq.name);
-        let mut reconstruct_seq = <Vec<u8>>::new();
-        let mut _p = 0;
-        for frg_id in seq.seq_frags.iter() {
-            //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
-            match sdb.frags.get(*frg_id as usize).unwrap() {
-                Fragment::Prefix(b) => {
-                    reconstruct_seq.extend_from_slice(&b[..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
-                }
-                Fragment::Suffix(b) => {
-                    reconstruct_seq.extend_from_slice(&b[..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
-                }
-                Fragment::Internal(b) => {
-                    reconstruct_seq.extend_from_slice(&b[KMERSIZE as usize..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
-                }
-                Fragment::AlnSegments((frg_id, reverse, a)) => {
-                    if let Fragment::Internal(base_seq) = sdb.frags.get(*frg_id as usize).unwrap() {
-                        let bs = base_seq.clone();
-                        let mut seq = seq_db::reconstruct_seq_from_aln_segs(&bs, a);
-                        if *reverse == true {
-                            seq = reverse_complement(&seq);
-                        }
-                        assert!(base_seq.len() > KMERSIZE as usize);
-                        if seq.len() < KMERSIZE as usize {
-                            println!("{} {:?} {:?}", seq.len(), seq, a);
-                        }
-                        assert!(seq.len() > KMERSIZE as usize);
-                        reconstruct_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
-                        //println!("p: {} {}", p, p + seq.len());
-                        _p += seq.len();
-                    }
-                }
-            }
-        }
+        let reconstruct_seq = sdb.get_seq(&seq); 
         let orig_seq = seqs.get(&seq.name).unwrap();
         if reconstruct_seq != *orig_seq {
             //println!("{}", seq.name);
