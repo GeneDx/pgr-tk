@@ -207,11 +207,16 @@ impl<'a> Iterator for AGCFileIter<'a> {
                     .ctg_lens
                     .get(&(sample_name.clone(), ctg_name.clone()))
                     .unwrap();
-                next_batch.push((self.agc_file.filepath.clone(), sample_name.clone(), ctg_name.clone(), bgn, end));
+                next_batch.push((
+                    self.agc_file.filepath.clone(),
+                    sample_name.clone(),
+                    ctg_name.clone(),
+                    bgn,
+                    end,
+                ));
             }
 
             let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
-
 
             let v_seq_rec = self.agc_thread_pool.install(|| {
                 let seq_buf = next_batch
@@ -219,11 +224,14 @@ impl<'a> Iterator for AGCFileIter<'a> {
                     .map(|(filepath, s, c, _bgn, _end)| {
                         TL_AGCHANDLE.with(|tl_agc_handle| {
                             if (*tl_agc_handle.borrow_mut()).is_none() {
-                                *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone())); 
-                                println!("create new agc handel: thread id {:?}", self.agc_thread_pool.current_thread_index());   
-                            } 
+                                *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone()));
+                                println!(
+                                    "create new agc handel: thread id {:?}",
+                                    self.agc_thread_pool.current_thread_index()
+                                );
+                            }
                             let t = tl_agc_handle.borrow_mut();
-                            let agc_handle= (t.as_ref()).unwrap(); 
+                            let agc_handle = (t.as_ref()).unwrap();
                             let seq = agc_handle.get_seq(s.clone(), c.clone());
                             SeqRec {
                                 source: Some(s.clone()),

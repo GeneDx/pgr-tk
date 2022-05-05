@@ -54,13 +54,15 @@ fn load_seq_test() {
     let seqs = load_seqs();
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
-    let _ = sdb.load_seqs_from_fastx("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
+    let _ = sdb.load_seqs_from_fastx(
+        "/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string(),
+    );
     //println!("test");
     for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
         //println!();
         //println!("{}", seq.name);
-        let reconstruct_seq = sdb.get_seq(&seq); 
+        let reconstruct_seq = sdb.get_seq(&seq);
         let orig_seq = seqs.get(&seq.name).unwrap();
         if reconstruct_seq != *orig_seq {
             //println!("{}", seq.name);

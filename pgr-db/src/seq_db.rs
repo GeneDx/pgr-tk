@@ -322,7 +322,6 @@ impl CompactSeqDB {
             };
         }
 
-
         seq_frags.push(frg_id);
         frg_id += 1;
 
@@ -599,7 +598,6 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-
     pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
         let mut reconstructed_seq = <Vec<u8>>::new();
         let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
@@ -639,11 +637,10 @@ impl CompactSeqDB {
         reconstructed_seq
     }
 
-    pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8>{
+    pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
         self.get_seq(seq)
     }
-     
 }
 
 impl CompactSeqDB {

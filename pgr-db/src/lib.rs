@@ -8,7 +8,7 @@ pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
-    use crate::shmmrutils::{match_reads, DeltaPoint, self};
+    use crate::shmmrutils::{self, match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
     use pgr_utils::fasta_io::FastaReader;
     use std::collections::HashMap;
@@ -16,7 +16,6 @@ mod tests {
     use std::io::{BufRead, BufReader, Read};
 
     use crate::seq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
-    
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -151,7 +150,7 @@ mod tests {
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
     }
-    
+
     #[test]
     fn rc_match() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
@@ -161,15 +160,8 @@ mod tests {
         let shmmr_spec = seq_db::SHMMRSPEC;
         let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec);
         let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec);
-        let shmmr0 = shmmr0
-            .iter()
-            .map(|m| m.x >> 8)
-            .collect::<Vec<u64>>();
-        let shmmr1 = shmmr1
-            .iter()
-            .rev()
-            .map(|m| m.x >> 8)
-            .collect::<Vec<u64>>();
+        let shmmr0 = shmmr0.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
+        let shmmr1 = shmmr1.iter().rev().map(|m| m.x >> 8).collect::<Vec<u64>>();
         assert!(shmmr0.len() > 0);
         assert_eq!(shmmr0, shmmr1);
     }
