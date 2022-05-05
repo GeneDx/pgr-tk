@@ -225,10 +225,6 @@ impl<'a> Iterator for AGCFileIter<'a> {
                         TL_AGCHANDLE.with(|tl_agc_handle| {
                             if (*tl_agc_handle.borrow_mut()).is_none() {
                                 *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone()));
-                                println!(
-                                    "create new agc handel: thread id {:?}",
-                                    self.agc_thread_pool.current_thread_index()
-                                );
                             }
                             let t = tl_agc_handle.borrow_mut();
                             let agc_handle = (t.as_ref()).unwrap();
