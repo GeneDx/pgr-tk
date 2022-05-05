@@ -285,7 +285,7 @@ mod tests {
         let (_shmmr_spec, new_map) =
             read_mdb_file("test/test_data/test_shmmr.db".to_string()).unwrap();
 
-        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
         let mut agc_iter = agcfile.into_iter();
         let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;

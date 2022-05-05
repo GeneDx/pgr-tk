@@ -299,7 +299,7 @@ impl CompactSeqDB {
         }
     }
 
-    pub fn seq_to_index(
+    pub fn _seq_to_index(
         &mut self,
         source: Option<String>,
         name: String,
@@ -364,6 +364,62 @@ impl CompactSeqDB {
             seq_frags,
             len: seqlen,
         }
+    }
+
+    pub fn seq_to_index(
+        source: Option<String>,
+        name: String,
+        id: u32,
+        seqlen: usize,
+        shmmrs: Vec<MM128>,
+    ) -> (CompactSeq, Vec<((u64, u64), u32, u32, u8)>) {
+        //assert!(shmmrs.len() > 0);
+        if shmmrs.len() == 0 {
+            return (
+                CompactSeq {
+                    source,
+                    name,
+                    id,
+                    seq_frags: vec![],
+                    len: seqlen,
+                },
+                vec![],
+            );
+        }
+
+        let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
+            .iter()
+            .zip(shmmrs[1..shmmrs.len()].iter())
+            .collect::<Vec<_>>();
+
+        let internal_frags: Vec<((u64, u64), u32, u32, u8)> = shmmr_pairs
+            .par_iter()
+            .map(|(shmmr0, shmmr1)| {
+                let s0 = shmmr0.x >> 8;
+                let s1 = shmmr1.x >> 8;
+                let (shmmr_pair, orientation) = if s0 <= s1 {
+                    ((s0, s1), 0_u8)
+                } else {
+                    ((s1, s0), 1_u8)
+                };
+                let bgn = shmmr0.pos() + 1;
+                let end = shmmr1.pos() + 1;
+                (shmmr_pair, bgn, end, orientation)
+            })
+            .collect::<Vec<_>>();
+
+        let seq_frags: Vec<u32> = (0..(shmmr_pairs.len() as u32)).collect();
+
+        (
+            CompactSeq {
+                source,
+                name,
+                id,
+                seq_frags,
+                len: seqlen,
+            },
+            internal_frags,
+        )
     }
 
     fn get_fastx_reader(&mut self, filepath: String) -> Result<GZFastaReader, std::io::Error> {
@@ -522,13 +578,41 @@ impl CompactSeqDB {
             .iter()
             .map(|(_sid, src, n, s)| (src.clone(), n.clone(), s.len()))
             .collect::<Vec<(Option<String>, String, usize)>>();
+            
+        /*
         seq_names.iter().zip(all_shmmers).for_each(
             |((source, seq_name, seqlen), (sid, shmmrs))| {
                 let compress_seq =
-                    self.seq_to_index(source.clone(), seq_name.clone(), sid, *seqlen, shmmrs);
+                    self._seq_to_index(source.clone(), seq_name.clone(), sid, *seqlen, shmmrs);
                 self.seqs.push(compress_seq);
             },
         );
+        */
+
+        seq_names
+            .par_iter()
+            .zip(all_shmmers)
+            .map(|((source, seq_name, seqlen), (sid, shmmrs))| {
+                let tmp = self::CompactSeqDB::seq_to_index(
+                    source.clone(),
+                    seq_name.clone(),
+                    sid,
+                    *seqlen,
+                    shmmrs,
+                );
+                (sid, tmp.0, tmp.1)
+            })
+            .collect::<Vec<(u32, CompactSeq, Vec<_>)>>()
+            .into_iter()
+            .for_each(|(sid, cs, internal_frags)| {
+                internal_frags.iter().zip(cs.seq_frags.clone()).for_each(
+                    |((shmmr, bgn, end, orientation), frg_id)| {
+                        let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
+                        e.push((frg_id, sid, *bgn, *end, *orientation));
+                    },
+                );
+                self.seqs.push(cs);
+            });
     }
 
     fn _write_shmmr_vec_from_reader(
