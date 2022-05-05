@@ -8,15 +8,15 @@ pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
-    use crate::shmmrutils::{match_reads, DeltaPoint};
+    use crate::shmmrutils::{match_reads, DeltaPoint, self};
     use flate2::bufread::MultiGzDecoder;
-    use pgr_utils::fasta_io::{reverse_complement, FastaReader};
+    use pgr_utils::fasta_io::FastaReader;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};
 
     use crate::seq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
-    use crate::seq_db::{Fragment, KMERSIZE};
+    
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -76,42 +76,7 @@ mod tests {
         for seq in sdb.seqs.iter() {
             //println!();
             //println!("{}", seq.name);
-            let mut reconstruct_seq = <Vec<u8>>::new();
-            let mut _p = 0;
-            for frg_id in seq.seq_frags.iter() {
-                //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
-                match sdb.frags.get(*frg_id as usize).unwrap() {
-                    Fragment::Prefix(b) => {
-                        reconstruct_seq.extend_from_slice(&b[..]);
-                        //println!("p: {} {}", p, p + b.len());
-                        _p += b.len();
-                    }
-                    Fragment::Suffix(b) => {
-                        reconstruct_seq.extend_from_slice(&b[..]);
-                        //println!("p: {} {}", p, p + b.len());
-                        _p += b.len();
-                    }
-                    Fragment::Internal(b) => {
-                        reconstruct_seq.extend_from_slice(&b[KMERSIZE as usize..]);
-                        //println!("p: {} {}", p, p + b.len());
-                        _p += b.len();
-                    }
-                    Fragment::AlnSegments((frg_id, reverse, a)) => {
-                        if let Fragment::Internal(base_seq) =
-                            sdb.frags.get(*frg_id as usize).unwrap()
-                        {
-                            let bs = base_seq.clone();
-                            let mut seq = seq_db::reconstruct_seq_from_aln_segs(&bs, a);
-                            if *reverse == true {
-                                seq = reverse_complement(&seq);
-                            }
-                            reconstruct_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
-                            //println!("p: {} {}", p, p + seq.len());
-                            _p += seq.len();
-                        }
-                    }
-                }
-            }
+            let reconstruct_seq = sdb.get_seq(seq);
             let orig_seq = seqs.get(&seq.name).unwrap();
             if reconstruct_seq != *orig_seq {
                 //println!("{}", seq.name);
@@ -186,15 +151,21 @@ mod tests {
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
     }
+    
     #[test]
     fn rc_match() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_rev.fa".to_string());
-        let cs0 = sdb.seqs.get(0).unwrap();
-        let cs1 = sdb.seqs.get(1).unwrap();
-        let shmmr0 = cs0.shmmrs.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
-        let shmmr1 = cs1
-            .shmmrs
+        let cs0 = sdb.get_seq_by_id(0);
+        let cs1 = sdb.get_seq_by_id(1);
+        let shmmr_spec = seq_db::SHMMRSPEC;
+        let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec);
+        let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec);
+        let shmmr0 = shmmr0
+            .iter()
+            .map(|m| m.x >> 8)
+            .collect::<Vec<u64>>();
+        let shmmr1 = shmmr1
             .iter()
             .rev()
             .map(|m| m.x >> 8)
@@ -202,6 +173,7 @@ mod tests {
         assert!(shmmr0.len() > 0);
         assert_eq!(shmmr0, shmmr1);
     }
+
     #[test]
     fn raw_agc_test() {
         use crate::bindings::{

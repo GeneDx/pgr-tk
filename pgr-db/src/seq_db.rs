@@ -61,7 +61,6 @@ pub struct CompactSeq {
     pub source: Option<String>,
     pub name: String,
     pub id: u32,
-    pub shmmrs: Vec<MM128>,
     pub seq_frags: Vec<u32>,
     pub len: usize,
 }
@@ -70,7 +69,7 @@ pub struct CompactSeqDB {
     pub shmmr_spec: ShmmrSpec,
     pub seqs: Vec<CompactSeq>,
     pub frag_map: ShmmrToFrags,
-    pub frags: Fragments,
+    pub frags: Option<Fragments>,
 }
 
 fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
@@ -148,7 +147,7 @@ impl CompactSeqDB {
     pub fn new(shmmr_spec: ShmmrSpec) -> Self {
         let seqs = Vec::<CompactSeq>::new();
         let frag_map = ShmmrToFrags::default();
-        let frags = Vec::<Fragment>::new();
+        let frags = None;
         CompactSeqDB {
             shmmr_spec,
             seqs,
@@ -167,24 +166,27 @@ impl CompactSeqDB {
         try_compress: bool,
     ) -> CompactSeq {
         let mut seq_frags = Vec::<u32>::new();
-        let mut frg_id = self.frags.len() as u32;
+
+        assert!(self.frags.is_some());
+        let frags: &mut Vec<Fragment> = self.frags.as_mut().unwrap();
+
+        let mut frg_id = frags.len() as u32;
 
         //assert!(shmmrs.len() > 0);
         if shmmrs.len() == 0 {
             let frg = seq[..].to_vec();
-            self.frags.push(Fragment::Prefix(frg));
+            frags.push(Fragment::Prefix(frg));
             seq_frags.push(frg_id);
             frg_id += 1;
 
             let frg = Vec::<u8>::new();
-            self.frags.push(Fragment::Suffix(frg));
+            frags.push(Fragment::Suffix(frg));
             seq_frags.push(frg_id);
 
             return CompactSeq {
                 source,
                 name,
                 id,
-                shmmrs,
                 seq_frags,
                 len: seq.len(),
             };
@@ -192,7 +194,7 @@ impl CompactSeqDB {
         // prefix
         let end = (shmmrs[0].pos() + 1) as usize;
         let frg = seq[..end].to_vec();
-        self.frags.push(Fragment::Prefix(frg));
+        frags.push(Fragment::Prefix(frg));
         seq_frags.push(frg_id);
         frg_id += 1;
 
@@ -216,7 +218,7 @@ impl CompactSeqDB {
                 if frg_len > 64 && try_compress && self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
-                        let base_frg = self.frags.get(t_frg_id.0 as usize).unwrap();
+                        let base_frg = frags.get(t_frg_id.0 as usize).unwrap();
                         if let Fragment::Internal(b) = base_frg {
                             let base_frg = b;
                             //assert!(base_frg.len() > KMERSIZE as usize);
@@ -275,7 +277,7 @@ impl CompactSeqDB {
                 }
                 let e = self.frag_map.get_mut(shmmr).unwrap();
                 e.push((frg_id, id, *bgn, *end, *orientation));
-                self.frags.push(frg.clone());
+                frags.push(frg.clone());
                 seq_frags.push(frg_id);
                 frg_id += 1;
             }
@@ -285,14 +287,13 @@ impl CompactSeqDB {
         // suffix
         let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
         let frg = seq[bgn..].to_vec();
-        self.frags.push(Fragment::Suffix(frg));
+        frags.push(Fragment::Suffix(frg));
         seq_frags.push(frg_id);
 
         CompactSeq {
             source,
             name,
             id,
-            shmmrs,
             seq_frags,
             len: seq.len(),
         }
@@ -306,8 +307,9 @@ impl CompactSeqDB {
         seqlen: usize,
         shmmrs: Vec<MM128>,
     ) -> CompactSeq {
+        assert!(self.frags.is_none());
         let mut seq_frags = Vec::<u32>::new();
-        let mut frg_id = self.frags.len() as u32;
+        let mut frg_id = 0;
 
         //assert!(shmmrs.len() > 0);
         if shmmrs.len() == 0 {
@@ -315,14 +317,13 @@ impl CompactSeqDB {
                 source,
                 name,
                 id,
-                shmmrs,
                 seq_frags,
                 len: seqlen,
             };
         }
 
+
         seq_frags.push(frg_id);
-        self.frags.push(Fragment::Prefix(vec![]));
         frg_id += 1;
 
         let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
@@ -352,18 +353,15 @@ impl CompactSeqDB {
                 let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
                 e.push((frg_id, id, *bgn, *end, *orientation));
                 seq_frags.push(frg_id);
-                self.frags.push(Fragment::Internal(vec![]));
                 frg_id += 1;
             });
 
         seq_frags.push(frg_id);
-        self.frags.push(Fragment::Suffix(vec![]));
 
         CompactSeq {
             source,
             name,
             id,
-            shmmrs,
             seq_frags,
             len: seqlen,
         }
@@ -423,6 +421,7 @@ impl CompactSeqDB {
     fn load_seq_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
         let mut seqs = <Vec<(u32, Option<String>, String, Vec<u8>)>>::new();
         let mut sid = 0;
+        self.frags = Some(Fragments::new());
         loop {
             let mut count = 0;
             let mut end_ext_loop = false;
@@ -454,6 +453,9 @@ impl CompactSeqDB {
     }
 
     fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
+        if self.frags.is_none() {
+            self.frags = Some(Fragments::new());
+        }
         let all_shmmers = self.get_shmmrs_from_seqs(seqs);
         seqs.iter()
             .zip(all_shmmers)
@@ -594,6 +596,54 @@ impl CompactSeqDB {
         self.load_index_from_reader(&mut agcfile.into_iter());
         Ok(())
     }
+}
+
+impl CompactSeqDB {
+
+    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
+        let mut reconstructed_seq = <Vec<u8>>::new();
+        let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
+        let mut _p = 0;
+        for frg_id in seq.seq_frags.iter() {
+            //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
+            match frags.get(*frg_id as usize).unwrap() {
+                Fragment::Prefix(b) => {
+                    reconstructed_seq.extend_from_slice(&b[..]);
+                    //println!("p: {} {}", p, p + b.len());
+                    _p += b.len();
+                }
+                Fragment::Suffix(b) => {
+                    reconstructed_seq.extend_from_slice(&b[..]);
+                    //println!("p: {} {}", p, p + b.len());
+                    _p += b.len();
+                }
+                Fragment::Internal(b) => {
+                    reconstructed_seq.extend_from_slice(&b[KMERSIZE as usize..]);
+                    //println!("p: {} {}", p, p + b.len());
+                    _p += b.len();
+                }
+                Fragment::AlnSegments((frg_id, reverse, a)) => {
+                    if let Fragment::Internal(base_seq) = frags.get(*frg_id as usize).unwrap() {
+                        let mut seq = reconstruct_seq_from_aln_segs(&base_seq, a);
+                        if *reverse == true {
+                            seq = reverse_complement(&seq);
+                        }
+                        reconstructed_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
+                        //println!("p: {} {}", p, p + seq.len());
+                        _p += seq.len();
+                    }
+                }
+            }
+        }
+
+        reconstructed_seq
+    }
+
+    pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8>{
+        let seq = self.seqs.get(sid as usize).unwrap();
+        self.get_seq(seq)
+    }
+     
 }
 
 impl CompactSeqDB {
