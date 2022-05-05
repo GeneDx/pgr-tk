@@ -6,13 +6,14 @@ use libc::strlen;
 use pgr_utils::fasta_io::SeqRec;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
+use rayon::ThreadPool;
+use rayon::ThreadPoolBuilder;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::io;
 use std::mem;
-use std::sync::Arc;
-use std::thread;
+//use std::sync::Arc;
 
 #[derive(Debug)]
 struct AGCHandle(*mut agc_t);
@@ -37,7 +38,7 @@ pub struct AGCFile {
 
 pub struct AGCFileIter<'a> {
     agc_file: &'a AGCFile,
-    agc_handles: Vec<AGCHandle>,
+    agc_thread_pool: ThreadPool,
     current_ctg: usize,
     seq_buf: RefCell<Option<(usize, usize, Vec<SeqRec>)>>,
 }
@@ -152,19 +153,24 @@ impl<'a> IntoIterator for &'a AGCFile {
     type Item = io::Result<SeqRec>;
     type IntoIter = AGCFileIter<'a>;
     fn into_iter(self) -> Self::IntoIter {
-        AGCFileIter::new(self) 
+        AGCFileIter::new(self)
     }
 }
 
 impl<'a> AGCFileIter<'a> {
     pub fn new(agc_file: &'a AGCFile) -> Self {
+        let agc_thread_pool = ThreadPoolBuilder::new().num_threads(36).build().unwrap();
         AGCFileIter {
             agc_file,
-            agc_handles: vec![],
+            agc_thread_pool,
             current_ctg: 0,
             seq_buf: RefCell::new(None),
         }
     }
+}
+
+thread_local! {
+    pub static TL_AGCHANDLE: RefCell<Option<AGCFile>> = RefCell::new(None);
 }
 
 impl<'a> Iterator for AGCFileIter<'a> {
@@ -184,14 +190,12 @@ impl<'a> Iterator for AGCFileIter<'a> {
 
         let seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
 
-        //let buf_b = seq_buf.0;
         let buf_e = seq_buf.1;
-        //println!("{} {}", buf_b, buf_e);
         self.seq_buf.replace(Some(seq_buf));
 
         if self.current_ctg == buf_e {
             // buffer exhausted
-            let mut next_batch = <Vec<(String, String, usize, usize)>>::new();
+            let mut next_batch = <Vec<(String, String, String, usize, usize)>>::new();
             for i in self.current_ctg..self.current_ctg + number_decoder {
                 if i == self.agc_file.sample_ctg.len() {
                     break;
@@ -199,46 +203,40 @@ impl<'a> Iterator for AGCFileIter<'a> {
                 let (sample_name, ctg_name) = self.agc_file.sample_ctg.get(i).unwrap();
                 let bgn = 0;
                 let end = *self
-                    .agc_file.ctg_lens
+                    .agc_file
+                    .ctg_lens
                     .get(&(sample_name.clone(), ctg_name.clone()))
                     .unwrap();
-                next_batch.push((sample_name.clone(), ctg_name.clone(), bgn, end));
+                next_batch.push((self.agc_file.filepath.clone(), sample_name.clone(), ctg_name.clone(), bgn, end));
             }
-            //let agc_handle = Arc::new(AGCHandle(self.agc_handle.0));
-            let agc_handle = Arc::new(AGCHandle(self.agc_file.agc_handle.0));
 
             let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
-            seq_buf.2 = next_batch
-                .par_iter()
-                .map(|(s, c, bgn, end)| {
-                    //let seq = self.get_seq(s.clone(), c.clone());
-                    let c_sample_name: *mut i8 = CString::new(s.as_bytes()).unwrap().into_raw();
-                    let c_ctg_name: *mut i8 = CString::new(c.as_bytes()).unwrap().into_raw();
-                    let seq;
-                    let ctg_len = *end - *bgn + 1;
 
-                    unsafe {
-                        let new_agc_handle: *mut agc_t = agc_handle.0.clone();
-                        let seq_buf: *mut i8 =
-                            libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
-                        agc_get_ctg_seq(
-                            new_agc_handle,
-                            c_sample_name,
-                            c_ctg_name,
-                            *bgn as i32,
-                            *end as i32 - 1,
-                            seq_buf,
-                        );
-                        seq = <Vec<u8>>::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
-                    }
-                    //let seq = seq.as_bytes().to_vec();
-                    SeqRec {
-                        source: Some(s.clone()),
-                        id: c.as_bytes().to_vec(),
-                        seq: seq,
-                    }
-                })
-                .collect::<Vec<SeqRec>>();
+
+            let v_seq_rec = self.agc_thread_pool.install(|| {
+                let seq_buf = next_batch
+                    .par_iter()
+                    .map(|(filepath, s, c, _bgn, _end)| {
+                        TL_AGCHANDLE.with(|tl_agc_handle| {
+                            if (*tl_agc_handle.borrow_mut()).is_none() {
+                                *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone())); 
+                                println!("create new agc handel: thread id {:?}", self.agc_thread_pool.current_thread_index());   
+                            } 
+                            let t = tl_agc_handle.borrow_mut();
+                            let agc_handle= (t.as_ref()).unwrap(); 
+                            let seq = agc_handle.get_seq(s.clone(), c.clone());
+                            SeqRec {
+                                source: Some(s.clone()),
+                                id: c.as_bytes().to_vec(),
+                                seq: seq,
+                            }
+                        })
+                        //let seq = self.get_seq(s.clone(), c.clone());
+                    })
+                    .collect::<Vec<SeqRec>>();
+                seq_buf
+            });
+            seq_buf.2 = v_seq_rec;
 
             seq_buf.0 = self.current_ctg;
             seq_buf.1 = self.current_ctg + seq_buf.2.len();
