@@ -4,7 +4,7 @@ use flate2::bufread::MultiGzDecoder;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::{self, BufReader, SeekFrom};
-
+#[derive(Debug, Clone)]
 pub struct SeqRec {
     pub source: Option<String>,
     pub id: Vec<u8>,
