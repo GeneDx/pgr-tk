@@ -8,7 +8,7 @@ pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
-    use crate::shmmrutils::{match_reads, DeltaPoint, self};
+    use crate::shmmrutils::{self, match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
     use pgr_utils::fasta_io::FastaReader;
     use std::collections::HashMap;
@@ -16,7 +16,6 @@ mod tests {
     use std::io::{BufRead, BufReader, Read};
 
     use crate::seq_db::{self, deltas_to_aln_segs, reconstruct_seq_from_aln_segs};
-    
 
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -151,7 +150,7 @@ mod tests {
             assert_eq!(frg, reconstruct_seq_from_aln_segs(&base_frg, &aln_segs));
         }
     }
-    
+
     #[test]
     fn rc_match() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
@@ -161,15 +160,8 @@ mod tests {
         let shmmr_spec = seq_db::SHMMRSPEC;
         let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec);
         let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec);
-        let shmmr0 = shmmr0
-            .iter()
-            .map(|m| m.x >> 8)
-            .collect::<Vec<u64>>();
-        let shmmr1 = shmmr1
-            .iter()
-            .rev()
-            .map(|m| m.x >> 8)
-            .collect::<Vec<u64>>();
+        let shmmr0 = shmmr0.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
+        let shmmr1 = shmmr1.iter().rev().map(|m| m.x >> 8).collect::<Vec<u64>>();
         assert!(shmmr0.len() > 0);
         assert_eq!(shmmr0, shmmr1);
     }
@@ -225,10 +217,10 @@ mod tests {
     }
 
     #[test]
-    fn act_io_test() {
+    fn act_io_test() -> Result<(), Box<dyn std::error::Error>> {
         use crate::agc_io::AGCFile;
 
-        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
         let seq = agcfile.get_sub_seq(
             "test_agc_ref".to_string(),
             "NA21309#1#JAHEPC010000026.1:3279880-3319873".to_string(),
@@ -244,23 +236,25 @@ mod tests {
             }
         });
 
-        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
         println!("index size: {}", sdb.frag_map.len());
+        Ok(())
     }
 
     #[test]
-    fn query_frag_test() {
+    fn query_frag_test()  -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         use seq_db::query_fragment;
-        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
 
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
 
-        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let seq = agcfile.next();
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
+        let mut agc_iter = agcfile.into_iter();
+        let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
         let r_frags = query_fragment(&sdb.frag_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];
@@ -274,6 +268,7 @@ mod tests {
         for v in out {
             println!("Q {:?}", v);
         }
+        Ok(())
         //write_shmr_map_bincode(&sdb.frag_map, "test_shmmr.db".to_string());
     }
 
@@ -281,7 +276,7 @@ mod tests {
     fn test_shmmrmap_read_write() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         use seq_db::{query_fragment, read_mdb_file, write_shmr_map_file};
-        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
         write_shmr_map_file(
@@ -292,8 +287,9 @@ mod tests {
         let (_shmmr_spec, new_map) =
             read_mdb_file("test/test_data/test_shmmr.db".to_string()).unwrap();
 
-        let mut agcfile = AGCFile::new(String::from("test/test_data/test.agc"));
-        let seq = agcfile.next();
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
+        let mut agc_iter = agcfile.into_iter();
+        let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
         let r_frags = query_fragment(&new_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];

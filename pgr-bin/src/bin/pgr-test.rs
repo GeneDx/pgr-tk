@@ -54,13 +54,15 @@ fn load_seq_test() {
     let seqs = load_seqs();
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
-    let _ = sdb.load_seqs_from_fastx("/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string());
+    let _ = sdb.load_seqs_from_fastx(
+        "/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string(),
+    );
     //println!("test");
     for seq in sdb.seqs.iter() {
         println!("S {} {} {}", seq.name, seq.id, seq.len);
         //println!();
         //println!("{}", seq.name);
-        let reconstruct_seq = sdb.get_seq(&seq); 
+        let reconstruct_seq = sdb.get_seq(&seq);
         let orig_seq = seqs.get(&seq.name).unwrap();
         if reconstruct_seq != *orig_seq {
             //println!("{}", seq.name);
@@ -117,18 +119,19 @@ fn load_index_from_agcfile() {
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let filelist = File::open("./filelist").unwrap();
 
-    BufReader::new(filelist).lines().into_iter().for_each(|fp| {
+    BufReader::new(filelist).lines().into_iter().try_for_each(|fp| ->  Result<(), std::io::Error> {
         let fp = fp.unwrap();
-        let agcfile = AGCFile::new(fp);
+        let agcfile = AGCFile::new(fp)?;
         let _ = sdb.load_index_from_agcfile(agcfile);
+        Ok(())
     });
 
     //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
     sdb.write_shmr_map_index("test".to_string());
 }
 
-fn load_index_mdb() {
-    let agcfile = AGCFile::new(String::from("grch38.agc"));
+fn load_index_mdb() -> Result<(), std::io::Error> {
+    let agcfile = AGCFile::new(String::from("grch38.agc"))?;
     for sample in agcfile.samples.iter() {
         for contig in sample.contigs.iter() {
             let (n, t) = contig;
@@ -155,7 +158,8 @@ fn load_index_mdb() {
             "Q {} {} {} {} {} {} {} {}",
             v0.0, v0.1, v0.2, v0.3, v0.4, v1.0, v1.1, v1.2
         );
-    }
+    };
+    Ok(())
 }
 
 fn main() {
