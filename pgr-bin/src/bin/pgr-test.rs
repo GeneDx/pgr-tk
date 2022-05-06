@@ -1,11 +1,11 @@
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::agc_io::AGCFile;
-use pgr_utils::fasta_io::{reverse_complement, FastaReader};
+use pgr_utils::fasta_io::FastaReader;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
-use pgr_db::seq_db::{self, query_fragment, read_mdb_file, Fragment, KMERSIZE};
+use pgr_db::seq_db::{self, query_fragment, read_mdb_file};
 
 pub fn load_seqs() -> HashMap<String, Vec<u8>> {
     let mut seqs = HashMap::<String, Vec<u8>>::new();
@@ -50,10 +50,10 @@ pub fn load_seqs() -> HashMap<String, Vec<u8>> {
     seqs
 }
 
-fn load_seq_test() {
+fn _load_seq_test() {
     let seqs = load_seqs();
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
-    let shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
+    let _shmmr_spec = &pgr_db::seq_db::SHMMRSPEC;
     let _ = sdb.load_seqs_from_fastx(
         "/wd/peregrine-r-ext/phasing_test/PanMHCgraph/HPRCy1.MHC.fa".to_string(),
     );
@@ -90,7 +90,7 @@ fn load_seq_test() {
     }
 }
 
-fn load_index_from_fastx() -> Result<(), std::io::Error> {
+fn _load_index_from_fastx() -> Result<(), std::io::Error> {
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let filelist = File::open("./filelist").unwrap();
 
@@ -115,26 +115,29 @@ fn load_index_from_fastx() -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn load_index_from_agcfile() {
+fn load_index_from_agcfile() -> Result<(), std::io::Error> {
     let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
     let filelist = File::open("./filelist").unwrap();
 
-    BufReader::new(filelist).lines().into_iter().try_for_each(|fp| ->  Result<(), std::io::Error> {
-        let fp = fp.unwrap();
-        let agcfile = AGCFile::new(fp)?;
-        let _ = sdb.load_index_from_agcfile(agcfile);
-        Ok(())
-    });
+    BufReader::new(filelist).lines().into_iter().try_for_each(
+        |fp| -> Result<(), std::io::Error> {
+            let fp = fp.unwrap();
+            let agcfile = AGCFile::new(fp)?;
+            let _ = sdb.load_index_from_agcfile(agcfile);
+            Ok(())
+        },
+    )?;
 
     //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
-    sdb.write_shmr_map_index("test".to_string());
+    sdb.write_shmr_map_index("test".to_string())?;
+    Ok(())
 }
 
-fn load_index_mdb() -> Result<(), std::io::Error> {
+fn _load_index_mdb() -> Result<(), std::io::Error> {
     let agcfile = AGCFile::new(String::from("grch38.agc"))?;
     for sample in agcfile.samples.iter() {
         for contig in sample.contigs.iter() {
-            let (n, t) = contig;
+            let (_n, _t) = contig;
             //println!("{}:{}:{}", sample.name, n, t);
         }
     }
@@ -158,13 +161,14 @@ fn load_index_mdb() -> Result<(), std::io::Error> {
             "Q {} {} {} {} {} {} {} {}",
             v0.0, v0.1, v0.2, v0.3, v0.4, v1.0, v1.1, v1.2
         );
-    };
+    }
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     //load_seq_test();
     //load_index_from_fastx();
-    load_index_from_agcfile();
+    load_index_from_agcfile()?;
     //load_index_mdb();
+    Ok(())
 }

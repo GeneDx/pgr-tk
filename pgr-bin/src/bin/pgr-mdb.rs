@@ -42,12 +42,14 @@ fn load_write_index_from_agcfile(
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let filelist = File::open(path)?;
 
-    BufReader::new(filelist).lines().into_iter().try_for_each(|fp| -> Result<(), std::io::Error> {
-        let fp = fp.unwrap();
-        let agcfile = AGCFile::new(fp)?;
-        let _ = sdb.load_index_from_agcfile(agcfile);
-        Ok(())
-    });
+    BufReader::new(filelist).lines().into_iter().try_for_each(
+        |fp| -> Result<(), std::io::Error> {
+            let fp = fp.unwrap();
+            let agcfile: AGCFile = AGCFile::new(fp)?;
+            let _ = sdb.load_index_from_agcfile(agcfile);
+            Ok(())
+        },
+    )?;
 
     //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
     sdb.write_shmr_map_index(prefix)?;

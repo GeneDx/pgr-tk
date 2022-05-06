@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[test]
-    fn query_frag_test()  -> Result<(), std::io::Error> {
+    fn query_frag_test() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         use seq_db::query_fragment;
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;

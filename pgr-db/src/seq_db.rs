@@ -578,7 +578,7 @@ impl CompactSeqDB {
             .iter()
             .map(|(_sid, src, n, s)| (src.clone(), n.clone(), s.len()))
             .collect::<Vec<(Option<String>, String, usize)>>();
-            
+
         /*
         seq_names.iter().zip(all_shmmers).for_each(
             |((source, seq_name, seqlen), (sid, shmmrs))| {
