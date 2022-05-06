@@ -164,13 +164,13 @@ struct AGCFile {
 #[pymethods]
 impl AGCFile {
     #[new]
-    pub fn new(filepath: String) -> Self {
-        let agc_file = agc_io::AGCFile::new(filepath);
+    pub fn new(filepath: String) -> PyResult<Self> {
+        let agc_file = agc_io::AGCFile::new(filepath)?;
         let mut ctg_lens = FxHashMap::<(String, String), usize>::default();
         agc_file.ctg_lens.iter().for_each(|(k, v)| {
             ctg_lens.insert((k.0.clone(), k.1.clone()), *v);
         });
-        AGCFile { agc_file, ctg_lens }
+        Ok(AGCFile { agc_file, ctg_lens })
     }
 
     pub fn get_sub_seq(

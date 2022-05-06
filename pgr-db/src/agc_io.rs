@@ -11,6 +11,8 @@ use rayon::ThreadPoolBuilder;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fmt::Error;
+use std::fs;
 use std::io;
 use std::mem;
 //use std::sync::Arc;
@@ -48,11 +50,19 @@ fn cstr_to_string(cstr_ptr: *mut i8) -> String {
 }
 
 impl AGCFile {
-    pub fn new(filepath: String) -> Self {
+    pub fn new(filepath: String) -> Result<Self, std::io::Error> {
+
+        if !std::path::Path::new(&filepath).exists() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound, filepath));
+                 
+        }
+        
         let agc_handle;
         let mut samples = vec![];
         let mut ctg_lens = HashMap::new();
         let mut sample_ctg = vec![];
+        
         unsafe {
             agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
@@ -86,13 +96,13 @@ impl AGCFile {
             }
             agc_list_destroy(samples_ptr);
         }
-        Self {
+        Ok(Self {
             filepath,
             agc_handle,
             samples,
             ctg_lens,
             sample_ctg,
-        }
+        })
     }
 
     pub fn get_sub_seq(
@@ -224,7 +234,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
                     .map(|(filepath, s, c, _bgn, _end)| {
                         TL_AGCHANDLE.with(|tl_agc_handle| {
                             if (*tl_agc_handle.borrow_mut()).is_none() {
-                                *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone()));
+                                *tl_agc_handle.borrow_mut() = Some(AGCFile::new(filepath.clone()).unwrap());
                             }
                             let t = tl_agc_handle.borrow_mut();
                             let agc_handle = (t.as_ref()).unwrap();
