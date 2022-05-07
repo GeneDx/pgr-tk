@@ -18,6 +18,6 @@ jobs:
       with:
         submodules: recursive
     - name: Run tests
-      run: cargo test --verbose
+      run: rustup default stable && cargo test --verbose
     - name: Build
       run: bash build.sh
