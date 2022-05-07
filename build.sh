@@ -1,9 +1,3 @@
-
-git submodule update --checkout
-pushd agc
-make -f makefile.release
-popd
-
 pushd rs-wfa/
 rm -rf WFA
 git clone https://github.com/cschin/WFA.git --depth=1
