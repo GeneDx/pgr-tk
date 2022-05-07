@@ -118,7 +118,7 @@ class SeqShmmrIdxDB(object):
 
             if r[1] < fwd_rgns[-1][1]:
                 continue
-                
+
             if r[0] - last < tol:  # merge
                 fwd_rgns[-1][1] = r[1]
                 fwd_rgns[-1][2] += r[2]
@@ -138,7 +138,7 @@ class SeqShmmrIdxDB(object):
 
             if r[1] < rev_rgns[-1][1]:
                 continue
-                
+
             if r[0] - last < tol:  # merge
                 rev_rgns[-1][1] = r[1]
                 rev_rgns[-1][2] += r[2]
@@ -146,9 +146,8 @@ class SeqShmmrIdxDB(object):
             else:
                 rev_rgns.append(r)
 
-        last = rev_rgns[-1][1]
+            last = rev_rgns[-1][1]
         return fwd_rgns + rev_rgns
-
 
 
 def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
@@ -193,12 +192,13 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
                 alt_bases = cs0[p1-1:p1+s.tgt_loc[2]]
 
             value = (chr(s.t), ref_bases, alt_bases,
-                    (key[0], key[1], s.ref_loc[2]),
-                    (s.tgt_loc[0], ctg_bgn+s.tgt_loc[1], s.tgt_loc[2]), strand)
+                     (key[0], key[1], s.ref_loc[2]),
+                     (s.tgt_loc[0], ctg_bgn+s.tgt_loc[1], s.tgt_loc[2]), strand)
             variant_calls.setdefault(key, {})
             variant_calls[key][(s.tgt_loc[0], strand)] = value
 
     return variant_calls
+
 
 def output_variants_to_vcf_records(variant_calls, ref_name):
     keys = sorted(list(variant_calls.keys()))
@@ -213,26 +213,24 @@ def output_variants_to_vcf_records(variant_calls, ref_name):
         for kk in v:
             gt_idx += 1
             variants.append((gt_idx, v[kk][:3], ref_id))
-       
+
         count = {}
         for v in variants:
             count.setdefault(v[0], [])
             count[v[0]].append(v[1])
-            
+
         ht = [(str(x[2]), str(x[0])) for x in variants]
         ht.sort()
         ht = list(zip(*ht))
-        
-    
 
         for kk in sorted(count.keys()):
-            ref_base=count[kk][0][1]
-            alt_base=count[kk][0][2]
-            #print(count)
+            ref_base = count[kk][0][1]
+            alt_base = count[kk][0][2]
+            # print(count)
             if ref_base == alt_base:
                 continue
-          
-            vcf_recs.append(( ref_name,  "{}".format(k[1]), ".", ref_base, alt_base, 
-                  "30", ".", ".", "GT:AD", "./1:0,1:"))
-            
+
+            vcf_recs.append((ref_name,  "{}".format(k[1]), ".", ref_base, alt_base,
+                             "30", ".", ".", "GT:AD", "./1:0,1:"))
+
     return vcf_recs
