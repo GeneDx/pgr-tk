@@ -13,7 +13,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-
+    container: docker.io/cschin/pgr-tk-build-env
     steps:
     - uses: actions/checkout@v3
     - name: Build
