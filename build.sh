@@ -1,5 +1,5 @@
 
-git submodule update --init
+git submodule update --checkout
 pushd agc
 make -f makefile.release
 popd
