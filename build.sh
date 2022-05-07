@@ -1,5 +1,8 @@
 
 git submodule update --init
+pushd agc
+make -f makefile.release
+popd
 
 pushd rs-wfa/
 rm -rf WFA
