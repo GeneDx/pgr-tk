@@ -115,13 +115,17 @@ class SeqShmmrIdxDB(object):
                 last = r[1]
                 fwd_rgns.append(r)
                 continue
+
+            if r[1] < fwd_rgns[-1][1]:
+                continue
+                
             if r[0] - last < tol:  # merge
                 fwd_rgns[-1][1] = r[1]
                 fwd_rgns[-1][2] += r[2]
                 fwd_rgns[-1][4] += r[4]
-            elif r[1] > fwd_rgns[-1][1]:
+            else:
                 fwd_rgns.append(r)
-            last = r[1]
+            last = fwd_rgns[-1][1]
 
         rev_rgns = []
         last = None
@@ -131,13 +135,18 @@ class SeqShmmrIdxDB(object):
                 last = r[1]
                 rev_rgns.append(r)
                 continue
+
+            if r[1] < rev_rgns[-1][1]:
+                continue
+                
             if r[0] - last < tol:  # merge
                 rev_rgns[-1][1] = r[1]
                 rev_rgns[-1][2] += r[2]
                 rev_rgns[-1][4] += r[4]
-            elif r[1] > rev_rgns[-1][1]:
+            else:
                 rev_rgns.append(r)
-            last = r[1]
+
+        last = rev_rgns[-1][1]
         return fwd_rgns + rev_rgns
 
 
