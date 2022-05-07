@@ -6,7 +6,7 @@ popd
 cargo build -p libwfa --release
 cargo build -p pgr-db --release
 
-pushd pgr-py-lite/
-maturin build --release
-maturin build --release --skip-auditwheel
-popd
+#pushd pgr-py-lite/
+#maturin build --release
+#maturin build --release --skip-auditwheel
+#popd
