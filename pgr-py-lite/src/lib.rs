@@ -33,7 +33,9 @@ struct SeqIndexDB {
     pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
     #[pyo3(get)]
     pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>, //ctg_name, source -> id, len
-                                                                          //pub seq_index: Option<Vec<(u32, u32, String, Option<String>)>>, //id , len, ctg_name, source
+    //pub seq_index: Option<Vec<(u32, u32, String, Option<String>)>>, //id , len, ctg_name, source
+    #[pyo3(get)]
+    pub seq_info: Option<HashMap<u32, (String, Option<String>, u32)>>, //ctg_name, source -> id, len
 }
 
 #[pymethods]
@@ -45,6 +47,7 @@ impl SeqIndexDB {
             agc_db: None,
             shmmr_spec: None,
             seq_index: None,
+            seq_info: None,
         }
     }
 
@@ -52,24 +55,28 @@ impl SeqIndexDB {
         let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
         self.agc_db = Some((agc_file, new_map));
+        self.seq_db = None;
         self.shmmr_spec = Some(shmmr_spec);
 
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
         let midx_file = BufReader::new(File::open(prefix.to_string() + ".midx")?);
         midx_file
             .lines()
             .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
-                let mut line = line.as_str().split_ascii_whitespace();
+                let mut line = line.as_str().split("\t");
                 let sid = line.next().unwrap().parse::<u32>().unwrap();
                 let len = line.next().unwrap().parse::<u32>().unwrap();
                 let ctg_name = line.next().unwrap().to_string();
                 let source = line.next().unwrap().to_string();
-                seq_index.insert((ctg_name, Some(source)), (sid, len));
+                seq_index.insert((ctg_name.clone(), Some(source.clone())), (sid, len));
+                seq_info.insert(sid, (ctg_name, Some(source), len));
                 Ok(())
             })?;
         self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
         Ok(())
     }
 
@@ -93,11 +100,15 @@ impl SeqIndexDB {
         sdb.load_seqs_from_fastx(filepath)?;
         self.shmmr_spec = Some(spec);
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
         sdb.seqs.iter().for_each(|v| {
             seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
         });
         self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
         self.seq_db = Some(sdb);
+        self.agc_db = None;
         Ok(())
     }
 
@@ -128,10 +139,14 @@ impl SeqIndexDB {
 
         self.shmmr_spec = Some(spec);
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
         sdb.seqs.iter().for_each(|v| {
             seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
         });
         self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
+        self.agc_db = None;
         Ok(())
     }
 
@@ -140,7 +155,7 @@ impl SeqIndexDB {
         seq: Vec<u8>,
     ) -> PyResult<Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
             seq_db::query_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
@@ -152,7 +167,7 @@ impl SeqIndexDB {
         penality: f32,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
         let res = aln::query_fragment_to_hps(shmmr_to_frags, &seq, shmmr_spec, penality);
         Ok(res)
     }
@@ -165,8 +180,17 @@ impl SeqIndexDB {
         }
     }
 
+    pub fn get_shmmr_map(&self) -> PyResult<PyObject> {
+        // very expansive as the Rust FxHashMap will be converted to Python's dictionary
+        // maybe limit the size that can be converted to avoid OOM
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        pyo3::Python::with_gil(|py| {
+            Ok(shmmr_to_frags.to_object(py)) 
+        })
+    }
+
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
-        let shmmr_to_frags = self.get_shmmr_map();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
         let py_out = shmmr_to_frags
             .iter()
             .flat_map(|v| {
@@ -193,7 +217,13 @@ impl SeqIndexDB {
                 .0
                 .get_sub_seq(sample_name, ctg_name, bgn, end))
         } else {
-            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(0)[bgn..end].to_vec())
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name)))
+                .unwrap();
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
         }
     }
 
@@ -206,13 +236,19 @@ impl SeqIndexDB {
                 .0
                 .get_seq(sample_name, ctg_name))
         } else {
-            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(0))
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name)))
+                .unwrap();
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
         }
     }
 }
 
 impl SeqIndexDB {
-    fn get_shmmr_map(&self) -> &seq_db::ShmmrToFrags {
+    fn get_shmmr_map_internal(&self) -> &seq_db::ShmmrToFrags {
         let shmmr_to_frags;
         if self.agc_db.is_some() {
             shmmr_to_frags = &self.agc_db.as_ref().unwrap().1;
