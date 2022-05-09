@@ -224,7 +224,8 @@ impl SeqIndexDB {
                 .unwrap()
                 .get(&(ctg_name, Some(sample_name)))
                 .unwrap();
-            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
+            let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
+            Ok(seq[bgn..end].to_vec())
         }
     }
 
