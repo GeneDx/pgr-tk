@@ -15,7 +15,7 @@ use std::io;
 use std::mem;
 //use std::sync::Arc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AGCHandle(*mut agc_t);
 
 unsafe impl Send for AGCHandle {}
@@ -27,7 +27,7 @@ pub struct AGCSample {
     pub contigs: Vec<(String, usize)>, //name, len count
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AGCFile {
     pub filepath: String,
     agc_handle: AGCHandle,

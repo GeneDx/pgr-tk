@@ -34,7 +34,7 @@ enum GZFastaReader {
     RegularFile(FastaReader<BufReader<BufReader<File>>>),
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Fragment {
     AlnSegments(AlnSegments),
     Prefix(Bases),
@@ -54,9 +54,11 @@ impl<'a> fmt::Display for Fragment {
 }
 
 pub type ShmmrPair = (u64, u64);
+
 pub type Fragments = Vec<Fragment>;
 pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
+#[derive(Debug, Clone)]
 pub struct CompactSeq {
     pub source: Option<String>,
     pub name: String,
@@ -65,6 +67,7 @@ pub struct CompactSeq {
     pub len: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct CompactSeqDB {
     pub shmmr_spec: ShmmrSpec,
     pub seqs: Vec<CompactSeq>,
@@ -507,7 +510,7 @@ impl CompactSeqDB {
         ();
     }
 
-    fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
+    pub fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
         if self.frags.is_none() {
             self.frags = Some(Fragments::new());
         }
