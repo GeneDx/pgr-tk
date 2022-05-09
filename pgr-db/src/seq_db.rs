@@ -229,11 +229,11 @@ impl CompactSeqDB {
                             let rc;
                             if orientation != t_frg_id.4 {
                                 frg = reverse_complement(
-                                    &seq[(bgn - KMERSIZE) as usize..end as usize].to_vec(),
+                                    &seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec(),
                                 );
                                 rc = true;
                             } else {
-                                frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+                                frg = seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec();
                                 rc = false;
                             }
                             //assert!(frg.len() > KMERSIZE as usize);
@@ -264,7 +264,7 @@ impl CompactSeqDB {
                 };
 
                 if !aligned || !try_compress {
-                    let frg = seq[(bgn - KMERSIZE) as usize..end as usize].to_vec();
+                    let frg = seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec();
                     out_frag = Some((shmmr_pair, Fragment::Internal(frg), bgn, end, orientation));
                 };
                 out_frag
@@ -703,7 +703,7 @@ impl CompactSeqDB {
                     _p += b.len();
                 }
                 Fragment::Internal(b) => {
-                    reconstructed_seq.extend_from_slice(&b[KMERSIZE as usize..]);
+                    reconstructed_seq.extend_from_slice(&b[self.shmmr_spec.k as usize..]);
                     //println!("p: {} {}", p, p + b.len());
                     _p += b.len();
                 }
@@ -713,7 +713,7 @@ impl CompactSeqDB {
                         if *reverse == true {
                             seq = reverse_complement(&seq);
                         }
-                        reconstructed_seq.extend_from_slice(&seq[KMERSIZE as usize..]);
+                        reconstructed_seq.extend_from_slice(&seq[self.shmmr_spec.k as usize..]);
                         //println!("p: {} {}", p, p + seq.len());
                         _p += seq.len();
                     }

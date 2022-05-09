@@ -59,12 +59,12 @@ def query_sdb(seq_index_db, query_seq, gap_penality_factor=0.25, merge_range_tol
 
     if merge_range_tol > 0:
         for sid, rgns in aln_range.items():
-            aln_range[sid] = seq_index_db.merge_regions(
+            aln_range[sid] = merge_regions(
                 rgns, tol=merge_range_tol)
 
     return aln_range
 
-def merge_regions(self, rgns, tol=1000):
+def merge_regions(rgns, tol=1000):
     # rgns is a list of (bgn, end, len, orientation)
     rgns.sort()
     frgns = [r for r in rgns if r[3] == 0]
