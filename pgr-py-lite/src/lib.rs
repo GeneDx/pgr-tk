@@ -27,7 +27,7 @@ pub fn pgr_lib_version() -> PyResult<String> {
 
 #[pyclass]
 #[derive(Clone)]
-struct ShmmrFragMap {
+struct SeqIndexDB {
     pub shmmr_spec: Option<ShmmrSpec>,
     pub seq_db: Option<seq_db::CompactSeqDB>,
     pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
@@ -37,10 +37,10 @@ struct ShmmrFragMap {
 }
 
 #[pymethods]
-impl ShmmrFragMap {
+impl SeqIndexDB {
     #[new]
     pub fn new() -> Self {
-        ShmmrFragMap {
+        SeqIndexDB {
             seq_db: None,
             agc_db: None,
             shmmr_spec: None,
@@ -73,6 +73,7 @@ impl ShmmrFragMap {
         Ok(())
     }
 
+    #[args(w = "80", k = "56", r = "4", min_span = "8")]
     pub fn load_from_fastx(
         &mut self,
         filepath: String,
@@ -100,10 +101,11 @@ impl ShmmrFragMap {
         Ok(())
     }
 
+    #[args(source = "\"Memory\"", w = "80", k = "56", r = "4", min_span = "8")]
     pub fn load_from_seq_list(
         &mut self,
-        source: Option<String>,
         seq_list: Vec<(u32, String, Vec<u8>)>,
+        source: Option<&str>,
         w: u32,
         k: u32,
         r: u32,
@@ -116,6 +118,7 @@ impl ShmmrFragMap {
             min_span,
             sketch: false,
         };
+        let source = Some(source.unwrap().to_string());
         let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
         let seq_vec = seq_list
             .into_iter()
@@ -208,7 +211,7 @@ impl ShmmrFragMap {
     }
 }
 
-impl ShmmrFragMap {
+impl SeqIndexDB {
     fn get_shmmr_map(&self) -> &seq_db::ShmmrToFrags {
         let shmmr_to_frags;
         if self.agc_db.is_some() {
@@ -255,7 +258,6 @@ impl AGCFile {
 }
 
 #[pyfunction]
-
 pub fn sparse_aln(
     sp_hits: Vec<HitPair>,
     max_span: u32,
@@ -433,9 +435,8 @@ fn get_aln_map(aln_segs: Vec<AlnSegment>, s0: &PyString, s1: &PyString) -> PyRes
 }
 
 #[pymodule]
-
 fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<ShmmrFragMap>()?;
+    m.add_class::<SeqIndexDB>()?;
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
