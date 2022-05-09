@@ -16,6 +16,9 @@ use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rustc_hash::FxHashMap;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 #[pyfunction]
 pub fn pgr_lib_version() -> PyResult<String> {
@@ -26,29 +29,48 @@ pub fn pgr_lib_version() -> PyResult<String> {
 #[derive(Clone)]
 struct ShmmrFragMap {
     pub shmmr_spec: Option<ShmmrSpec>,
+    pub seq_db: Option<seq_db::CompactSeqDB>,
+    pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
     #[pyo3(get)]
-    pub shmmr_to_frags: seq_db::ShmmrToFrags,
-    #[pyo3(get)]
-    pub seq_index: Option<Vec<(u32, u32, String, Option<String>)>>,
+    pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>, //ctg_name, source -> id, len
+                                                                          //pub seq_index: Option<Vec<(u32, u32, String, Option<String>)>>, //id , len, ctg_name, source
 }
 
 #[pymethods]
 impl ShmmrFragMap {
     #[new]
     pub fn new() -> Self {
-        let shmmr_to_frags = seq_db::ShmmrToFrags::default();
-        let shmmr_spec = None;
         ShmmrFragMap {
-            shmmr_spec,
-            shmmr_to_frags,
+            seq_db: None,
+            agc_db: None,
+            shmmr_spec: None,
             seq_index: None,
         }
     }
 
-    pub fn load_from_mdb(&mut self, filename: String) -> () {
-        let (shmmr_spec, new_map) = seq_db::read_mdb_file(filename).unwrap();
-        self.shmmr_to_frags = new_map;
+    pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
+        let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
+        let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
+        self.agc_db = Some((agc_file, new_map));
         self.shmmr_spec = Some(shmmr_spec);
+
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let midx_file = BufReader::new(File::open(prefix.to_string() + ".midx")?);
+        midx_file
+            .lines()
+            .into_iter()
+            .try_for_each(|line| -> Result<(), std::io::Error> {
+                let line = line.unwrap();
+                let mut line = line.as_str().split_ascii_whitespace();
+                let sid = line.next().unwrap().parse::<u32>().unwrap();
+                let len = line.next().unwrap().parse::<u32>().unwrap();
+                let ctg_name = line.next().unwrap().to_string();
+                let source = line.next().unwrap().to_string();
+                seq_index.insert((ctg_name, Some(source)), (sid, len));
+                Ok(())
+            })?;
+        self.seq_index = Some(seq_index);
+        Ok(())
     }
 
     pub fn load_from_fastx(
@@ -67,15 +89,14 @@ impl ShmmrFragMap {
             sketch: false,
         };
         let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
-        sdb.load_index_from_fastx(filepath)?;
-        self.shmmr_to_frags = sdb.frag_map;
+        sdb.load_seqs_from_fastx(filepath)?;
         self.shmmr_spec = Some(spec);
-        self.seq_index = Some(
-            sdb.seqs
-                .iter()
-                .map(|v| (v.id, v.len as u32, v.name.clone(), v.source.clone()))
-                .collect::<Vec<(u32, u32, String, Option<String>)>>(),
-        );
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
+        self.seq_db = Some(sdb);
         Ok(())
     }
 
@@ -100,15 +121,14 @@ impl ShmmrFragMap {
             .into_iter()
             .map(|v| (v.0, source.clone(), v.1, v.2))
             .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
-        sdb.load_index_from_seq_vec(&seq_vec);
-        self.shmmr_to_frags = sdb.frag_map;
+        sdb.load_seqs_from_seq_vec(&seq_vec);
+
         self.shmmr_spec = Some(spec);
-        self.seq_index = Some(
-            sdb.seqs
-                .iter()
-                .map(|v| (v.id, v.len as u32, v.name.clone(), v.source.clone()))
-                .collect::<Vec<(u32, u32, String, Option<String>)>>(),
-        );
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
         Ok(())
     }
 
@@ -117,8 +137,9 @@ impl ShmmrFragMap {
         seq: Vec<u8>,
     ) -> PyResult<Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
+        let shmmr_to_frags = self.get_shmmr_map();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
-            seq_db::query_fragment(&self.shmmr_to_frags, &seq, shmmr_spec);
+            seq_db::query_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
     }
 
@@ -128,7 +149,8 @@ impl ShmmrFragMap {
         penality: f32,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let res = aln::query_fragment_to_hps(&self.shmmr_to_frags, &seq, shmmr_spec, penality);
+        let shmmr_to_frags = self.get_shmmr_map();
+        let res = aln::query_fragment_to_hps(shmmr_to_frags, &seq, shmmr_spec, penality);
         Ok(res)
     }
 
@@ -141,8 +163,8 @@ impl ShmmrFragMap {
     }
 
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
-        let py_out = self
-            .shmmr_to_frags
+        let shmmr_to_frags = self.get_shmmr_map();
+        let py_out = shmmr_to_frags
             .iter()
             .flat_map(|v| {
                 v.1.iter()
@@ -151,6 +173,50 @@ impl ShmmrFragMap {
             })
             .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
         Ok(py_out)
+    }
+
+    pub fn get_sub_seq(
+        &self,
+        sample_name: String,
+        ctg_name: String,
+        bgn: usize,
+        end: usize,
+    ) -> PyResult<Vec<u8>> {
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_sub_seq(sample_name, ctg_name, bgn, end))
+        } else {
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(0)[bgn..end].to_vec())
+        }
+    }
+
+    pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_seq(sample_name, ctg_name))
+        } else {
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(0))
+        }
+    }
+}
+
+impl ShmmrFragMap {
+    fn get_shmmr_map(&self) -> &seq_db::ShmmrToFrags {
+        let shmmr_to_frags;
+        if self.agc_db.is_some() {
+            shmmr_to_frags = &self.agc_db.as_ref().unwrap().1;
+        } else {
+            shmmr_to_frags = &self.seq_db.as_ref().unwrap().frag_map;
+        }
+        shmmr_to_frags
     }
 }
 
