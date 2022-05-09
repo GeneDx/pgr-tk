@@ -146,6 +146,7 @@ impl SeqIndexDB {
         });
         self.seq_index = Some(seq_index);
         self.seq_info = Some(seq_info);
+        self.seq_db = Some(sdb);
         self.agc_db = None;
         Ok(())
     }
