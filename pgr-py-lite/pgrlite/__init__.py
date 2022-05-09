@@ -28,7 +28,7 @@ def u8_to_string(u8):
 
 
 
-def get_aln_ranges(seq_index_db, query_seq, gap_penality_factor=0.25, merge_range_tol=0):
+def query_sdb(seq_index_db, query_seq, gap_penality_factor=0.25, merge_range_tol=0):
     r = seq_index_db.query_fragment_to_hps(query_seq, gap_penality_factor)
     sid_to_alns = {}
     for (sid, alns) in r:
