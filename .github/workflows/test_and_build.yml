@@ -21,12 +21,9 @@ jobs:
       run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. && cargo test --verbose
     - name: Build
       run: bash build.sh
-    - uses: "marvinpinto/action-automatic-releases@latest"
+    - uses: actions/upload-artifact@v3
       with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "latest"
-        prerelease: true
-        title: "Development Build"
-        files: |
+        name: build-artifact
+        path: |
           target/release/pgr-mdb
           target/wheels/*.whl
