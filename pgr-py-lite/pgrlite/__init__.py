@@ -28,8 +28,8 @@ def u8_to_string(u8):
 
 
 
-def query_sdb(seq_index_db, query_seq, gap_penality_factor=0.25, merge_range_tol=0):
-    r = seq_index_db.query_fragment_to_hps(query_seq, gap_penality_factor)
+def query_sdb(seq_index_db, query_seq, gap_penality_factor=0.25, merge_range_tol=0, max_repeat_count = 128):
+    r = seq_index_db.query_fragment_to_hps(query_seq, gap_penality_factor, max_repeat_count)
     sid_to_alns = {}
     for (sid, alns) in r:
         aln_lens = []

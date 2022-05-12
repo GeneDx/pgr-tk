@@ -75,7 +75,7 @@ pub struct CompactSeqDB {
     pub frags: Option<Fragments>,
 }
 
-fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
+pub fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
     let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
         .iter()
         .zip(shmmrs[1..shmmrs.len()].iter())

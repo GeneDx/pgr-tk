@@ -117,6 +117,7 @@ pub fn query_fragment_to_hps(
     frag: &Vec<u8>,
     shmmr_spec: &ShmmrSpec,
     penality: f32,
+    max_repeat_count: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
     let r = query_fragment(shmap, frag, &shmmr_spec);
     // group by target seq_id
@@ -141,10 +142,19 @@ pub fn query_fragment_to_hps(
         };
         let left_frag_coor = d.1;
         d.2.iter().for_each(|v| {
-            let key = (sp.0, sp.1, v.1);
-            if *sp_count1.get(&key).unwrap_or(&0) > 8 {
-                return;
-            };
+            match max_repeat_count {
+                Some(max_repeat_count) => {
+                    if *sp_count1.get(&(sp.0, sp.1, v.1)).unwrap_or(&0) > max_repeat_count {
+                        return;
+                    }
+                }
+                None => {
+                    if *sp_count1.get(&(sp.0, sp.1, v.1)).unwrap_or(&0) > 8 {
+                        return;
+                    }
+                }
+            }
+
             let e = sid_to_hits.entry(v.1).or_insert(vec![]);
             let right_frag_coor = (v.2, v.3, v.4);
             e.push((left_frag_coor, right_frag_coor));

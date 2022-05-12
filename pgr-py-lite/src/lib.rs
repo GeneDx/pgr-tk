@@ -166,10 +166,17 @@ impl SeqIndexDB {
         &self,
         seq: Vec<u8>,
         penality: f32,
+        max_repeat_count: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         let shmmr_to_frags = self.get_shmmr_map_internal();
-        let res = aln::query_fragment_to_hps(shmmr_to_frags, &seq, shmmr_spec, penality);
+        let res = aln::query_fragment_to_hps(
+            shmmr_to_frags,
+            &seq,
+            shmmr_spec,
+            penality,
+            max_repeat_count,
+        );
         Ok(res)
     }
 
@@ -185,9 +192,7 @@ impl SeqIndexDB {
         // very expansive as the Rust FxHashMap will be converted to Python's dictionary
         // maybe limit the size that can be converted to avoid OOM
         let shmmr_to_frags = self.get_shmmr_map_internal();
-        pyo3::Python::with_gil(|py| {
-            Ok(shmmr_to_frags.to_object(py)) 
-        })
+        pyo3::Python::with_gil(|py| Ok(shmmr_to_frags.to_object(py)))
     }
 
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
@@ -303,6 +308,39 @@ pub fn sparse_aln(
 ) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
     let mut hp = sp_hits.clone();
     Ok(aln::sparse_aln(&mut hp, max_span, penality))
+}
+
+#[pyfunction]
+fn get_shmmrs_from_seq(
+    seq: Vec<u8>,
+    w: u32,
+    k: u32,
+    r: u32,
+    min_span: u32,
+) -> PyResult<Vec<(u64, u64, u32, u32, u8)>> {
+    let shmmr_spec = ShmmrSpec {
+        w,
+        k,
+        r,
+        min_span,
+        sketch: false,
+    };
+    let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec);
+    let res = seq_db::pair_shmmrs(&shmmrs)
+        .iter()
+        .map(|(s0, s1)| {
+            let p0 = s0.pos() + 1;
+            let p1 = s1.pos() + 1;
+            let s0 = s0.x >> 8;
+            let s1 = s1.x >> 8;
+            if s0 < s1 {
+                (s0, s1, p0, p1, 0_u8)
+            } else {
+                (s1, s0, p0, p1, 1_u8)
+            }
+        })
+        .collect::<Vec<(u64, u64, u32, u32, u8)>>();
+    Ok(res)
 }
 
 #[pyfunction]
@@ -482,5 +520,6 @@ fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_aln_segements, m)?)?;
     m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
+    m.add_function(wrap_pyfunction!(get_shmmrs_from_seq, m)?)?;
     Ok(())
 }
