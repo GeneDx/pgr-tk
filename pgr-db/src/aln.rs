@@ -119,6 +119,7 @@ pub fn query_fragment_to_hps(
     penality: f32,
     max_count: Option<u32>,
     max_count_target: Option<u32>,
+    max_aln_span: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
     let r = query_fragment(shmap, frag, &shmmr_spec);
     // group by target seq_id
@@ -131,8 +132,8 @@ pub fn query_fragment_to_hps(
 
         *e += 1;
         d.2.iter().for_each(|v| {
-                 // count shimmer pair on target hits
-                 // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
+            // count shimmer pair on target hits
+            // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
             let key = (sp.0, sp.1, v.1);
             let e = sp_count1.entry(key).or_insert(0);
             *e += 1;
@@ -142,32 +143,30 @@ pub fn query_fragment_to_hps(
     let mut sid_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
     r.into_iter().for_each(|d| {
         let sp = d.0;
-        let count = *sp_count0.get(&sp).unwrap_or(&0); 
-        if let Some(max_count) = max_count {
-            if count > max_count {
-                return;
-            } else if count > 128 {
-                return;
-            }
+        let count = *sp_count0.get(&sp).unwrap_or(&0);
+        let max_count = max_count.unwrap_or(128);
+        if count > max_count {
+            return;
         };
         let left_frag_coor = d.1;
         d.2.iter().for_each(|v| {
-            let count = *sp_count1.get(&(sp.0, sp.1, v.1)).unwrap_or(&0); 
-            if let Some(max_count_target) = max_count_target {
-                if count > max_count_target {return;}; 
-            } else if count > 128 {
-                return
-            }
+            let count = *sp_count1.get(&(sp.0, sp.1, v.1)).unwrap_or(&0);
+            let max_count_target = max_count_target.unwrap_or(128);
+            if count > max_count_target {
+                return;
+            };
             let e = sid_to_hits.entry(v.1).or_insert(vec![]);
             let right_frag_coor = (v.2, v.3, v.4);
             e.push((left_frag_coor, right_frag_coor));
         });
     });
 
+    let max_aln_span = max_aln_span.unwrap_or(8);
+
     let out = sid_to_hits
         .into_iter()
         .filter(|(_sid, hps)| hps.len() > 1)
-        .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, 8, penality)))
+        .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, max_aln_span, penality)))
         .collect::<Vec<_>>();
 
     out

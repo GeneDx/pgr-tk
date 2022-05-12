@@ -168,6 +168,7 @@ impl SeqIndexDB {
         penality: f32,
         max_count: Option<u32>,
         max_count_target: Option<u32>,
+        max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         let shmmr_to_frags = self.get_shmmr_map_internal();
@@ -177,7 +178,8 @@ impl SeqIndexDB {
             shmmr_spec,
             penality,
             max_count,
-            max_count_target, 
+            max_count_target,
+            max_aln_span,
         );
         Ok(res)
     }
@@ -310,7 +312,6 @@ impl AGCFile {
         Ok(self.agc_file.get_seq(sample_name, ctg_name))
     }
 }
-
 
 #[pyfunction]
 pub fn sparse_aln(
