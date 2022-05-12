@@ -166,7 +166,8 @@ impl SeqIndexDB {
         &self,
         seq: Vec<u8>,
         penality: f32,
-        max_repeat_count: Option<u32>,
+        max_count: Option<u32>,
+        max_count_target: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         let shmmr_to_frags = self.get_shmmr_map_internal();
@@ -175,9 +176,19 @@ impl SeqIndexDB {
             &seq,
             shmmr_spec,
             penality,
-            max_repeat_count,
+            max_count,
+            max_count_target, 
         );
         Ok(res)
+    }
+
+    pub fn get_shmmr_pair_count(&self, shmmr_pair: (u64, u64)) -> usize {
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        if shmmr_to_frags.contains_key(&shmmr_pair) {
+            shmmr_to_frags.get(&shmmr_pair).unwrap().len()
+        } else {
+            0
+        }
     }
 
     pub fn get_shmmr_spec(&self) -> PyResult<Option<(u32, u32, u32, u32, bool)>> {
@@ -300,6 +311,7 @@ impl AGCFile {
     }
 }
 
+
 #[pyfunction]
 pub fn sparse_aln(
     sp_hits: Vec<HitPair>,
@@ -311,7 +323,7 @@ pub fn sparse_aln(
 }
 
 #[pyfunction]
-fn get_shmmrs_from_seq(
+fn get_shmmr_pairs_from_seq(
     seq: Vec<u8>,
     w: u32,
     k: u32,
@@ -520,6 +532,6 @@ fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_aln_segements, m)?)?;
     m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
-    m.add_function(wrap_pyfunction!(get_shmmrs_from_seq, m)?)?;
+    m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
     Ok(())
 }
