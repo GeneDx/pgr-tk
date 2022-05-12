@@ -233,7 +233,8 @@ impl CompactSeqDB {
                                 );
                                 rc = true;
                             } else {
-                                frg = seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec();
+                                frg =
+                                    seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec();
                                 rc = false;
                             }
                             //assert!(frg.len() > KMERSIZE as usize);
