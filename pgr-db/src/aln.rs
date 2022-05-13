@@ -118,24 +118,31 @@ pub fn query_fragment_to_hps(
     shmmr_spec: &ShmmrSpec,
     penality: f32,
     max_count: Option<u32>,
+    max_count_query: Option<u32>,
     max_count_target: Option<u32>,
     max_aln_span: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
     let r = query_fragment(shmap, frag, &shmmr_spec);
     // group by target seq_id
-    let mut sp_count0 = FxHashMap::<(u64, u64), u32>::default();
-    let mut sp_count1 = FxHashMap::<(u64, u64, u32), u32>::default();
+    let mut sp_count = FxHashMap::<(u64, u64), u32>::default();
+    let mut sp_count_query = FxHashMap::<(u64, u64, u32), u32>::default();
+    let mut sp_count_target = FxHashMap::<(u64, u64, u32), u32>::default();
     r.iter().for_each(|d| {
         let sp = d.0;
         // count shimmer pair hits
-        let e = sp_count0.entry(sp).or_insert(0);
+        let e = sp_count.entry(sp).or_insert(0);
 
         *e += 1;
         d.2.iter().for_each(|v| {
+            // count shimmer pair on query 
+            // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
+            let key = (sp.0, sp.1, v.0);
+            let e = sp_count_query.entry(key).or_insert(0);
+            *e += 1;
             // count shimmer pair on target hits
             // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
             let key = (sp.0, sp.1, v.1);
-            let e = sp_count1.entry(key).or_insert(0);
+            let e = sp_count_target.entry(key).or_insert(0);
             *e += 1;
         })
     });
@@ -143,14 +150,18 @@ pub fn query_fragment_to_hps(
     let mut sid_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
     r.into_iter().for_each(|d| {
         let sp = d.0;
-        let count = *sp_count0.get(&sp).unwrap_or(&0);
+        let count = *sp_count.get(&sp).unwrap_or(&0);
         let max_count = max_count.unwrap_or(128);
         if count > max_count {
             return;
         };
         let left_frag_coor = d.1;
         d.2.iter().for_each(|v| {
-            let count = *sp_count1.get(&(sp.0, sp.1, v.1)).unwrap_or(&0);
+            let count = *sp_count_target.get(&(sp.0, sp.1, v.1)).unwrap_or(&0);
+            let max_count_query = max_count_query.unwrap_or(128);
+            if count > max_count_query {
+                return;
+            };
             let max_count_target = max_count_target.unwrap_or(128);
             if count > max_count_target {
                 return;

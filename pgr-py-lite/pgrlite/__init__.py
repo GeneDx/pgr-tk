@@ -31,12 +31,17 @@ def query_sdb(seq_index_db, query_seq,
               gap_penality_factor=0.25,
               merge_range_tol=12,
               max_count=128,
+              max_query_count=128,
               max_target_count=128,
               max_aln_span=8):
 
     r = seq_index_db.query_fragment_to_hps(
-        query_seq, gap_penality_factor,
-        max_count, max_target_count, max_aln_span)
+        query_seq, 
+        gap_penality_factor,
+        max_count, 
+        max_query_count, 
+        max_target_count, 
+        max_aln_span)
 
     sid_to_alns = {}
     for (sid, alns) in r:

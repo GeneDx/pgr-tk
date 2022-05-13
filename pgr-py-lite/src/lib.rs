@@ -15,6 +15,7 @@ use pgr_utils::seqs2variants;
 use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 use std::fs::File;
@@ -167,6 +168,7 @@ impl SeqIndexDB {
         seq: Vec<u8>,
         penality: f32,
         max_count: Option<u32>,
+        max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
@@ -178,6 +180,7 @@ impl SeqIndexDB {
             shmmr_spec,
             penality,
             max_count,
+            max_count_query,
             max_count_target,
             max_aln_span,
         );
@@ -190,6 +193,53 @@ impl SeqIndexDB {
             shmmr_to_frags.get(&shmmr_pair).unwrap().len()
         } else {
             0
+        }
+    }
+
+    #[args(max_unique_count = "1")]
+    pub fn get_shmmr_pair_source_count(
+        &self,
+        shmmr_pair: (u64, u64),
+        max_unique_count: Option<usize>,
+    ) -> Vec<(String, usize)> {
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let mut count = FxHashMap::<String, usize>::default();
+        if shmmr_to_frags.contains_key(&shmmr_pair) {
+            shmmr_to_frags
+                .get(&shmmr_pair)
+                .unwrap()
+                .iter()
+                .for_each(|v| {
+                    let sid = v.1;
+                    let source = self
+                        .seq_info
+                        .as_ref()
+                        .unwrap()
+                        .get(&sid)
+                        .unwrap()
+                        .1
+                        .as_ref()
+                        .unwrap_or(&"".to_string())
+                        .clone();
+                    *count.entry(source).or_insert(0) += 1;
+                });
+            count
+                .into_par_iter()
+                .filter(|(_k, v)| {
+                    if let Some(muc) = max_unique_count {
+                        if *v > muc {
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    }
+                })
+                .map(|(k, v)| (k, v))
+                .collect::<Vec<(String, usize)>>()
+        } else {
+            vec![]
         }
     }
 
@@ -211,7 +261,7 @@ impl SeqIndexDB {
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
         let shmmr_to_frags = self.get_shmmr_map_internal();
         let py_out = shmmr_to_frags
-            .iter()
+            .par_iter()
             .flat_map(|v| {
                 v.1.iter()
                     .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
@@ -323,7 +373,7 @@ pub fn sparse_aln(
     Ok(aln::sparse_aln(&mut hp, max_span, penality))
 }
 
-#[pyfunction]
+#[pyfunction(w="80", k="56",  r="4", min_span="16")]
 fn get_shmmr_pairs_from_seq(
     seq: Vec<u8>,
     w: u32,
@@ -340,7 +390,7 @@ fn get_shmmr_pairs_from_seq(
     };
     let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec);
     let res = seq_db::pair_shmmrs(&shmmrs)
-        .iter()
+        .par_iter()
         .map(|(s0, s1)| {
             let p0 = s0.pos() + 1;
             let p1 = s1.pos() + 1;
@@ -356,7 +406,7 @@ fn get_shmmr_pairs_from_seq(
     Ok(res)
 }
 
-#[pyfunction]
+#[pyfunction(w="80", k="56",  r="4", min_span="16")]
 fn get_shmmr_dots(
     seq0: Vec<u8>,
     seq1: Vec<u8>,
@@ -466,7 +516,7 @@ fn get_aln_segements(
 
     match aln_segs {
         Ok(segs) => Ok(segs
-            .iter()
+            .par_iter()
             .map(|seg| {
                 let t = match seg.t {
                     seqs2variants::AlnSegType::Match => b'M',
@@ -491,7 +541,7 @@ fn get_aln_map(aln_segs: Vec<AlnSegment>, s0: &PyString, s1: &PyString) -> PyRes
     let s0 = s0.to_string();
     let s1 = s1.to_string();
     let aln_segs = aln_segs
-        .iter()
+        .par_iter()
         .map(|s| seqs2variants::AlnSegment {
             ref_loc: seqs2variants::SeqLocus {
                 id: s.ref_loc.0,
