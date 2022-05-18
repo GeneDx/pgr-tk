@@ -1,6 +1,6 @@
 // use rayon::prelude::*;
-use crate::seq_db::{query_fragment, ShmmrToFrags};
-use crate::shmmrutils::ShmmrSpec;
+use crate::seq_db::{query_fragment, ShmmrToFrags, self};
+use crate::shmmrutils::{ShmmrSpec, self};
 use rustc_hash::FxHashMap;
 use std::collections::HashSet;
 
@@ -123,22 +123,23 @@ pub fn query_fragment_to_hps(
     max_aln_span: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
     let r = query_fragment(shmap, frag, &shmmr_spec);
-    // group by target seq_id
+    
     let mut sp_count = FxHashMap::<(u64, u64), u32>::default();
-    let mut sp_count_query = FxHashMap::<(u64, u64, u32), u32>::default();
+    let mut sp_count_query = FxHashMap::<(u64, u64), u32>::default();
     let mut sp_count_target = FxHashMap::<(u64, u64, u32), u32>::default();
+    
+    seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(0, &frag, &shmmr_spec)).iter().for_each(|sp| {
+        let e = sp_count_query.entry((sp.0.x >> 8, sp.1.x >>8) ).or_insert(0);
+        *e+= 1;
+    });
+    
     r.iter().for_each(|d| {
         let sp = d.0;
         // count shimmer pair hits
         let e = sp_count.entry(sp).or_insert(0);
-
         *e += 1;
+
         d.2.iter().for_each(|v| {
-            // count shimmer pair on query 
-            // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
-            let key = (sp.0, sp.1, v.0);
-            let e = sp_count_query.entry(key).or_insert(0);
-            *e += 1;
             // count shimmer pair on target hits
             // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
             let key = (sp.0, sp.1, v.1);
@@ -155,13 +156,13 @@ pub fn query_fragment_to_hps(
         if count > max_count {
             return;
         };
+        let max_count_query = max_count_query.unwrap_or(128);
+        if count > max_count_query {
+            return;
+        };
         let left_frag_coor = d.1;
         d.2.iter().for_each(|v| {
             let count = *sp_count_target.get(&(sp.0, sp.1, v.1)).unwrap_or(&0);
-            let max_count_query = max_count_query.unwrap_or(128);
-            if count > max_count_query {
-                return;
-            };
             let max_count_target = max_count_target.unwrap_or(128);
             if count > max_count_target {
                 return;
