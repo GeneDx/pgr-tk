@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+""" This module is used to extract and compare sequences in a set of pan genome assemblies.
+It includes a number modules for access the sequence data and query the sequence index.
+
+"""
+
 from .pgrlite import *
 
 __version__ = pgr_lib_version()
@@ -7,6 +13,9 @@ byte_rc_map = dict(zip([ord(c) for c in "ACGTNnacgt"],
 
 
 def rc_byte_seq(seq):
+    """
+
+    """
     seq = [byte_rc_map[_] for _ in seq[::-1]]
     return seq
 
