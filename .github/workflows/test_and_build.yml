@@ -18,7 +18,7 @@ jobs:
       with:
         submodules: recursive
     - name: Run tests
-      run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. && cargo test --verbose
+      run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. && cargo test --verbose --workspace --exclude pgrlite
     - name: Build
       run: bash build.sh
     - uses: actions/upload-artifact@v3
