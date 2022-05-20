@@ -326,7 +326,7 @@ impl SeqIndexDB {
     ///     the ``list_of_the_hit_pairs`` is a list of tuples of 
     ///     ((``query_start``, ``query_end``, ``query_orientation``), 
     ///     (``target_start``, ``target_end``, ``target_orientation``)) 
-    #[pyo3(text_signature = "($self, seq)")]
+    #[pyo3(text_signature = "($self, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)")]
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
@@ -555,6 +555,7 @@ impl SeqIndexDB {
     /// -------
     /// list
     ///     a list of bytes representing the sequence
+    #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
         if self.agc_db.is_some() {
             Ok(self
