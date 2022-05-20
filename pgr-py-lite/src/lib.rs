@@ -28,7 +28,7 @@ pub fn pgr_lib_version() -> PyResult<String> {
 }
 
 
-/// A call that store the pangenomics index and seqeunce with multiple backend storage options (AGC, fasta file, memory)
+/// A class that stores pangenomics indices and seqeunces with multiple backend storage options (AGC, fasta file, memory)
 /// Large set of genomic sequenes, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
 /// which can read an AGC to create the index file. For example, we can create the index files from an AGC file:: 
 /// 
