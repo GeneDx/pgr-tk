@@ -1,6 +1,29 @@
 # -*- coding: utf-8 -*-
-""" This module is used to extract and compare sequences in a set of pan genome assemblies.
+"""This module is used to extract and compare sequences in a set of pan genome assemblies.
 It includes a number modules for access the sequence data and query the sequence index.
+
+Example
+-------
+
+This shows a simple example to query the pangenomics database::
+
+    import pgrlite
+  
+    ## The AGCFile class is used to access the sequence data stored in a AGC file. 
+    ref_db =pgrlite.AGCFile("hg19.agc")
+
+    ## Load a pre-build index and sequence data from all humane genome assemblies 
+    ## of the HPRC year one release. 
+    sdb = pgrlite.SeqIndexDB()
+    sdb.load_from_agc_index("HPRC-y1-rebuild-04252022")
+
+    ## Extract a sequence from the hg19 AGC file.
+    gene_seq = ref_db.get_sub_seq('hg19.fasta', 'chr6', 
+                                  160952514, 161087407)
+
+    ## find hits in the pangenomic reference
+    alignment_ranges = pgrlite.query_sdb(sdb, gene_seq, 
+                                         merge_range_tol=100000)
 
 """
 
@@ -13,7 +36,17 @@ byte_rc_map = dict(zip([ord(c) for c in "ACGTNnacgt"],
 
 
 def rc_byte_seq(seq):
-    """
+    """ Reverse complement a sequence as a list of bytes.
+    
+    Parameters
+    ----------
+    seq : list of bytes
+        ascii code of the DNA sequence 
+
+    Returns
+    -------
+    list of bytes 
+        the list of bytes of the reverse complement DNA sequence
 
     """
     seq = [byte_rc_map[_] for _ in seq[::-1]]
@@ -24,15 +57,54 @@ rc_map = dict(zip("ACGTNnactg", "TGCANntgca"))
 
 
 def rc(seq):
+    """ Reverse complement a sequence as a Python String.
+    
+    Parameters
+    ----------
+    seq : string
+        a DNA sequence as a Python String 
+
+    Returns
+    -------
+    string
+        the reverse complement DNA sequence as a Python String
+
+    """
     seq = "".join([dict(zip("ACGT", "TGCA"))[_] for _ in seq[::-1]])
     return seq
 
 
 def string_to_u8(s):
+    """ Convert a Python String to a list of bytes.
+
+    Parameters
+    ----------
+    s : string
+        a Python String of a DNA sequence
+
+    Returns
+    -------
+    list of bytes
+        a list of bytes representing the DNA sequence
+
+    """
     return list(s.encode("utf-8"))
 
 
 def u8_to_string(u8):
+    """ Convert DNA sequene in a list of bytes to a Python String.
+
+    Parameters
+    ----------
+    u8 : list of bytes
+        a list of bytes representing the DNA sequence
+
+    Returns
+    -------
+    string
+        a Python String of a DNA sequence
+
+    """
     return bytes(u8).decode("utf-8")
 
 
@@ -43,7 +115,50 @@ def query_sdb(seq_index_db, query_seq,
               max_query_count=128,
               max_target_count=128,
               max_aln_span=8):
+    """ Query a sequence index database for a query sequence. 
 
+    Parameters
+    ----------
+    seq_index_db : SeqIndexDB object
+        a sequence index database object
+
+    query_seq : list of bytes
+        a list of bytes representing the DNA sequence
+
+    gap_penality_factor : float
+        the gap penalty factor used in sparse dyanmic programming for finding the hits
+
+    merge_range_tol : int
+        a parameter used to merge the alignment ranges
+
+    max_count : int
+        only use the shimmer pairs that less than the ``max_count`` for sparse dynamic programming
+
+    max_query_count : int
+        only use the shimmer pairs that less than the ``max_count`` in the query sequence for sparse dynamic programming
+
+    max_query_count : int
+        only use the shimmer pairs that less than the ``max_count`` in the target sequence for sparse dynamic programming
+        
+    max_aln_span : int
+        the size of span used in the sparse dynamic alignment for finding the hits
+
+
+    Returns
+    -------
+    dict
+        - a python dictionary with the key as the target sequence id and the value as a list of alignment ranges
+
+        - each alignment ranges is a list of tuples, each tuple is (``start``, ``end``, ``length``, 
+          ``orientation``, ``aln_records``)
+
+        - the ``aln_records`` is a list of tuples of 
+          (``target_sequence_id``, (``score``, ``list_of_the_hit_pairs``)), where 
+          the ``list_of_the_hit_pairs`` is a list of tuples of 
+          ((``query_start``, ``query_end``, ``query_orientation``), 
+          (``target_start``, ``target_end``, ``target_orientation``))
+
+    """
     r = seq_index_db.query_fragment_to_hps(
         query_seq, 
         gap_penality_factor,
@@ -88,7 +203,20 @@ def query_sdb(seq_index_db, query_seq,
 
 
 def merge_regions(rgns, tol=1000):
+    """ Take a list of ranges and merge them if two regions are within ``tol``.
+    Parameters
+    ----------
+    rgns : list of tuples
+        a list of tuples of (``start``, ``end``, ``length``, ``orientation``, ...)
+
+    Returns
+    -------
+    list of tuples
+        a list of tuples of (``start``, ``end``, ``length``, ``orientation``, ...)
+
+    """
     # rgns is a list of (bgn, end, len, orientation)
+    
     rgns.sort()
     frgns = [r for r in rgns if r[3] == 0]
     rrgns = [r for r in rgns if r[3] == 1]
@@ -136,6 +264,58 @@ def merge_regions(rgns, tol=1000):
 
 
 def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
+    """ Generate a variant call internal representation from the alignment segments.
+
+    Parameters
+    ----------
+    aln_segs : list of tuples
+        -  a list of tuples of "alignment segments" generate by ``pgrlite.pgrlite.get_aln_segements()``
+        -  the "alignment segments" are a list of ``(ref_loc: SeqLocus, tgt_loc: SeqLocus, align_type: AlnSegType)``. The data structures
+           is defined as following Rust structs::
+            
+                pub struct SeqLocus {
+                    pub id: u32,
+                    pub bgn: u32,
+                    pub len: u32,
+                }
+
+                pub enum AlnSegType {
+                    Match,
+                    Mismatch,
+                    Insertion,
+                    Deletion,
+                    Unspecified,
+                }
+
+                pub struct AlnSegment {
+                    pub ref_loc: SeqLocus,
+                    pub tgt_loc: SeqLocus,
+                    pub t: AlnSegType,
+                }
+    
+    ref_bgn : int
+        the reference sequence start position
+
+    ctg_bgn : int
+        the contig start position
+
+    rs0 : string
+        the reference sequence
+
+    cs0 : string
+        the contig sequence
+
+    strand : int
+        the contig strand
+
+
+    Returns
+    -------
+    dict
+        a dictionary mapping the key (ref_id, reference_position) to a set of variant 
+        calls in the form of a dictionary mapping from (target_location, strand) to 
+        a variant call record.
+    """
     variant_calls = {}
     for s in aln_segs:
         ref_id = s.ref_loc[0]
@@ -186,6 +366,21 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
 
 
 def output_variants_to_vcf_records(variant_calls, ref_name):
+    """ Convert the variant calls to VCF records.
+    
+    Parameters
+    ----------
+    variant_calls : dict
+        the variant calls generated by ``get_variant_calls()``
+
+    ref_name : string
+        reference sequence name
+
+    Returns
+    -------
+    list
+        list of VCF records
+    """
     keys = sorted(list(variant_calls.keys()))
     vcf_recs = []
     for k in keys:
