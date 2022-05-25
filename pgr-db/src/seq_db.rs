@@ -76,6 +76,9 @@ pub struct CompactSeqDB {
 }
 
 pub fn pair_shmmrs(shmmrs: &Vec<MM128>) -> Vec<(&MM128, &MM128)> {
+    if shmmrs.len() < 2 {
+        return vec![];
+    }
     let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
         .iter()
         .zip(shmmrs[1..shmmrs.len()].iter())
