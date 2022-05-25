@@ -755,6 +755,49 @@ impl CompactSeqDB {
     }
 }
 
+pub fn frag_map_to_adj_list(
+    frag_map: &ShmmrToFrags,
+    min_count: usize,
+) -> Vec<((u64, u64, u8), (u64, u64, u8))> {
+    let mut out = frag_map
+        .par_iter()
+        .flat_map(|v| {
+            v.1.iter()
+                .map(|vv| (vv.1, vv.2, vv.3, (v.0 .0, v.0 .1, vv.4)))
+                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>()
+        })
+        .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
+    out.par_sort();
+    let out = out
+        .into_par_iter()
+        .filter(|v| frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count)
+        .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
+
+    (0..out.len() - 1)
+        .into_par_iter()
+        .flat_map(|i| {
+            let v = out[i];
+            let w = out[i + 1];
+            if v.0 != v.1 {
+                vec![None]
+            } else {
+                vec![
+                    Some((v.3, w.3)),
+                    Some(((w.3 .0, w.3 .1, 1 - w.3 .2), (v.3 .0, v.3 .1, 1 - v.3 .2))),
+                ]
+            }
+        })
+        .filter(|v| v.is_some())
+        .map(|v| v.unwrap())
+        .collect::<Vec<((u64, u64, u8), (u64, u64, u8))>>()
+}
+
+impl CompactSeqDB {
+    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<((u64, u64, u8), (u64, u64, u8))> {
+        frag_map_to_adj_list(&self.frag_map, min_count)
+    }
+}
+
 pub fn query_fragment(
     shmmr_map: &ShmmrToFrags,
     frag: &Vec<u8>,
