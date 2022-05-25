@@ -1,2 +1,0 @@
-[workspace]
-members = ["pgr-db", "pgr-bin", "pgr-utils", 'pgr-py-lite', 'pgr-py'] 
