@@ -101,7 +101,8 @@ impl SeqIndexDB {
     /// 
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
-        let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
+        // let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, new_map) = seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
         self.agc_db = Some((agc_file, new_map));
         self.seq_db = None;
