@@ -467,7 +467,12 @@ impl SeqIndexDB {
     /// -------
     /// 
     /// dict
-    ///     the ``shmmer_pair`` to ``fragment_id`` map
+    ///     the ``shmmer_pair`` to ``fragments`` map
+    /// 
+    ///     fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end, 
+    ///     orientation(to the shimmer pair)) defined as:: 
+    /// 
+    ///         pub type FragmentSignature = (u32, u32, u32, u32, u8); 
     /// 
     pub fn get_shmmr_map(&self) -> PyResult<PyObject> {
         // very expansive as the Rust FxHashMap will be converted to Python's dictionary
