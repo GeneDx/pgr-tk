@@ -7,3 +7,4 @@ libagc.so
 */*.pyc
 pgr-py-lite/pgrlite/__pycache__/__init__.cpython-38.pyc
 pgr-py-lite/src/lib.rs
+Cargo.lock
