@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     container: docker.io/cschin/pgr-tk-build-env
     steps:
-    - name: setup
-      run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. 
     - uses: actions/checkout@v3
       with:
         submodules: recursive
+    - name: setup
+      run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. 
     - name: Run tests
       run: cargo test --verbose --workspace --exclude pgrlite
     - name: Build
