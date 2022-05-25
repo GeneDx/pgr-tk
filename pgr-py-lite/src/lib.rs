@@ -587,7 +587,7 @@ impl SeqIndexDB {
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
     /// 
-    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<( (u64, u64, u8), (u64, u64, u8))> {
+    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         let frag_map = self.get_shmmr_map_internal();
         seq_db::frag_map_to_adj_list(frag_map, min_count)
     }

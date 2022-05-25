@@ -758,7 +758,7 @@ impl CompactSeqDB {
 pub fn frag_map_to_adj_list(
     frag_map: &ShmmrToFrags,
     min_count: usize,
-) -> Vec<((u64, u64, u8), (u64, u64, u8))> {
+) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
     let mut out = frag_map
         .par_iter()
         .flat_map(|v| {
@@ -767,33 +767,46 @@ pub fn frag_map_to_adj_list(
                 .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>()
         })
         .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
+
     out.par_sort();
     let out = out
         .into_par_iter()
-        .filter(|v| frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count)
-        .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
+        .map(|v| {
+            if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count {
+                Some(v)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>();
 
     (0..out.len() - 1)
         .into_par_iter()
         .flat_map(|i| {
             let v = out[i];
             let w = out[i + 1];
-            if v.0 != v.1 {
+            if v.is_none() || w.is_none() {
                 vec![None]
             } else {
-                vec![
-                    Some((v.3, w.3)),
-                    Some(((w.3 .0, w.3 .1, 1 - w.3 .2), (v.3 .0, v.3 .1, 1 - v.3 .2))),
-                ]
+                let v = v.unwrap();
+                let w = w.unwrap();
+                if v.0 != w.0 {
+                    vec![None]
+                } else {
+                    vec![
+                        Some((v.0, v.3, w.3)),
+                        Some((v.0, (w.3 .0, w.3 .1, 1 - w.3 .2), (v.3 .0, v.3 .1, 1 - v.3 .2))),
+                    ]
+                }
             }
         })
         .filter(|v| v.is_some())
         .map(|v| v.unwrap())
-        .collect::<Vec<((u64, u64, u8), (u64, u64, u8))>>()
+        .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
 }
 
 impl CompactSeqDB {
-    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<((u64, u64, u8), (u64, u64, u8))> {
+    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         frag_map_to_adj_list(&self.frag_map, min_count)
     }
 }

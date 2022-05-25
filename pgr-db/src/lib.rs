@@ -305,4 +305,21 @@ mod tests {
         }
         Ok(())
     }
+
+
+    #[test]
+    fn test_frag_map_to_adj_list() -> Result<(), std::io::Error> {
+        use crate::agc_io::AGCFile;
+        use seq_db::{query_fragment, read_mdb_file, write_shmr_map_file};
+        let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
+        let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
+        let _ = sdb.load_index_from_agcfile(agcfile);
+
+        let out = sdb.generate_smp_adj_list(2);
+        println!("out: {:?}", out);
+        out.into_iter().for_each(|v| {
+            println!("{:?}", v);
+        });
+        Ok(())
+    }
 }
