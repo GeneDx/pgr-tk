@@ -795,7 +795,11 @@ pub fn frag_map_to_adj_list(
                 } else {
                     vec![
                         Some((v.0, v.3, w.3)),
-                        Some((v.0, (w.3 .0, w.3 .1, 1 - w.3 .2), (v.3 .0, v.3 .1, 1 - v.3 .2))),
+                        Some((
+                            v.0,
+                            (w.3 .0, w.3 .1, 1 - w.3 .2),
+                            (v.3 .0, v.3 .1, 1 - v.3 .2),
+                        )),
                     ]
                 }
             }
@@ -806,7 +810,10 @@ pub fn frag_map_to_adj_list(
 }
 
 impl CompactSeqDB {
-    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    pub fn generate_smp_adj_list(
+        &self,
+        min_count: usize,
+    ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         frag_map_to_adj_list(&self.frag_map, min_count)
     }
 }
@@ -955,5 +962,91 @@ pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::
         shmmr_map.insert((k1, k2), value);
     });
 
+    Ok((shmmr_spec, shmmr_map))
+}
+
+pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
+    let mut in_file = File::open(filepath).expect("open fail");
+    let mut buf = Vec::<u8>::new();
+
+    let mut u64bytes = [0_u8; 8];
+
+    in_file.read_to_end(&mut buf)?;
+    let mut cursor = 0_usize;
+    assert!(buf[0..3] == "mdb".to_string().into_bytes());
+    cursor += 3; // skip "mdb"
+
+    let w = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let k = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let r = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let min_span = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let flag = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
+    cursor += 4;
+    let sketch = (flag & 0b01) == 0b01;
+
+    let shmmr_spec = ShmmrSpec {
+        w,
+        k,
+        r,
+        min_span,
+        sketch,
+    };
+    u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+    let shmmr_key_len = usize::from_le_bytes(u64bytes);
+    cursor += 8;
+    ShmmrToFrags::default();
+    let mut rec_loc = Vec::<(u64, u64, usize, usize)>::new();
+    for _ in 0..shmmr_key_len {
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        let k1 = u64::from_le_bytes(u64bytes);
+        cursor += 8;
+
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        let k2 = u64::from_le_bytes(u64bytes);
+        cursor += 8;
+
+        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        let vec_len = usize::from_le_bytes(u64bytes);
+        cursor += 8;
+
+        let start = cursor;
+        cursor += vec_len * 17;
+        rec_loc.push((k1, k2, start, vec_len))
+    };
+
+    let shmmr_map = rec_loc.par_iter().map(|&(k1, k2, start, vec_len)| {
+        let mut cursor = start;
+        let value = (0..vec_len)
+            .into_iter()
+            .map(|_| {
+                let mut u32bytes = [0_u8; 4];
+                let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.0 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
+
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.1 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
+
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.2 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
+
+                u32bytes.clone_from_slice(&buf[cursor..cursor + 4]);
+                v.3 = u32::from_le_bytes(u32bytes);
+                cursor += 4;
+
+                v.4 = buf[cursor..cursor + 1][0];
+                cursor += 1;
+                v
+            })
+            .collect::<Vec<(u32, u32, u32, u32, u8)>>();
+        ((k1, k2), value)
+    }).collect::<FxHashMap<(u64, u64), Vec<(u32, u32, u32, u32, u8)>>>();
     Ok((shmmr_spec, shmmr_map))
 }
