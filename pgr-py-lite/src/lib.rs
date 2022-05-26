@@ -1105,6 +1105,33 @@ fn get_aln_map(
     })
 }
 
+
+
+/// Perform a navie naive de Bruijn graph consensus
+///
+/// Parameters
+/// ----------
+/// aln_segs : list
+///     a list of the list of bytes representing the bases of each sequence
+///
+/// kmer_size: int  
+///     the size of kmers used for constructing the de Bruijn graph
+///
+/// Returns
+/// -------
+/// list
+///     a list of bytes representing the consensus sequence
+/// 
+#[pyfunction(seqs, kmer_size)]
+#[pyo3(text_signature = "($self, seqs, kmer_size)")]
+pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> PyResult<Vec<u8>> {
+    let consensus = pgr_db::ec::naive_dbg_consensus(seqs, kmer_size);
+    match consensus {
+        Ok(seq) => Ok(seq),
+        Err(_) => Err(exceptions::PyException::new_err("consensus failed, trying bigger kmer size")),
+    }
+}
+
 /// The internal `pgrlite` modules implemented with Rust.
 /// These classes and fucntion are re-exported as `pgrlite.*`
 /// so `import pgrlite` will bring these classes and function

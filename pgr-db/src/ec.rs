@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 /// this methods can ignore haplotype specific signals
 ///
 pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> Result<Vec<u8>, &'static str> {
-    let mut dbG = DiGraphMap::<usize, u32>::new();
+    let mut db_g = DiGraphMap::<usize, u32>::new();
     let mut kmer_idx = FxHashMap::<Vec<u8>, usize>::default();
     let mut idx_kmer = Vec::<Vec<u8>>::new();
     let mut kmer_count = FxHashMap::<usize, usize>::default();
@@ -39,7 +39,7 @@ pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> Result<Vec<u
                 m
             });
             *kmer_count.entry(kidx1).or_insert(0) += 1;
-            dbG.add_edge(kidx0, kidx1, 1);
+            db_g.add_edge(kidx0, kidx1, 1);
             kidx0 = kidx1;
         });
     }
@@ -52,7 +52,7 @@ pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> Result<Vec<u
         let mut track_back = FxHashMap::<usize, Option<usize>>::default();
 
         kmers.into_iter().for_each(|m| {
-            let in_edges = dbG.edges_directed(m, Incoming);
+            let in_edges = db_g.edges_directed(m, Incoming);
             let mut bs = 0;
             let mut bn: Option<usize> = None;
             let ms = *kmer_count.get(&m).unwrap();
@@ -97,7 +97,7 @@ pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> Result<Vec<u
         bases
     };
 
-    match toposort(&dbG, None) {
+    match toposort(&db_g, None) {
         Ok(kmers) => Ok(get_best_path(kmers)),
         Err(_) => Err("circle found"),
     }
@@ -118,7 +118,7 @@ mod test {
             sketch: false,
         };
         let mut sdb = CompactSeqDB::new(spec);
-        sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
         let seqs = (0..sdb.seqs.len())
             .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
