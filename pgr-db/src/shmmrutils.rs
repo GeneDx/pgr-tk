@@ -336,12 +336,28 @@ impl RingBuffer {
 }
 
 pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
-    let mut shimmers = Vec::<MM128>::new();
+    
+    let mut shmmrs = Vec::<MM128>::new();
     let mut rbuf = RingBuffer::new(r as usize);
     let mut min_mer = MM128 {
         x: u64::MAX,
         y: u64::MAX,
     };
+    let mut mers2 = Vec::<MM128>::new();
+
+
+    // padding the shmmr vec with the max min_mer
+    // this makes sure the first and the least are always in the output
+    (0..r-1).for_each(|_| {
+        mers2.push(min_mer);
+    });
+    mers2.extend(mers);
+    (0..r-1).for_each(|_| {
+        mers2.push(min_mer);
+    }); 
+
+    let mers = mers2;
+
     let mut pos = 0;
     let mut mdist = 0;
     loop {
@@ -356,7 +372,7 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
             for i in 0..rbuf.size as usize {
                 let mm = rbuf.get(i);
                 if mm.x == min_mer.x {
-                    shimmers.push(mm);
+                    shmmrs.push(mm);
                     min_mer = mm;
                     last_i = i;
                 }
@@ -365,7 +381,7 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
             pos += 1;
             continue;
         } else if m.x <= min_mer.x && pos >= r as usize {
-            shimmers.push(m);
+            shmmrs.push(m);
             min_mer = m;
             mdist = 0;
             pos += 1;
@@ -374,7 +390,7 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
         mdist += 1;
         pos += 1;
     }
-    shimmers
+    shmmrs
 }
 
 pub fn sequence_to_shmmrs1(
