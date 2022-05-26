@@ -27,33 +27,32 @@ pub fn pgr_lib_version() -> PyResult<String> {
     Ok(VERSION_STRING.to_string())
 }
 
-
 /// A class that stores pangenomics indices and seqeunces with multiple backend storage options (AGC, fasta file, memory)
 /// Large set of genomic sequenes, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
-/// which can read an AGC to create the index file. For example, we can create the index files from an AGC file:: 
-/// 
-///     # create a file that contains a list of file that contains a set of files from which we want to build the indices 
+/// which can read an AGC to create the index file. For example, we can create the index files from an AGC file::
+///
+///     # create a file that contains a list of file that contains a set of files from which we want to build the indices
 ///  
 ///     $ echo HPRC-y1-rebuild-04252022.agc > filelist
 ///  
 ///     # using pgr-mdb to create the index files, for 97 haplotyed genome assembly from HPRC year one release,
 ///     # it takes about 30 to 40 min to create the index files
-/// 
+///
 ///     $ pgr-mdb filelist HPRC-y1-rebuild-04252022
-/// 
+///
 ///     # two index files will be created by the pgr-mdb command
 ///     # one with a suffix .mdb and another one with a suffix .midx
 ///     # when we use the load_from_agc_index() method, all three files, e.g., genomes.agc, genomes.mdb and
 ///     # genomes.midx should have the same prefix as the parameter used to call  load_from_agc_index() method
-/// 
-/// One can also create index and load the seqeunces from a fasta file using ```load_from_fastx()``` methods. 
+///
+/// One can also create index and load the seqeunces from a fasta file using ```load_from_fastx()``` methods.
 /// Curretnly, this might be a good option for mid-size dataset (up to a couple of hundred magebases).
-/// 
+///
 /// Or, a user can load the sequnece from memory using a Python list. This is convinient when one needs to
-/// rebuild the SHIMMER index with different parameters for a different resolution. 
+/// rebuild the SHIMMER index with different parameters for a different resolution.
 ///  
-/// Once the index is built, the database can be queried quickly by using the ``query_fragment()`` or 
-/// the ``query_fragment_to_hps()`` method. 
+/// Once the index is built, the database can be queried quickly by using the ``query_fragment()`` or
+/// the ``query_fragment_to_hps()`` method.
 ///  
 #[pyclass]
 #[derive(Clone)]
@@ -62,7 +61,7 @@ struct SeqIndexDB {
     pub shmmr_spec: Option<ShmmrSpec>,
     /// Rust internal: store the sequences
     pub seq_db: Option<seq_db::CompactSeqDB>,
-    /// Rust internal: store the agc file and the index 
+    /// Rust internal: store the agc file and the index
     pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[pyo3(get)]
@@ -87,22 +86,23 @@ impl SeqIndexDB {
     }
 
     /// use AGC file for sequences and the index created from an AGC file
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
+    ///
     /// prefix: string
     ///     the prefix to the `.agc`, `.mdb` and `.midx` files
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// None or I/O Error
-    /// 
+    ///
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
         // let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
-        let (shmmr_spec, new_map) = seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, new_map) =
+            seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
         self.agc_db = Some((agc_file, new_map));
         self.seq_db = None;
@@ -130,31 +130,31 @@ impl SeqIndexDB {
         Ok(())
     }
     /// load and create the index created from a fasta / fastq file
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
+    ///
     ///filepath : string
     ///     the path the fasta or fastq file
-    /// 
+    ///
     /// w : int
     ///     the window size of the shimmer index, default to 80
-    /// 
+    ///
     /// k : int
     ///     the k-mer size of the shimmer index, default to 56
-    /// 
+    ///
     /// r : int
     ///     the reduction factor of the shimmer index, default to 4
-    /// 
+    ///
     /// min_span : int
     ///     the min_span ofr the shimmer index, default to 8
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// None or I/O Error
     ///     None
-    /// 
+    ///
     #[pyo3(text_signature = "($self, w, k, r, min_span)")]
     #[args(w = "80", k = "56", r = "4", min_span = "8")]
     pub fn load_from_fastx(
@@ -188,36 +188,35 @@ impl SeqIndexDB {
         Ok(())
     }
 
-
     /// load and create the index created from a python list
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
-    /// seq_list : list 
+    ///
+    /// seq_list : list
     ///     a list of tuple of the form (squence_id : int, sequence_name : string, sequence: list of bytes)
-    /// 
+    ///
     /// source : string
     ///     a string indicating the source of the sequence, default to "Memory"
-    /// 
+    ///
     /// w : int
     ///     the window size of the shimmer index, default to 80
-    /// 
+    ///
     /// k : int
     ///     the k-mer size of the shimmer index, default to 56
-    /// 
+    ///
     /// r : int
     ///     the reduction factor of the shimmer index, default to 4
-    /// 
+    ///
     /// min_span : int
     ///     the min_span ofr the shimmer index, default to 8
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// None or I/O Error
     ///     None
-    /// 
+    ///
     #[pyo3(text_signature = "($self, seq_list, source, w, k, r, min_span)")]
     #[args(source = "\"Memory\"", w = "80", k = "56", r = "4", min_span = "8")]
     pub fn load_from_seq_list(
@@ -259,26 +258,26 @@ impl SeqIndexDB {
     }
 
     /// use a fragement of sequence to query the database to get all hits
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
+    ///
     /// seq : list
     ///     the sequnece in bytes used for query
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// list
     ///   a list of hits in the format (shimmer_pair, query_fragement, target_fragments), where
     ///     - shimmer_pair: (int, int), tuple of the shimmer_pair
     ///     - query_fragment: (int, int, int) = (start_coordinate, end_coordinate, orientation)
-    ///     - target_fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end, 
-    ///       orientation(to the shimmer pair)) defined as:: 
-    /// 
-    ///           pub type FragmentSignature = (u32, u32, u32, u32, u8); 
+    ///     - target_fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end,
+    ///       orientation(to the shimmer pair)) defined as::
+    ///
+    ///           pub type FragmentSignature = (u32, u32, u32, u32, u8);
     ///       
-    /// 
+    ///
     #[pyo3(text_signature = "($self, seq)")]
     pub fn query_fragment(
         &self,
@@ -292,42 +291,44 @@ impl SeqIndexDB {
     }
 
     /// use a fragement of sequence to query the database to get all hits
-    /// 
+    ///
     /// sparese dynamic programming is performed to long chain of alignment
     ///  
     /// Parameters
     /// ----------
     /// seq : list of bytes
     ///    a list of bytes representing the DNA sequence
-    /// 
+    ///
     /// penality : float
     ///    the gap penalty factor used in sparse dyanmic programming for finding the hits
-    /// 
+    ///
     /// merge_range_tol : int
     ///    a parameter used to merge the alignment ranges
-    /// 
+    ///
     /// max_count : int
     ///    only use the shimmer pairs that less than the ``max_count`` for sparse dynamic programming
-    /// 
+    ///
     /// max_query_count : int
     ///    only use the shimmer pairs that less than the ``max_count`` in the query sequence for sparse dynamic programming
-    /// 
+    ///
     /// max_query_count : int
     ///    only use the shimmer pairs that less than the ``max_count`` in the target sequence for sparse dynamic programming
-    /// 
+    ///
     /// max_aln_span : int
     ///    the size of span used in the sparse dynamic alignment for finding the hits
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// list
-    ///     a list of tuples of 
-    ///     (``target_sequence_id``, (``score``, ``list_of_the_hit_pairs``)), where 
-    ///     the ``list_of_the_hit_pairs`` is a list of tuples of 
-    ///     ((``query_start``, ``query_end``, ``query_orientation``), 
-    ///     (``target_start``, ``target_end``, ``target_orientation``)) 
-    #[pyo3(text_signature = "($self, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)")]
+    ///     a list of tuples of
+    ///     (``target_sequence_id``, (``score``, ``list_of_the_hit_pairs``)), where
+    ///     the ``list_of_the_hit_pairs`` is a list of tuples of
+    ///     ((``query_start``, ``query_end``, ``query_orientation``),
+    ///     (``target_start``, ``target_end``, ``target_orientation``))
+    #[pyo3(
+        text_signature = "($self, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
+    )]
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
@@ -353,16 +354,16 @@ impl SeqIndexDB {
     }
 
     /// count the number of shimmer hits in the database
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
+    ///
     /// shmmr_pair : tuple
     ///     a shimmer pair used for query
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// int
     ///     number of hits
     #[pyo3(text_signature = "($self, shmmr_pair)")]
@@ -375,25 +376,24 @@ impl SeqIndexDB {
         }
     }
 
-
     /// count the number of shimmer hits paritioned by the source file in the database
-    /// 
+    ///
     /// Parameters
     /// ----------
-    /// 
+    ///
     /// shmmr_pair : tuple
     ///     a shimmer pair used for query
-    /// 
+    ///
     /// max_unique_count : int
-    ///     a interger to filter out shimmer pairs with count that are greater 
+    ///     a interger to filter out shimmer pairs with count that are greater
     ///     than the `max_unique_count`  
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// list
     ///     a list of the tuple (soure_name : string, count : int)
-    /// 
+    ///
     #[pyo3(text_signature = "($self, shmmr_pair, max_unique_count)")]
     #[args(max_unique_count = "1")]
     pub fn get_shmmr_pair_source_count(
@@ -443,13 +443,13 @@ impl SeqIndexDB {
     }
 
     /// Output the specific of the shimmer used to build the index
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// tuple
     ///     (window_size, k_mer_size, reduction_factor, min_space, use_sketch)
-    /// 
+    ///
     pub fn get_shmmr_spec(&self) -> PyResult<Option<(u32, u32, u32, u32, bool)>> {
         if let Some(spec) = self.shmmr_spec.as_ref() {
             Ok(Some((spec.w, spec.k, spec.r, spec.min_span, spec.sketch)))
@@ -458,22 +458,21 @@ impl SeqIndexDB {
         }
     }
 
-
     /// get the ``shmmer_pair`` to ``fragment_id`` map in Python
-    /// 
+    ///
     /// this can be very expensive to generate the Python objects of a large hashmap in Rust
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// dict
     ///     the ``shmmer_pair`` to ``fragments`` map
-    /// 
-    ///     fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end, 
-    ///     orientation(to the shimmer pair)) defined as:: 
-    /// 
-    ///         pub type FragmentSignature = (u32, u32, u32, u32, u8); 
-    /// 
+    ///
+    ///     fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end,
+    ///     orientation(to the shimmer pair)) defined as::
+    ///
+    ///         pub type FragmentSignature = (u32, u32, u32, u32, u8);
+    ///
     pub fn get_shmmr_map(&self) -> PyResult<PyObject> {
         // very expansive as the Rust FxHashMap will be converted to Python's dictionary
         // maybe limit the size that can be converted to avoid OOM
@@ -482,12 +481,12 @@ impl SeqIndexDB {
     }
 
     /// get the ``shmmer_pair`` to ``fragment_id`` map in Python as a list
-    /// 
+    ///
     /// this can be very expensive to generate the Python objects of a large hashmap in Rust
-    /// 
+    ///
     /// Returns
     /// -------
-    /// 
+    ///
     /// list
     ///     list of the tuple (shmmr0, shmmr1, seq_id, position0, position1, orientation)
     ///   
@@ -503,8 +502,8 @@ impl SeqIndexDB {
             .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
         Ok(py_out)
     }
- 
-    /// fetch a contiguous sub-sequence 
+
+    /// fetch a contiguous sub-sequence
     ///
     /// Parameters
     /// ----------
@@ -516,7 +515,7 @@ impl SeqIndexDB {
     ///     the starting coordinate (0-based)
     /// end : int
     ///     the ending coordinate (exclusive)  
-    /// 
+    ///
     /// Returns
     /// -------
     /// list
@@ -548,7 +547,7 @@ impl SeqIndexDB {
         }
     }
 
-    /// fetch a sequence 
+    /// fetch a sequence
     ///
     /// Parameters
     /// ----------
@@ -556,7 +555,7 @@ impl SeqIndexDB {
     ///     the sample name stored in the AGC file
     /// ctg_name : string
     ///     the contig name stored in the AGC file
-    /// 
+    ///
     /// Returns
     /// -------
     /// list
@@ -582,22 +581,24 @@ impl SeqIndexDB {
     }
 
     /// Get adjecent list of the shimmer graph shimmer_pair -> shimmer_pair
-    /// 
+    ///
     /// Parameters
     /// ----------
     /// min_count : int
     ///     the minimum number of times a pair of shimmers must be observed to be included in the graph
-    /// 
+    ///
     /// Returns
     /// -------
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
-    /// 
-    pub fn generate_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    ///
+    pub fn generate_smp_adj_list(
+        &self,
+        min_count: usize,
+    ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         let frag_map = self.get_shmmr_map_internal();
         seq_db::frag_map_to_adj_list(frag_map, min_count)
     }
-
 }
 
 impl SeqIndexDB {
@@ -665,7 +666,7 @@ impl AGCFile {
     ///     the starting coordinate (0-based)
     /// end : int
     ///     the ending coordinate (exclusive)  
-    /// 
+    ///
     /// Returns
     /// -------
     /// list
@@ -690,7 +691,7 @@ impl AGCFile {
     ///     the sample name stored in the AGC file
     /// ctg_name : string
     ///     the contig name stored in the AGC file
-    /// 
+    ///
     /// Returns
     /// -------
     /// list
@@ -710,23 +711,23 @@ impl AGCFile {
 /// sp_hits : list
 ///     a list of tuple of ``HitPair`` defined as
 ///     ``pub type HitPair = ((u32, u32, u8), (u32, u32, u8))``
-///     This represents the hits as the position of matched Shimmer Pairs from 
-///     the two sequence. For example, if there two shimmers at positiong 2342 
+///     This represents the hits as the position of matched Shimmer Pairs from
+///     the two sequence. For example, if there two shimmers at positiong 2342
 ///     and 4322 of the query sequence that matches the shimmers at positions
 ///     6125465 and 6127445, them the HitPair will be ``(2342, 4322, 0)`` and
-///     ``(6125465, 6127445, 0)``. The third number would be 1 if shimmer paired 
+///     ``(6125465, 6127445, 0)``. The third number would be 1 if shimmer paired
 ///     are reversed matched to the sequence orientation and 0 otherwise.
 ///       
 /// max_span : int
 ///     For a give hit, the max_span defines how many other following hits are
 ///     considered for the next aligned position. This will limit the search
-///     space for the best alignment. If the two sequences are very repetitive, 
-///     then one needs to use larger ``max_span`` to ensure capturing the right 
+///     space for the best alignment. If the two sequences are very repetitive,
+///     then one needs to use larger ``max_span`` to ensure capturing the right
 ///     alignment path
 ///
 /// penality : float
-///     this parameter will determine when to break the alignment if there are big 
-///     gaps between the alignment segement. One can set it to zero to catch large 
+///     this parameter will determine when to break the alignment if there are big
+///     gaps between the alignment segement. One can set it to zero to catch large
 ///     chunk alignment ignoring the gaps. Typically, a number between 0.1 to 0.5 should
 ///     be used.
 ///
@@ -742,38 +743,44 @@ pub fn sparse_aln(
 }
 
 /// Generate a list of shimmer pair from a sequence
-/// 
+///
 /// Parameters
 /// ----------
 /// w : int
 ///     window size, default to 80, max allowed is 128
-/// 
+///
 /// k : int
 ///     k-mer size, default to 56, max allowed is 56
-/// 
+///
 /// r : int
 ///     reduction factor for generate sparse hierarchical minimiers (shimmer),
 ///     default to 4, max allowed is 12
-/// 
+///
 /// min_span : int
-///     - a parameter to remove close-by shimmer pairs 
-///     - if not zero, shimmer pairs whic the distance between them are less 
+///     - a parameter to remove close-by shimmer pairs
+///     - if not zero, shimmer pairs whic the distance between them are less
 ///       than ``the min_span`` will be removed
-///     - default to 16 
-/// 
+///     - default to 16
+///
+/// padding : bool
+///     - for short fragment that segemented by using shimmer, set ``padding`` to true
+///       to preserve the first and last shimmers
+///     - default to false
+///
 /// Returns
 /// -------
 /// list of tuple
 ///     a list fo tuple of ``(shimmr0, shimmr1, position0, position1, orientation)``  
-/// 
-#[pyfunction(w = "80", k = "56", r = "4", min_span = "16")]
-#[pyo3(text_signature = "($self, w, k, r, min_span)")]
+///
+#[pyfunction(w = "80", k = "56", r = "4", min_span = "16", padding = "false")]
+#[pyo3(text_signature = "($self, w, k, r, min_span, padding)")]
 fn get_shmmr_pairs_from_seq(
     seq: Vec<u8>,
     w: u32,
     k: u32,
     r: u32,
     min_span: u32,
+    padding: bool,
 ) -> PyResult<Vec<(u64, u64, u32, u32, u8)>> {
     let shmmr_spec = ShmmrSpec {
         w,
@@ -782,7 +789,7 @@ fn get_shmmr_pairs_from_seq(
         min_span,
         sketch: false,
     };
-    let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec);
+    let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, padding);
     let res = seq_db::pair_shmmrs(&shmmrs)
         .par_iter()
         .map(|(s0, s1)| {
@@ -801,39 +808,39 @@ fn get_shmmr_pairs_from_seq(
 }
 
 /// Generate a list of shimmer matches for creating a dot plot between two sequences
-/// 
+///
 /// Parameters
 /// ----------
-/// 
-/// seq0 : list 
+///
+/// seq0 : list
 ///     a list of bytes representing the first sequences
-/// 
+///
 /// seq1 : list
 ///     a list of bytes representing the second sequences
-/// 
+///
 /// w : int
 ///     window size, default to 80, max allowed is 128
-/// 
+///
 /// k : int
 ///     k-mer size, default to 56, max allowed is 56
-/// 
+///
 /// r : int
 ///     reduction factor for generate sparse hierarchical minimiers (shimmer),
 ///     default to 4, max allowed is 12
-/// 
+///
 /// min_span : int
-///     -  a parameter to remove close-by shimmer pairs 
-///     -  if not zero, shimmer pairs whic the distance between them are less 
+///     -  a parameter to remove close-by shimmer pairs
+///     -  if not zero, shimmer pairs whic the distance between them are less
 ///        than ``the min_span`` will be removed
-/// 
+///
 /// Returns
 /// -------
 /// tuple of two lists
 ///     ``(x, y)``:
-/// 
-///     -  ``x``: the matched shimmer positions in sequence 0 
-///     -  ``y``: the matched shimmer positions in sequence 1 
-/// 
+///
+///     -  ``x``: the matched shimmer positions in sequence 0
+///     -  ``y``: the matched shimmer positions in sequence 1
+///
 #[pyfunction(w = "80", k = "56", r = "4", min_span = "16")]
 #[pyo3(text_signature = "($self, seq0, seq1, w, k, r, min_span)")]
 fn get_shmmr_dots(
@@ -856,8 +863,8 @@ fn get_shmmr_dots(
         sketch: false,
     };
 
-    let shmmr0 = sequence_to_shmmrs(0, &seq0, &shmmr_spec);
-    let shmmr1 = sequence_to_shmmrs(1, &seq1, &shmmr_spec);
+    let shmmr0 = sequence_to_shmmrs(0, &seq0, &shmmr_spec, false);
+    let shmmr1 = sequence_to_shmmrs(1, &seq1, &shmmr_spec, false);
     let mut basemmer_x = FxHashMap::<u64, Vec<u32>>::default();
 
     for m in shmmr0 {
@@ -881,10 +888,10 @@ fn get_shmmr_dots(
 }
 
 /// A wrapper class to represent alignment segement for python
-/// 
-/// This wraps the Rust struct ``seq2variants::AlnSegment`` mapping 
-/// the enum ``seq2variants::AlnSegType`` to intergers 
-/// 
+///
+/// This wraps the Rust struct ``seq2variants::AlnSegment`` mapping
+/// the enum ``seq2variants::AlnSegType`` to intergers
+///
 #[pyclass]
 #[derive(Clone)]
 struct AlnSegment {
@@ -899,7 +906,7 @@ struct AlnSegment {
     tgt_loc: (u32, u32, u32),
 }
 
-/// A  class to represent alignment mapping between the two sequences 
+/// A  class to represent alignment mapping between the two sequences
 #[pyclass]
 #[derive(Clone)]
 pub struct AlnMap {
@@ -917,22 +924,22 @@ pub struct AlnMap {
     aln_seq: Vec<u8>,
 }
 
-/// Generate the CIGAR string from two sequences with WFA 
-/// 
+/// Generate the CIGAR string from two sequences with WFA
+///
 /// Parameters
 /// ----------
-/// 
+///
 /// seq0 : string
 ///     a string representing the first sequence
-/// 
+///
 /// seq1 : string
 ///     a string representing the second sequence
-/// 
+///
 /// Returns
 /// -------
 /// tuple
 ///     tuple of (alignment_score, CIGAR_string, CIGAR_list)
-/// 
+///
 #[pyfunction(seq0, seq1)]
 #[pyo3(text_signature = "($self, seq0, seq1)")]
 fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u8>)> {
@@ -963,28 +970,28 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u
 }
 
 /// Get alignement segments from two sequences
-/// 
+///
 /// Parameters
 /// ----------
 /// ref_id : int
 ///     a interger id for the reference sequence
-/// 
+///
 /// ref_seq : string
 ///     a python string of the reference sequence
-/// 
+///
 /// tgt_id : int
-///     a interger id for the target sequnece 
-/// 
+///     a interger id for the target sequnece
+///
 /// tgt_seq : string
 ///     a python string of the target sequence
-/// 
+///
 /// Returns
 /// -------
 /// list
 ///     a list of ``AlnSegement``
-/// 
-///     the ``AlnSegment`` is a Rust struct defined as:: 
-/// 
+///
+///     the ``AlnSegment`` is a Rust struct defined as::
+///
 ///         pub struct SeqLocus {
 ///             pub id: u32,
 ///             pub bgn: u32,
@@ -1004,7 +1011,7 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u
 ///             pub tgt_loc: SeqLocus,
 ///             pub t: AlnSegType,
 ///         }
-/// 
+///
 #[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
 #[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
 fn get_aln_segements(
@@ -1040,25 +1047,29 @@ fn get_aln_segements(
 }
 
 /// Get alignement map from a list of alignment segments
-/// 
+///
 /// Parameters
 /// ----------
 /// aln_segs : list
 ///     a list of the ``AlnSegment``
-/// 
+///
 /// s0: string
 ///     a python string of the reference sequence
-/// 
+///
 /// s1: int
-///     a interger id for the target sequnece 
-/// 
+///     a interger id for the target sequnece
+///
 /// Returns
 /// -------
 /// list
 ///     a list of ``AlnSegement``
 #[pyfunction(aln_segs, s0, s1)]
 #[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
-fn get_aln_map(aln_segs: Vec<AlnSegment>, ref_seq: &PyString, tgt_seq: &PyString) -> PyResult<AlnMap> {
+fn get_aln_map(
+    aln_segs: Vec<AlnSegment>,
+    ref_seq: &PyString,
+    tgt_seq: &PyString,
+) -> PyResult<AlnMap> {
     let s0 = ref_seq.to_string();
     let s1 = tgt_seq.to_string();
     let aln_segs = aln_segs

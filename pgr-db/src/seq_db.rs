@@ -472,7 +472,7 @@ impl CompactSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _, _, seq)| {
-                let shmmrs = sequence_to_shmmrs(*sid, &seq, &self.shmmr_spec);
+                let shmmrs = sequence_to_shmmrs(*sid, &seq, &self.shmmr_spec, false);
                 //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
@@ -826,7 +826,7 @@ pub fn query_fragment(
     frag: &Vec<u8>,
     shmmr_spec: &ShmmrSpec,
 ) -> Vec<((u64, u64), (u32, u32, u8), Vec<FragmentSignature>)> {
-    let shmmrs = sequence_to_shmmrs(0, &frag, &shmmr_spec);
+    let shmmrs = sequence_to_shmmrs(0, &frag, &shmmr_spec, false);
     let query_results = pair_shmmrs(&shmmrs)
         .par_iter()
         .map(|(s0, s1)| {

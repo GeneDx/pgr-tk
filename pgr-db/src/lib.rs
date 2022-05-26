@@ -158,8 +158,8 @@ mod tests {
         let cs0 = sdb.get_seq_by_id(0);
         let cs1 = sdb.get_seq_by_id(1);
         let shmmr_spec = seq_db::SHMMRSPEC;
-        let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec);
-        let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec);
+        let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec, false);
+        let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec, false);
         let shmmr0 = shmmr0.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
         let shmmr1 = shmmr1.iter().rev().map(|m| m.x >> 8).collect::<Vec<u64>>();
         assert!(shmmr0.len() > 0);
@@ -306,7 +306,6 @@ mod tests {
         Ok(())
     }
 
-
     #[test]
     fn test_frag_map_to_adj_list() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
@@ -335,11 +334,11 @@ mod tests {
             k: 24,
             r: 12,
             min_span: 24,
-            sketch: false
+            sketch: false,
         };
-        let out1 = sequence_to_shmmrs(0, &seq.to_vec(), &spec);
+        let out1 = sequence_to_shmmrs(0, &seq.to_vec(), &spec, true);
         println!("out1: {} {:?}", out1.len(), out1);
-        let out2 = sequence_to_shmmrs(0, &seq2.to_vec(), &spec);
+        let out2 = sequence_to_shmmrs(0, &seq2.to_vec(), &spec, true);
         println!("out2: {} {:?}", out2.len(), out2);
         assert!(out1.len() == 2);
         assert!(out2.len() == 2);

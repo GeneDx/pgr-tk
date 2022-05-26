@@ -335,28 +335,28 @@ impl RingBuffer {
     }
 }
 
-pub fn reduce_shmmr(mers: Vec<MM128>, r: u32) -> Vec<MM128> {
-    
+pub fn reduce_shmmr(mers: Vec<MM128>, r: u32, padding: bool) -> Vec<MM128> {
     let mut shmmrs = Vec::<MM128>::new();
     let mut rbuf = RingBuffer::new(r as usize);
     let mut min_mer = MM128 {
         x: u64::MAX,
         y: u64::MAX,
     };
-    let mut mers2 = Vec::<MM128>::new();
-
 
     // padding the shmmr vec with the max min_mer
     // this makes sure the first and the least are always in the output
-    (0..r-1).for_each(|_| {
-        mers2.push(min_mer);
-    });
-    mers2.extend(mers);
-    (0..r-1).for_each(|_| {
-        mers2.push(min_mer);
-    }); 
-
-    let mers = mers2;
+    let mut mers2 = Vec::<MM128>::new();
+    let mut mers: &Vec<MM128> = &mers;
+    if padding {
+        (0..r - 1).for_each(|_| {
+            mers2.push(min_mer);
+        });
+        mers2.extend(mers);
+        (0..r - 1).for_each(|_| {
+            mers2.push(min_mer);
+        });
+        mers = &mers2;
+    }
 
     let mut pos = 0;
     let mut mdist = 0;
@@ -400,6 +400,7 @@ pub fn sequence_to_shmmrs1(
     k: u32,
     r: u32,
     min_span: u32,
+    padding: bool,
 ) -> Vec<MM128> {
     let base2bits: [u64; 256] = [
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -505,8 +506,8 @@ pub fn sequence_to_shmmrs1(
     }
 
     let shmmrs2 = shmmrs;
-    let shmmrs2 = reduce_shmmr(shmmrs2, r);
-    let shmmrs2 = reduce_shmmr(shmmrs2, r);
+    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
+    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
     let mut shmmrs3 = Vec::<MM128>::new();
     shmmrs2
         .iter()
@@ -630,10 +631,15 @@ pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, k: u32, r: u32, min_span: u3
     shmmrs2
 }
 
-pub fn sequence_to_shmmrs(rid: u32, seq: &Vec<u8>, shmmrspec: &ShmmrSpec) -> Vec<MM128> {
+pub fn sequence_to_shmmrs(
+    rid: u32,
+    seq: &Vec<u8>,
+    shmmrspec: &ShmmrSpec,
+    padding: bool,
+) -> Vec<MM128> {
     let (w, k, r, min_span) = (shmmrspec.w, shmmrspec.k, shmmrspec.r, shmmrspec.min_span);
     if !shmmrspec.sketch {
-        sequence_to_shmmrs1(rid, seq, w, k, r, min_span)
+        sequence_to_shmmrs1(rid, seq, w, k, r, min_span, padding)
     } else {
         sequence_to_shmmrs2(rid, seq, k, r, min_span)
     }

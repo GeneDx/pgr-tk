@@ -1,6 +1,6 @@
 // use rayon::prelude::*;
-use crate::seq_db::{query_fragment, ShmmrToFrags, self};
-use crate::shmmrutils::{ShmmrSpec, self};
+use crate::seq_db::{self, query_fragment, ShmmrToFrags};
+use crate::shmmrutils::{self, ShmmrSpec};
 use rustc_hash::FxHashMap;
 use std::collections::HashSet;
 
@@ -123,16 +123,25 @@ pub fn query_fragment_to_hps(
     max_aln_span: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
     let r = query_fragment(shmap, frag, &shmmr_spec);
-    
+
     let mut sp_count = FxHashMap::<(u64, u64), u32>::default();
     let mut sp_count_query = FxHashMap::<(u64, u64), u32>::default();
     let mut sp_count_target = FxHashMap::<(u64, u64, u32), u32>::default();
-    
-    seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(0, &frag, &shmmr_spec)).iter().for_each(|sp| {
-        let e = sp_count_query.entry((sp.0.x >> 8, sp.1.x >>8) ).or_insert(0);
-        *e+= 1;
+
+    seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(
+        0,
+        &frag,
+        &shmmr_spec,
+        false,
+    ))
+    .iter()
+    .for_each(|sp| {
+        let e = sp_count_query
+            .entry((sp.0.x >> 8, sp.1.x >> 8))
+            .or_insert(0);
+        *e += 1;
     });
-    
+
     r.iter().for_each(|d| {
         let sp = d.0;
         // count shimmer pair hits
