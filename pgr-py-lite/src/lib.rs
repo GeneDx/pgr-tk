@@ -1148,5 +1148,6 @@ fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
+    m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;
     Ok(())
 }
