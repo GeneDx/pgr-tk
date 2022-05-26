@@ -5,6 +5,7 @@ pub mod aln;
 pub mod bindings;
 pub mod seq_db;
 pub mod shmmrutils;
+pub mod ec;
 
 #[cfg(test)]
 mod tests {
