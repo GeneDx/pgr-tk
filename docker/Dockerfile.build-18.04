@@ -1,0 +1,29 @@
+FROM ubuntu:18.04
+ARG DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+RUN apt-get update &&  apt-get install -y --no-install-recommends git curl software-properties-common \
+    build-essential=12.4ubuntu1  \
+    clang-3.9=1:3.9.1-19ubuntu1 \
+    libclang-3.9 openssh-client \
+    gpg wget
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
+    gpg --dearmor - | tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ bionic main' | \
+    tee /etc/apt/sources.list.d/kitware.list >/dev/null
+RUN apt-get update && apt-get install -y cmake
+RUN apt-get install -y python3.8 python3.8-dev python3.8-distutils
+RUN mkdir -p /opt
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+RUN . /root/.cargo/env && cargo install maturin
+COPY github-build /opt/github-build 
+ENV GIT_SSH_COMMAND="ssh -i /opt/github-build -o StrictHostKeyChecking=no"
+RUN touch /mark19
+RUN cd /opt/ && git clone git@github.com:cschin/pgr-tk.git
+RUN cd /opt/pgr-tk && git submodule update --init
+RUN cd /opt/pgr-tk && git rev-parse HEAD
+RUN . /root/.cargo/env && cd /opt/pgr-tk && cd rs-wfa/ && \
+   rm -rf WFA && git clone https://github.com/cschin/WFA.git --depth=1 && \
+   cd .. && cargo build -p libwfa --release && cargo build -p pgr-db --release && \
+   cd pgr-py-lite/ && maturin build --release --skip-auditwheel && cd ..
+RUN . /root/.cargo/env && cd /opt/pgr-tk && cd pgr-bin && cargo build --release
+
