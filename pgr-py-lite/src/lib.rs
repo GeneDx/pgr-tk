@@ -1105,8 +1105,6 @@ fn get_aln_map(
     })
 }
 
-
-
 /// Perform a navie naive de Bruijn graph consensus
 ///
 /// Parameters
@@ -1114,21 +1112,30 @@ fn get_aln_map(
 /// aln_segs : list
 ///     a list of the list of bytes representing the bases of each sequence
 ///
-/// kmer_size: int  
+/// kmer_size : int  
 ///     the size of kmers used for constructing the de Bruijn graph
+///
+/// min_cov : int
+///     to keep hyplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept
 ///
 /// Returns
 /// -------
 /// list
 ///     a list of bytes representing the consensus sequence
-/// 
-#[pyfunction(seqs, kmer_size)]
-#[pyo3(text_signature = "($self, seqs, kmer_size)")]
-pub fn naive_dbg_consensus(seqs: Vec<Vec<u8>>, kmer_size: usize) -> PyResult<Vec<u8>> {
-    let consensus = pgr_db::ec::naive_dbg_consensus(seqs, kmer_size);
+///
+#[pyfunction(seqs, kmer_size, min_cov)]
+#[pyo3(text_signature = "($self, seqs, kmer_size, min_cov)")]
+pub fn naive_dbg_consensus(
+    seqs: Vec<Vec<u8>>,
+    kmer_size: usize,
+    min_cov: usize,
+) -> PyResult<Vec<u8>> {
+    let consensus = pgr_db::ec::naive_dbg_consensus(seqs, kmer_size, min_cov);
     match consensus {
         Ok(seq) => Ok(seq),
-        Err(_) => Err(exceptions::PyException::new_err("consensus failed, trying bigger kmer size")),
+        Err(_) => Err(exceptions::PyException::new_err(
+            "consensus failed, trying bigger kmer size",
+        )),
     }
 }
 
