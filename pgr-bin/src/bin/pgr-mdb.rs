@@ -56,23 +56,6 @@ fn load_write_index_from_agcfile(
     Ok(())
 }
 
-fn _dump_index_mdb(prefix: String) -> Result<(), std::io::Error> {
-    let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix + ".mdb")?;
-    println!(
-        "# {} {} {} {} {}",
-        shmmr_spec.w, shmmr_spec.k, shmmr_spec.r, shmmr_spec.min_span, shmmr_spec.sketch
-    );
-    new_map.iter().for_each(|v| {
-        for vv in v.1.iter() {
-            println!(
-                "{:016x} {:016x} {} {} {} {} {}",
-                v.0 .0, v.0 .1, vv.0, vv.1, vv.2, vv.3, vv.4
-            );
-        }
-    });
-    Ok(())
-}
-
 fn main() {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
