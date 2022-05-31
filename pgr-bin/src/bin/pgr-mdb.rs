@@ -56,6 +56,7 @@ fn load_write_index_from_agcfile(
     Ok(())
 }
 
+
 fn main() {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
@@ -70,7 +71,4 @@ fn main() {
         sketch: args.sketch,
     };
     load_write_index_from_agcfile(args.filepath, args.prefix.clone(), &shmmr_spec).unwrap();
-    // dump_index_mdb(args.prefix).unwrap();
-
-    //load_write_index_from_agcfile();
 }
