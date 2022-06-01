@@ -41,7 +41,8 @@ pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         std_buf
     };
 
-    let mut fastx_reader = FastaReader::new(fastx_buf, &filepath.to_string()).unwrap();
+    let mut fastx_reader =
+        FastaReader::new(fastx_buf, &filepath.to_string(), 1 << 14, true).unwrap();
     while let Some(rec) = fastx_reader.next_rec() {
         let rec = rec.unwrap();
         let seqname = String::from_utf8_lossy(&rec.id).into_owned();
