@@ -56,7 +56,6 @@ fn load_write_index_from_agcfile(
     Ok(())
 }
 
-
 fn main() {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();

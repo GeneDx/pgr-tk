@@ -3,9 +3,10 @@ pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 pub mod agc_io;
 pub mod aln;
 pub mod bindings;
+pub mod ec;
+pub mod kmer_filter;
 pub mod seq_db;
 pub mod shmmrutils;
-pub mod ec;
 
 #[cfg(test)]
 mod tests {
@@ -51,7 +52,8 @@ mod tests {
             std_buf
         };
 
-        let mut fastx_reader = FastaReader::new(fastx_buf, &filepath.to_string()).unwrap();
+        let mut fastx_reader =
+            FastaReader::new(fastx_buf, &filepath.to_string(), 1 << 12, true).unwrap();
         while let Some(rec) = fastx_reader.next_rec() {
             let rec = rec.unwrap();
             let seqname = String::from_utf8_lossy(&rec.id).into_owned();

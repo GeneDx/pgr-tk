@@ -122,7 +122,7 @@ impl SeqDB {
         reader.seek(SeekFrom::Start(0))?;
         if is_gzfile {
             let fastx_buf = BufReader::new(MultiGzDecoder::new(&mut reader));
-            let mut fastx_reader = FastaReader::new(fastx_buf, &self.filepath)?;
+            let mut fastx_reader = FastaReader::new(fastx_buf, &self.filepath, 1 << 14, true)?;
             let mut sid = 0;
             while let Some(rec) = fastx_reader.next_rec() {
                 let rec = rec.unwrap();
@@ -134,7 +134,7 @@ impl SeqDB {
                 sid += 1;
             }
         } else {
-            let mut fastx_reader = FastaReader::new(reader, &self.filepath).unwrap();
+            let mut fastx_reader = FastaReader::new(reader, &self.filepath, 1 << 14, true).unwrap();
             let mut sid = 0;
             // unfortunatly we, need to repeat the code here as the type fastx_reader is different from the above
             while let Some(rec) = fastx_reader.next_rec() {

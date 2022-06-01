@@ -455,12 +455,12 @@ impl CompactSeqDB {
         if is_gzfile {
             drop(std_buf);
             Ok(GZFastaReader::GZFile(
-                FastaReader::new(gz_buf, &filepath).unwrap(),
+                FastaReader::new(gz_buf, &filepath, 1 << 14, true).unwrap(),
             ))
         } else {
             drop(gz_buf);
             Ok(GZFastaReader::RegularFile(
-                FastaReader::new(std_buf, &filepath).unwrap(),
+                FastaReader::new(std_buf, &filepath, 1 << 14, true).unwrap(),
             ))
         }
     }
