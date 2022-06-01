@@ -21,16 +21,14 @@ impl KmerFilter {
 impl KmerFilter {
     pub fn add_seq(&mut self, seq: &Vec<u8>) {
         (0..seq.len() - self.kmer_size).into_iter().for_each(|pos| {
-            let kmer = seq[pos..pos + self.kmer_size].to_vec();
-            self.filter.test_and_add(&kmer).unwrap();
+            self.filter.test_and_add(&seq[pos..pos + self.kmer_size]).unwrap();
         })
     }
 
     pub fn check_seq(&self, seq: &Vec<u8>) -> usize {
         let mut count = 0_usize;
         (0..seq.len() - self.kmer_size).into_iter().for_each(|pos| {
-            let kmer = seq[pos..pos + self.kmer_size].to_vec();
-            if self.filter.contains(&kmer) {
+            if self.filter.contains(&seq[pos..pos + self.kmer_size]) {
                 count += 1
             };
         });
