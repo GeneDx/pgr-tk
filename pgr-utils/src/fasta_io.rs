@@ -164,6 +164,69 @@ impl<R: BufRead> Iterator for FastaReader<R> {
     }
 }
 
+
+pub struct FastqStreamReader {
+    inner: std::io::Stdin,
+    seq_capacity: usize 
+}
+
+impl FastqStreamReader {
+    pub fn new(seq_capacity: usize) -> Self {
+        FastqStreamReader {
+            inner: std::io::stdin(),
+            seq_capacity
+        } 
+    }
+}
+
+impl Iterator for FastqStreamReader {
+    type Item = io::Result<SeqRec>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut tmp = String::with_capacity(128);
+        match self.inner.read_line(&mut tmp) {
+            Ok(n) => {
+                if n == 0 {
+                    return None
+                }
+                let tmp = tmp.trim();
+                if &tmp[0..1] == "@" {
+                    let id = tmp[1..].as_bytes().to_vec();
+                    let mut seq = String::with_capacity(self.seq_capacity);
+                    if self.inner.read_line(&mut seq).unwrap_or(0) == 0 {
+                        return None
+                    }
+                    let seq = seq.trim();
+                    let seq = seq[..].as_bytes().to_vec();
+                    let mut buf = String::with_capacity(self.seq_capacity);
+                    if self.inner.read_line(&mut buf).unwrap_or(0) == 0 {
+                        return None
+                    };
+                    if self.inner.read_line(&mut buf).unwrap_or(0) == 0 {
+                        return None
+                    };
+                    let source = None;
+                    let rec = SeqRec {
+                        source,
+                        id: id,
+                        seq: seq,
+                    }; 
+                    Some(Ok(rec))
+                } else {
+                    None
+                }
+            },
+            Err(_) => {
+                None
+            }
+        }
+    }
+}
+
+
+
+
+
+
 fn encode_biseq(s: Vec<u8>) -> Vec<u8> {
     let fourbit_map_f: [u8; 256] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

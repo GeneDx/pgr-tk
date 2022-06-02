@@ -2,7 +2,7 @@ const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::kmer_filter::KmerFilter;
-use pgr_utils::fasta_io::{FastaReader, SeqRec};
+use pgr_utils::fasta_io::{FastaReader, FastqStreamReader, SeqRec};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -19,7 +19,8 @@ enum GZFastaReader {
 #[clap(about = "using Cuckoo Filter for Matching Reads To A Reference Set of Sequences", long_about = None)]
 struct CmdOptions {
     ref_fasta_path: String,
-    query_fastx_path: String,
+    #[clap(long, short)]
+    query_fastx_path: Option<String>,
     /// k-mer size
     #[clap(long, short, default_value_t = 32)]
     k: usize,
@@ -107,11 +108,16 @@ fn main() -> Result<(), std::io::Error> {
             });
     };
 
-    match get_fastx_reader(args.query_fastx_path)? {
-        GZFastaReader::GZFile(reader) => check_seqs(&mut reader.into_iter()),
-        //check_seqs(&mut reader.into_iter()),
-        GZFastaReader::RegularFile(reader) => check_seqs(&mut reader.into_iter()),
-    };
+    if args.query_fastx_path.is_some() {
+        match get_fastx_reader(args.query_fastx_path.unwrap())? {
+            GZFastaReader::GZFile(reader) => check_seqs(&mut reader.into_iter()),
+            //check_seqs(&mut reader.into_iter()),
+            GZFastaReader::RegularFile(reader) => check_seqs(&mut reader.into_iter()),
+        }
+    } else {
+        let reader = FastqStreamReader::new(128);
+        check_seqs(&mut reader.into_iter());
+    }
 
     Ok(())
 }
