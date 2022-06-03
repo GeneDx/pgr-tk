@@ -70,7 +70,7 @@ def rc(seq):
         the reverse complement DNA sequence as a Python String
 
     """
-    seq = "".join([dict(zip("ACGT", "TGCA"))[_] for _ in seq[::-1]])
+    seq = "".join([rc_map[_] for _ in seq[::-1]])
     return seq
 
 
