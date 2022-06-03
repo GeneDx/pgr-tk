@@ -2,7 +2,7 @@ const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::kmer_filter::KmerFilter;
-use pgr_utils::fasta_io::{FastaReader, FastqStreamReader, SeqRec};
+use pgr_utils::fasta_io::{FastaReader, FastqStreamReader, SeqRec, reverse_complement};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -73,6 +73,8 @@ fn main() -> Result<(), std::io::Error> {
         seq_iter.into_iter().for_each(|r| {
             if let Ok(r) = r {
                 filter.add_seq(&r.seq);
+                let rc_seq = reverse_complement(&r.seq);
+                filter.add_seq(&rc_seq);
             };
         });
     };
