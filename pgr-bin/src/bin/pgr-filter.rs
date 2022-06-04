@@ -6,7 +6,6 @@ use pgr_utils::fasta_io::{reverse_complement, FastaReader, FastqStreamReader, Se
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
-use std::sync::Arc;
 
 enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
@@ -85,7 +84,6 @@ fn main() -> Result<(), std::io::Error> {
         GZFastaReader::RegularFile(reader) => add_seqs(&mut reader.into_iter()),
     };
 
-    let filter = Arc::new(filter);
 
     let check_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         let mut seq_data = Vec::<SeqRec>::new();
@@ -95,7 +93,6 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
 
-        let filter = Arc::clone(&filter);
         seq_data
             .into_par_iter()
             .filter(|r| {

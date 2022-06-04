@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Error, ErrorKind, Read, Write};
-use std::sync::Arc;
+
 
 enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
@@ -72,16 +72,16 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
     let mut filters = FxHashMap::<String, KmerFilter>::default();
 
-    let add_seqs =
-        |filter: &mut KmerFilter, seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
-            seq_iter.into_iter().for_each(|r| {
-                if let Ok(r) = r {
-                    filter.add_seq(&r.seq);
-                    let rc_seq = reverse_complement(&r.seq);
-                    filter.add_seq(&rc_seq);
-                };
-            });
-        };
+    let add_seqs = |filter: &mut KmerFilter,
+                    seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
+        seq_iter.into_iter().for_each(|r| {
+            if let Ok(r) = r {
+                filter.add_seq(&r.seq);
+                let rc_seq = reverse_complement(&r.seq);
+                filter.add_seq(&rc_seq);
+            };
+        });
+    };
 
     let inputs = BufReader::new(File::open(args.ref_fasta_list)?);
     inputs
@@ -96,7 +96,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
                     let fileanme = fields[0];
                     let suffix = fields[1];
-                    let mut filter = KmerFilter::new(args.k);
+                    let mut filter = KmerFilter::with_capacity(args.k, 1_usize << 24);
                     match get_fastx_reader(fileanme.to_string())? {
                         GZFastaReader::GZFile(reader) => {
                             add_seqs(&mut filter, &mut reader.into_iter())
@@ -114,8 +114,6 @@ fn main() -> Result<(), std::io::Error> {
             }
         })?;
 
-    let filters = Arc::new(filters);
-
     let check_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         let mut seq_data = Vec::<SeqRec>::new();
         for r in seq_iter {
@@ -124,43 +122,26 @@ fn main() -> Result<(), std::io::Error> {
             }
         }
 
-        let filters = Arc::clone(&filters);
-        let out_data = seq_data
-            .into_par_iter()
-            .flat_map(|r| -> Vec<Option<(String, SeqRec)>> {
-                filters
-                    .keys()
-                    .map(|suffix| {
-                        let filter = filters.get(suffix).unwrap();
-                        let c = filter.check_seq(&r.seq);
-                        if c > args.threshold {
-                            Some((suffix.to_string(), r.clone()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<Option<(String, SeqRec)>>>()
-            })
-            .filter(|x| x.is_some())
-            .map(|r| r.unwrap())
-            .collect::<Vec<(String, SeqRec)>>();
+        filters.iter().for_each(|(suffix, filter)| {
+            let mut writer = BufWriter::new(
+                File::create(args.prefix.clone() + "_" + &suffix.clone()[..] + ".fa")
+                    .expect("file creating error"),
+            );
 
-        let mut out_files = FxHashMap::<String, BufWriter<File>>::default();
-
-        out_data
-            .into_iter()
-            .try_for_each(|(suffix, r)| -> Result<(), std::io::Error> {
-                let writer = out_files.entry(suffix.clone()).or_insert_with(|| {
-                    BufWriter::new(
-                        File::create(args.prefix.clone() + "_" + &suffix.clone()[..] + ".fa")
-                            .expect("file creating error"),
-                    )
+            (&seq_data)
+                .into_par_iter()
+                .filter(|&r| {
+                    let c = filter.check_seq(&r.seq);
+                    c >= args.threshold
+                })
+                .collect::<Vec<&SeqRec>>()
+                .iter()
+                .for_each(|r| {
+                    write!(writer, ">{}\n", String::from_utf8_lossy(&r.id)).expect("writing error");
+                    write!(writer, "{}\n", String::from_utf8_lossy(&r.seq[..])).expect("writing error");
                 });
-                write!(writer, ">{}\n", String::from_utf8_lossy(&r.id))?;
-                write!(writer, "{}\n", String::from_utf8_lossy(&r.seq[..]))?;
-                Ok(())
-            })
-            .expect("writing error");
+        });
+
     };
 
     if args.query_fastx_path.is_some() {
