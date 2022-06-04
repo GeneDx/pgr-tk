@@ -37,7 +37,7 @@ byte_rc_map = dict(zip([ord(c) for c in "ACGTNnacgt"],
 
 def rc_byte_seq(seq):
     """ Reverse complement a sequence as a list of bytes.
-    
+
     Parameters
     ----------
     seq : list of bytes
@@ -58,7 +58,7 @@ rc_map = dict(zip("ACGTNnactg", "TGCANntgca"))
 
 def rc(seq):
     """ Reverse complement a sequence as a Python String.
-    
+
     Parameters
     ----------
     seq : string
@@ -139,7 +139,7 @@ def query_sdb(seq_index_db, query_seq,
 
     max_query_count : int
         only use the shimmer pairs that less than the ``max_count`` in the target sequence for sparse dynamic programming
-        
+
     max_aln_span : int
         the size of span used in the sparse dynamic alignment for finding the hits
 
@@ -160,11 +160,11 @@ def query_sdb(seq_index_db, query_seq,
 
     """
     r = seq_index_db.query_fragment_to_hps(
-        query_seq, 
+        query_seq,
         gap_penality_factor,
-        max_count, 
-        max_query_count, 
-        max_target_count, 
+        max_count,
+        max_query_count,
+        max_target_count,
         max_aln_span)
 
     sid_to_alns = {}
@@ -216,7 +216,7 @@ def merge_regions(rgns, tol=1000):
 
     """
     # rgns is a list of (bgn, end, len, orientation)
-    
+
     rgns.sort()
     frgns = [r for r in rgns if r[3] == 0]
     rrgns = [r for r in rgns if r[3] == 1]
@@ -272,7 +272,7 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
         -  a list of tuples of "alignment segments" generate by ``pgrlite.pgrlite.get_aln_segements()``
         -  the "alignment segments" are a list of ``(ref_loc: SeqLocus, tgt_loc: SeqLocus, align_type: AlnSegType)``. The data structures
            is defined as following Rust structs::
-            
+
                 pub struct SeqLocus {
                     pub id: u32,
                     pub bgn: u32,
@@ -292,7 +292,7 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
                     pub tgt_loc: SeqLocus,
                     pub t: AlnSegType,
                 }
-    
+
     ref_bgn : int
         the reference sequence start position
 
@@ -367,7 +367,7 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
 
 def output_variants_to_vcf_records(variant_calls, ref_name):
     """ Convert the variant calls to VCF records.
-    
+
     Parameters
     ----------
     variant_calls : dict
