@@ -2,7 +2,7 @@ const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::kmer_filter::KmerFilter;
-use pgr_utils::fasta_io::{FastaReader, FastqStreamReader, SeqRec, reverse_complement};
+use pgr_utils::fasta_io::{reverse_complement, FastaReader, FastqStreamReader, SeqRec};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -113,7 +113,6 @@ fn main() -> Result<(), std::io::Error> {
     if args.query_fastx_path.is_some() {
         match get_fastx_reader(args.query_fastx_path.unwrap())? {
             GZFastaReader::GZFile(reader) => check_seqs(&mut reader.into_iter()),
-            //check_seqs(&mut reader.into_iter()),
             GZFastaReader::RegularFile(reader) => check_seqs(&mut reader.into_iter()),
         }
     } else {
