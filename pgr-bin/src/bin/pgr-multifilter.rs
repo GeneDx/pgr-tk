@@ -72,7 +72,7 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
     let mut filters = FxHashMap::<String, KmerFilter>::default();
 
-    let mut add_seqs =
+    let add_seqs =
         |filter: &mut KmerFilter, seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
             seq_iter.into_iter().for_each(|r| {
                 if let Ok(r) = r {
