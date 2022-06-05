@@ -647,7 +647,7 @@ impl SeqIndexDB {
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line = format!(
-                    "S\t{}\t*\tLN:i:{},SN:Z:{:016x}_{:016x}\n",
+                    "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\n",
                     id, ave_len, smp.0, smp.1
                 );
                 out_file.write(seg_line.as_bytes())?;
