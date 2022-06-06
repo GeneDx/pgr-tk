@@ -597,6 +597,31 @@ impl SeqIndexDB {
         seq_db::frag_map_to_adj_list(frag_map, min_count)
     }
 
+    /// Sort the adjecent list of the shimmer graph
+    ///
+    /// Parameters
+    /// ----------
+    /// adj_list : list
+    ///     the list from the output from ``get_smp_adj_list``
+    ///
+    /// sort_by : (u64, u64)
+    ///     the starting node signature
+    ///
+    /// Returns
+    /// -------
+    /// list
+    ///     list of node (node.0, node.1, node_count, is_leaf)
+    ///
+    ///
+
+    pub fn sort_adj_list_by_weighted_dfs(
+        &self,
+        adj_list: Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
+        start: (u64, u64),
+    ) -> Vec<(u64, u64, u32, bool)> {
+        seq_db::sort_adj_list_by_weighted_dfs(&adj_list, start)
+    }
+
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
     ///
     /// Parameters

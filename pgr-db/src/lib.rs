@@ -4,6 +4,7 @@ pub mod agc_io;
 pub mod aln;
 pub mod bindings;
 pub mod ec;
+pub mod graph_utils;
 pub mod kmer_filter;
 pub mod seq_db;
 pub mod shmmrutils;

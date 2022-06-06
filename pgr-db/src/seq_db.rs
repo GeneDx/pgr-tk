@@ -809,7 +809,41 @@ pub fn frag_map_to_adj_list(
         })
         .filter(|v| v.is_some())
         .map(|v| v.unwrap())
-        .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
+        .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>() // seq_id, node0, node1
+}
+
+pub fn sort_adj_list_by_weighted_dfs (
+    adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
+    start: (u64, u64),
+) -> Vec<(u64, u64, u32, bool)> {
+    use crate::graph_utils::WeightedDfs;
+    use petgraph::graphmap::DiGraphMap;
+
+
+    let mut g = DiGraphMap::<(u64, u64), ()>::new();
+    let mut score = FxHashMap::<(u64, u64), u32>::default();
+    adj_list.into_iter().for_each(|(_sid, v, w)| {
+        let v = (v.0, v.1);
+        let w = (w.0, w.1);
+        g.add_edge(v, w, ());
+        let e = score.entry(v).or_insert(0);
+        *e += 1;
+        let e = score.entry(w).or_insert(0);
+        *e += 1;
+    });
+
+    let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
+    let mut out = vec![];
+    loop {
+        if let Some((node, is_leaf)) = wdfs_walker.next(&g) {
+            let node_count = *score.get(&node).unwrap();
+            out.push((node.0, node.1, node_count, is_leaf));
+            println!("{:?}", node);
+        } else {
+            break;
+        }
+    }
+    out
 }
 
 impl CompactSeqDB {
@@ -1056,3 +1090,4 @@ pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFra
         .collect::<FxHashMap<(u64, u64), Vec<(u32, u32, u32, u32, u8)>>>();
     Ok((shmmr_spec, shmmr_map))
 }
+
