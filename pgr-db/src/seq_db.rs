@@ -812,13 +812,13 @@ pub fn frag_map_to_adj_list(
         .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>() // seq_id, node0, node1
 }
 
-pub fn sort_adj_list_by_weighted_dfs (
+pub fn sort_adj_list_by_weighted_dfs(
+    frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     start: (u64, u64),
 ) -> Vec<(u64, u64, u32, bool)> {
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
-
 
     let mut g = DiGraphMap::<(u64, u64), ()>::new();
     let mut score = FxHashMap::<(u64, u64), u32>::default();
@@ -826,10 +826,12 @@ pub fn sort_adj_list_by_weighted_dfs (
         let v = (v.0, v.1);
         let w = (w.0, w.1);
         g.add_edge(v, w, ());
-        let e = score.entry(v).or_insert(0);
-        *e += 1;
-        let e = score.entry(w).or_insert(0);
-        *e += 1;
+        score
+            .entry(v)
+            .or_insert_with(|| frag_map.get(&v).unwrap().len() as u32);
+        score
+            .entry(w)
+            .or_insert_with(|| frag_map.get(&w).unwrap().len() as u32);
     });
 
     let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
@@ -838,7 +840,7 @@ pub fn sort_adj_list_by_weighted_dfs (
         if let Some((node, is_leaf)) = wdfs_walker.next(&g) {
             let node_count = *score.get(&node).unwrap();
             out.push((node.0, node.1, node_count, is_leaf));
-            println!("{:?}", node);
+            //println!("{:?}", node);
         } else {
             break;
         }
@@ -1090,4 +1092,3 @@ pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFra
         .collect::<FxHashMap<(u64, u64), Vec<(u32, u32, u32, u32, u8)>>>();
     Ok((shmmr_spec, shmmr_map))
 }
-
