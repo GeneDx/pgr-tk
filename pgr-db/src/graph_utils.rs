@@ -46,7 +46,7 @@ pub struct SNode (pub u64, pub u64, pub u8);
 
 impl Node for SNode {
     fn reverse(&self) -> Self {
-        SNode(self.1, self.0, 1-self.2)
+        SNode(self.0, self.1, 1-self.2)
     }
 }
     
@@ -193,6 +193,7 @@ where
             if self.discovered.visit(node.1) {
                 let rnode = node.1.reverse();
                 self.discovered.visit(rnode);
+                //println!("{:?} {:?}", node.1, rnode);
 
                 let mut out_count = 0_usize;
                 let mut succ_list = Vec::<WeightedNode<N>>::new();
