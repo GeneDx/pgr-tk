@@ -37,6 +37,21 @@ where
     }
 }
 
+pub trait Node {
+    fn reverse(&self) -> Self;
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+pub struct SNode (pub u64, pub u64, pub u8);
+
+impl Node for SNode {
+    fn reverse(&self) -> Self {
+        SNode(self.1, self.0, 1-self.2)
+    }
+}
+    
+
+
 /// Visit nodes of a graph in a depth-first-search (DFS) emitting nodes in
 /// preorder (when they are first discovered).
 ///
@@ -97,7 +112,7 @@ where
 
 impl<'a, N, VM> WeightedDfs<'a, N, VM>
 where
-    N: Copy + PartialEq + Eq + Hash + Ord,
+    N: Copy + PartialEq + Eq + Hash + Ord + Node,
     VM: VisitMap<N>,
 {
     /// Create a new **Dfs**, using the graph's visitor map, and put **start**
@@ -162,7 +177,7 @@ where
     /// Return the next node in the dfs, or **None** if the traversal is done.
     pub fn next<G>(&mut self, graph: G) -> Option<(N, bool)>
     where
-        G: IntoNeighbors<NodeId = N>,
+        G: IntoNeighbors<NodeId = N>
     {
         loop {
             let node;
@@ -176,6 +191,9 @@ where
             }
 
             if self.discovered.visit(node.1) {
+                let rnode = node.1.reverse();
+                self.discovered.visit(rnode);
+
                 let mut out_count = 0_usize;
                 let mut succ_list = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors(node.1) {

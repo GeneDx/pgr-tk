@@ -8,6 +8,7 @@ use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
+use crate::graph_utils::SNode;
 
 pub const KMERSIZE: u32 = 56;
 pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
@@ -815,24 +816,28 @@ pub fn frag_map_to_adj_list(
 pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
-    start: (u64, u64),
+    start: (u64, u64, u8),
 ) -> Vec<(u64, u64, u32, bool)> {
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
-    let mut g = DiGraphMap::<(u64, u64), ()>::new();
-    let mut score = FxHashMap::<(u64, u64), u32>::default();
-    adj_list.into_iter().for_each(|(_sid, v, w)| {
-        let v = (v.0, v.1);
-        let w = (w.0, w.1);
+    let mut g = DiGraphMap::<SNode, ()>::new();
+    let mut score = FxHashMap::<SNode, u32>::default();
+    adj_list.into_iter().for_each(|&(_sid, v, w)| {
+        let vv = (v.0, v.1);
+        let ww = (w.0, w.1);
+        let v = SNode(v.0, v.1, v.2);
+        let w = SNode(w.0, w.1, w.2);
         g.add_edge(v, w, ());
         score
             .entry(v)
-            .or_insert_with(|| frag_map.get(&v).unwrap().len() as u32);
+            .or_insert_with(|| frag_map.get(&vv).unwrap().len() as u32);
         score
             .entry(w)
-            .or_insert_with(|| frag_map.get(&w).unwrap().len() as u32);
+            .or_insert_with(|| frag_map.get(&ww).unwrap().len() as u32);
     });
+
+    let start = SNode(start.0, start.1, start.2);
 
     let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
     let mut out = vec![];
