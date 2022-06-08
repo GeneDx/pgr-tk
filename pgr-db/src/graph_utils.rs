@@ -5,6 +5,7 @@ use rustc_hash::FxHashMap;
 use std::collections::BinaryHeap;
 use std::hash::Hash;
 
+// A struct to support node weight prioritized path traversal.
 #[derive(Copy, Clone)]
 pub struct WeightedNode<N>(u32, N);
 
@@ -37,6 +38,7 @@ where
     }
 }
 
+// To facilitate specical graph traversal for skew symmetrical graphs.
 pub trait Node {
     fn reverse(&self) -> Self;
 }
@@ -52,36 +54,8 @@ impl Node for SNode {
     
 
 
-/// Visit nodes of a graph in a depth-first-search (DFS) emitting nodes in
-/// preorder (when they are first discovered).
-///
-/// The traversal starts at a given node and only traverses nodes reachable
-/// from it.
-///
-/// `Dfs` is not recursive.
-///
-/// `Dfs` does not itself borrow the graph, and because of this you can run
-/// a traversal over a graph while still retaining mutable access to it, if you
-/// use it like the following example:
-///
-/// ```
-/// use petgraph::Graph;
-/// use petgraph::visit::Dfs;
-///
-/// let mut graph = Graph::<_,()>::new();
-/// let a = graph.add_node(0);
-///
-/// let mut dfs = Dfs::new(&graph, a);
-/// while let Some(nx) = dfs.next(&graph) {
-///     // we can access `graph` mutably here still
-///     graph[nx] += 1;
-/// }
-///
-/// assert_eq!(graph[a], 1);
-/// ```
-///
-/// **Note:** The algorithm may not behave correctly if nodes are removed
-/// during iteration. It may not necessarily visit added nodes or edges.
+/// Code adapte from Petgraph's DFS
+/// 
 #[derive(Clone, Debug)]
 pub struct WeightedDfs<'a, N, VM>
 where
@@ -122,7 +96,7 @@ where
         G: GraphRef + Visitable<NodeId = N, Map = VM>,
     {
         let mut dfs = WeightedDfs::empty(graph, node_score);
-        let s = node_score.get(&start).unwrap();
+        let s = node_score.get(&start).expect("Node not found");
         dfs.move_to(start);
         dfs.next_node = Some(WeightedNode(*s, start));
         dfs

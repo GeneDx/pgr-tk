@@ -817,7 +817,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     start: (u64, u64, u8),
-) -> Vec<(u64, u64, u32, bool)> {
+) -> Vec<((u64, u64, u8), u32, bool)> {
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
@@ -844,7 +844,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     loop {
         if let Some((node, is_leaf)) = wdfs_walker.next(&g) {
             let node_count = *score.get(&node).unwrap();
-            out.push((node.0, node.1, node_count, is_leaf));
+            out.push(((node.0, node.1, node.2), node_count, is_leaf));
             //println!("{:?}", node);
         } else {
             break;
