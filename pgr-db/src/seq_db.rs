@@ -1,4 +1,5 @@
 use crate::agc_io::AGCFile;
+use crate::graph_utils::SNode;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
@@ -8,7 +9,6 @@ use rustc_hash::FxHashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
-use crate::graph_utils::SNode;
 
 pub const KMERSIZE: u32 = 56;
 pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
@@ -817,7 +817,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     start: (u64, u64, u8),
-) -> Vec<((u64, u64, u8), u32, bool)> {
+) -> Vec<((u64, u64, u8), u32, bool, u32, u32, u32)> {
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
@@ -842,9 +842,9 @@ pub fn sort_adj_list_by_weighted_dfs(
     let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
     let mut out = vec![];
     loop {
-        if let Some((node, is_leaf)) = wdfs_walker.next(&g) {
+        if let Some((node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
             let node_count = *score.get(&node).unwrap();
-            out.push(((node.0, node.1, node.2), node_count, is_leaf));
+            out.push(((node.0, node.1, node.2), node_count, is_leaf, rank, branch_id, branch_rank));
             //println!("{:?}", node);
         } else {
             break;
@@ -852,6 +852,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     }
     out
 }
+
 
 impl CompactSeqDB {
     pub fn generate_smp_adj_list(

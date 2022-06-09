@@ -1,6 +1,7 @@
 use core::cmp::Ord;
 use core::fmt::Debug;
-use petgraph::visit::{GraphRef, IntoNeighbors, VisitMap, Visitable};
+use petgraph::visit::{GraphRef, IntoNeighbors, IntoNeighborsDirected, VisitMap, Visitable};
+use petgraph::EdgeDirection::Incoming;
 use rustc_hash::FxHashMap;
 use std::collections::BinaryHeap;
 use std::hash::Hash;
@@ -44,18 +45,16 @@ pub trait Node {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct SNode (pub u64, pub u64, pub u8);
+pub struct SNode(pub u64, pub u64, pub u8);
 
 impl Node for SNode {
     fn reverse(&self) -> Self {
-        SNode(self.0, self.1, 1-self.2)
+        SNode(self.0, self.1, 1 - self.2)
     }
 }
-    
-
 
 /// Code adapte from Petgraph's DFS
-/// 
+///
 #[derive(Clone, Debug)]
 pub struct WeightedDfs<'a, N, VM>
 where
@@ -66,6 +65,9 @@ where
     /// The map of discovered nodes
     pub discovered: VM,
     pub next_node: Option<WeightedNode<N>>,
+    current_branch: u32,
+    branch_rank: u32,
+    global_rank: FxHashMap<N, u32>,
     pub node_score: Option<&'a FxHashMap<N, u32>>,
 }
 
@@ -79,6 +81,9 @@ where
             priority_queue: BinaryHeap::<WeightedNode<N>>::new(),
             discovered: VM::default(),
             next_node: None,
+            current_branch: 0_u32,
+            branch_rank: 0_u32,
+            global_rank: FxHashMap::<N, u32>::default(),
             node_score: None,
         }
     }
@@ -99,6 +104,7 @@ where
         let s = node_score.get(&start).expect("Node not found");
         dfs.move_to(start);
         dfs.next_node = Some(WeightedNode(*s, start));
+        dfs.global_rank.insert(start, 0);
         dfs
     }
 
@@ -112,6 +118,9 @@ where
             priority_queue: stack,
             discovered,
             next_node: None,
+            current_branch: 0_u32,
+            branch_rank: 0_u32,
+            global_rank: FxHashMap::<N, u32>::default(),
             node_score: Some(node_score),
         }
     }
@@ -123,6 +132,7 @@ where
     {
         graph.reset_map(&mut self.discovered);
         self.priority_queue.clear();
+        self.global_rank.clear();
     }
 
     /// Create a new **Dfs** using the graph's visitor map, and no stack.
@@ -133,6 +143,9 @@ where
         WeightedDfs {
             priority_queue: BinaryHeap::<WeightedNode<N>>::new(),
             next_node: None,
+            current_branch: 0_u32,
+            branch_rank: 0_u32,
+            global_rank: FxHashMap::<N, u32>::default(),
             discovered: graph.visit_map(),
             node_score: Some(node_score),
         }
@@ -146,22 +159,30 @@ where
         self.priority_queue.clear();
         self.priority_queue.push(wn);
         self.next_node = Some(WeightedNode(*s, start));
+        self.global_rank.insert(start, 0);
     }
 
     /// Return the next node in the dfs, or **None** if the traversal is done.
-    pub fn next<G>(&mut self, graph: G) -> Option<(N, bool)>
+    pub fn next<G>(&mut self, graph: G) -> Option<(N, bool, u32, u32, u32)>
     where
-        G: IntoNeighbors<NodeId = N>
+        G: IntoNeighbors<NodeId = N> + IntoNeighborsDirected<NodeId = N>,
     {
+        let mut branch_rank = self.branch_rank;
+        let global_rank = &mut self.global_rank;
+        let mut branch = self.current_branch;
         loop {
             let node;
             if let Some(n) = self.next_node {
                 node = n;
+                branch_rank = self.branch_rank;
             } else {
                 if self.priority_queue.is_empty() {
                     return None;
                 }
                 node = self.priority_queue.pop().unwrap();
+                self.branch_rank = 0;
+                self.current_branch += 1;
+                branch = self.current_branch;
             }
 
             if self.discovered.visit(node.1) {
@@ -179,16 +200,30 @@ where
                     }
                 }
 
-                let mut is_leaf = true;
+                let mut is_leaf = false;
                 if out_count == 0 {
-                    is_leaf = false;
+                    is_leaf = true;
                     self.next_node = None;
                 } else {
                     succ_list.sort();
                     self.next_node = succ_list.pop();
                     succ_list.iter().for_each(|s| self.priority_queue.push(*s));
                 }
-                return Some((node.1, is_leaf));
+
+                let mut node_rank = u32::MAX;
+                graph.neighbors_directed(node.1, Incoming).for_each(|n| {
+                    if let Some(r) = global_rank.get(&n) {
+                        if *r < node_rank {
+                            node_rank = *r;
+                        }
+                    }
+                });
+
+                node_rank += 1;
+                global_rank.insert(node.1, node_rank);
+
+                self.branch_rank += 1;
+                return Some((node.1, is_leaf, node_rank, branch, branch_rank));
             }
         }
     }

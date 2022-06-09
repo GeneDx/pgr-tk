@@ -618,7 +618,7 @@ impl SeqIndexDB {
         &self,
         adj_list: Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
         start: (u64, u64, u8),
-    ) -> Vec<((u64, u64, u8), u32, bool)> {
+    ) -> Vec<((u64, u64, u8), u32, bool, u32, u32, u32)> {
         let frag_map = self.get_shmmr_map_internal();
         seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
     }
