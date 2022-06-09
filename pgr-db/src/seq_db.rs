@@ -817,7 +817,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     start: (u64, u64, u8),
-) -> Vec<((u64, u64, u8), u32, bool, u32, u32, u32)> {
+) -> Vec<((u64, u64, u8), u32, bool, u32, u32, u32)> { // node, node_weight, is_leaf, global_rank, branch, branch_rank
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
