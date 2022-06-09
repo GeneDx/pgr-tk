@@ -829,6 +829,8 @@ pub fn sort_adj_list_by_weighted_dfs(
         let v = SNode(v.0, v.1, v.2);
         let w = SNode(w.0, w.1, w.2);
         g.add_edge(v, w, ());
+
+        //println!("DBG: add_edge {:?} {:?}", v, w);
         score
             .entry(v)
             .or_insert_with(|| frag_map.get(&vv).unwrap().len() as u32);
@@ -836,6 +838,8 @@ pub fn sort_adj_list_by_weighted_dfs(
             .entry(w)
             .or_insert_with(|| frag_map.get(&ww).unwrap().len() as u32);
     });
+
+    //println!("DBG: {} {}", g.node_count(), g.edge_count());
 
     let start = SNode(start.0, start.1, start.2);
 

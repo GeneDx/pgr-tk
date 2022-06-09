@@ -1,7 +1,7 @@
 use core::cmp::Ord;
-use core::fmt::Debug;
+use std::fmt::Debug;
 use petgraph::visit::{GraphRef, IntoNeighbors, IntoNeighborsDirected, VisitMap, Visitable};
-use petgraph::EdgeDirection::Incoming;
+use petgraph::EdgeDirection::{Incoming, Outgoing};
 use rustc_hash::FxHashMap;
 use std::collections::BinaryHeap;
 use std::hash::Hash;
@@ -58,7 +58,7 @@ impl Node for SNode {
 #[derive(Clone, Debug)]
 pub struct WeightedDfs<'a, N, VM>
 where
-    N: Ord,
+    N: Ord + Debug
 {
     /// The stack of nodes to visit
     pub priority_queue: BinaryHeap<WeightedNode<N>>,
@@ -74,7 +74,7 @@ where
 impl<'a, N, VM> Default for WeightedDfs<'a, N, VM>
 where
     VM: Default,
-    N: Ord,
+    N: Ord + Debug
 {
     fn default() -> Self {
         WeightedDfs {
@@ -91,7 +91,7 @@ where
 
 impl<'a, N, VM> WeightedDfs<'a, N, VM>
 where
-    N: Copy + PartialEq + Eq + Hash + Ord + Node,
+    N: Copy + PartialEq + Eq + Hash + Ord + Node + Debug,
     VM: VisitMap<N>,
 {
     /// Create a new **Dfs**, using the graph's visitor map, and put **start**
@@ -184,21 +184,35 @@ where
                 self.current_branch += 1;
                 branch = self.current_branch;
             }
+            //println!("DBG: current node: {:?}", node);
 
             if self.discovered.visit(node.1) {
                 let rnode = node.1.reverse();
                 self.discovered.visit(rnode);
-                //println!("{:?} {:?}", node.1, rnode);
+                //println!("DBG, visited: {:?}, {:?}", node, rnode);
 
                 let mut out_count = 0_usize;
                 let mut succ_list = Vec::<WeightedNode<N>>::new();
-                for succ in graph.neighbors(node.1) {
+                for succ in graph.neighbors_directed(node.1, Outgoing) {
+                    //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
+                        //println!("DBG: pushing0: {:?}", succ);
                         out_count += 1;
                         let s = self.node_score.unwrap().get(&succ).unwrap();
                         succ_list.push(WeightedNode(*s, succ));
                     }
                 }
+                
+                for succ in graph.neighbors_directed(node.1.reverse(), Outgoing) {
+                    //println!("DBG: succ: {:?} {:?}", node.1, succ);
+                    if !self.discovered.is_visited(&succ) {
+                        //println!("DBG: pushing0: {:?}", succ);
+                        out_count += 1;
+                        let s = self.node_score.unwrap().get(&succ).unwrap();
+                        succ_list.push(WeightedNode(*s, succ));
+                    }
+                }
+                
 
                 let mut is_leaf = false;
                 if out_count == 0 {
@@ -207,8 +221,13 @@ where
                 } else {
                     succ_list.sort();
                     self.next_node = succ_list.pop();
-                    succ_list.iter().for_each(|s| self.priority_queue.push(*s));
+                    succ_list.iter().for_each(|s| {
+                        //println!("DBG, pushing1: {:?}", s);
+                        self.priority_queue.push(*s);
+                        
+                    });
                 }
+                //println!("DBG: next node: {:?}", self.next_node);
 
                 let mut node_rank = u32::MAX;
                 graph.neighbors_directed(node.1, Incoming).for_each(|n| {
@@ -218,11 +237,22 @@ where
                         }
                     }
                 });
+                
+                graph.neighbors_directed(node.1.reverse(), Incoming).for_each(|n| {
+                    if let Some(r) = global_rank.get(&n) {
+                        if *r < node_rank {
+                            node_rank = *r;
+                        }
+                    }
+                });
+                
 
                 node_rank += 1;
                 global_rank.insert(node.1, node_rank);
+                global_rank.insert(node.1.reverse(), node_rank);
 
                 self.branch_rank += 1;
+                //println!("DBG: out {:?}", node.1);
                 return Some((node.1, is_leaf, node_rank, branch, branch_rank));
             }
         }
