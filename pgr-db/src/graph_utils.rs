@@ -163,11 +163,11 @@ where
     }
 
     /// Return the next node in the dfs, or **None** if the traversal is done.
-    pub fn next<G>(&mut self, graph: G) -> Option<(N, bool, u32, u32, u32)>
+    pub fn next<G>(&mut self, graph: G) -> Option<(N, Option<N>, bool, u32, u32, u32)>
     where
         G: IntoNeighbors<NodeId = N> + IntoNeighborsDirected<NodeId = N>,
     {
-        let mut branch_rank = self.branch_rank;
+        let mut branch_rank;
         let global_rank = &mut self.global_rank;
         let mut branch = self.current_branch;
         loop {
@@ -181,6 +181,7 @@ where
                 }
                 node = self.priority_queue.pop().unwrap();
                 self.branch_rank = 0;
+                branch_rank = 0; 
                 self.current_branch += 1;
                 branch = self.current_branch;
             }
@@ -230,10 +231,12 @@ where
                 //println!("DBG: next node: {:?}", self.next_node);
 
                 let mut node_rank = u32::MAX;
+                let mut p_node : Option<N> = None;
                 graph.neighbors_directed(node.1, Incoming).for_each(|n| {
                     if let Some(r) = global_rank.get(&n) {
                         if *r < node_rank {
                             node_rank = *r;
+                            p_node = Some(n)
                         }
                     }
                 });
@@ -242,6 +245,7 @@ where
                     if let Some(r) = global_rank.get(&n) {
                         if *r < node_rank {
                             node_rank = *r;
+                            p_node = Some(n);
                         }
                     }
                 });
@@ -253,7 +257,7 @@ where
 
                 self.branch_rank += 1;
                 //println!("DBG: out {:?}", node.1);
-                return Some((node.1, is_leaf, node_rank, branch, branch_rank));
+                return Some((node.1, p_node, is_leaf, node_rank, branch, branch_rank));
             }
         }
     }

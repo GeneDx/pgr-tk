@@ -817,7 +817,16 @@ pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     start: (u64, u64, u8),
-) -> Vec<((u64, u64, u8), u32, bool, u32, u32, u32)> { // node, node_weight, is_leaf, global_rank, branch, branch_rank
+) -> Vec<(
+    (u64, u64, u8),
+    Option<(u64, u64, u8)>,
+    u32,
+    bool,
+    u32,
+    u32,
+    u32,
+)> {
+    // node, node_weight, is_leaf, global_rank, branch, branch_rank
     use crate::graph_utils::WeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
@@ -846,9 +855,21 @@ pub fn sort_adj_list_by_weighted_dfs(
     let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
     let mut out = vec![];
     loop {
-        if let Some((node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
+        if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
             let node_count = *score.get(&node).unwrap();
-            out.push(((node.0, node.1, node.2), node_count, is_leaf, rank, branch_id, branch_rank));
+            let p_node = match p_node {
+                Some(pnode) => Some((pnode.0, pnode.1, pnode.2)),
+                None => None,
+            };
+            out.push((
+                (node.0, node.1, node.2),
+                p_node,
+                node_count,
+                is_leaf,
+                rank,
+                branch_id,
+                branch_rank,
+            ));
             //println!("{:?}", node);
         } else {
             break;
@@ -856,7 +877,6 @@ pub fn sort_adj_list_by_weighted_dfs(
     }
     out
 }
-
 
 impl CompactSeqDB {
     pub fn generate_smp_adj_list(
