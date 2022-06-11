@@ -1,5 +1,5 @@
 use crate::agc_io::AGCFile;
-use crate::graph_utils::SNode;
+use crate::graph_utils::ShmmrGraphNode;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
@@ -827,16 +827,16 @@ pub fn sort_adj_list_by_weighted_dfs(
     u32,
 )> {
     // node, node_weight, is_leaf, global_rank, branch, branch_rank
-    use crate::graph_utils::WeightedDfs;
+    use crate::graph_utils::BiDiGraphWeightedDfs;
     use petgraph::graphmap::DiGraphMap;
 
-    let mut g = DiGraphMap::<SNode, ()>::new();
-    let mut score = FxHashMap::<SNode, u32>::default();
+    let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
     adj_list.into_iter().for_each(|&(_sid, v, w)| {
         let vv = (v.0, v.1);
         let ww = (w.0, w.1);
-        let v = SNode(v.0, v.1, v.2);
-        let w = SNode(w.0, w.1, w.2);
+        let v = ShmmrGraphNode(v.0, v.1, v.2);
+        let w = ShmmrGraphNode(w.0, w.1, w.2);
         g.add_edge(v, w, ());
 
         //println!("DBG: add_edge {:?} {:?}", v, w);
@@ -850,9 +850,9 @@ pub fn sort_adj_list_by_weighted_dfs(
 
     //println!("DBG: {} {}", g.node_count(), g.edge_count());
 
-    let start = SNode(start.0, start.1, start.2);
+    let start = ShmmrGraphNode(start.0, start.1, start.2);
 
-    let mut wdfs_walker = WeightedDfs::new(&g, start, &score);
+    let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
     loop {
         if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {

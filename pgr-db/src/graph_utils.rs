@@ -40,23 +40,23 @@ where
 }
 
 // To facilitate specical graph traversal for skew symmetrical graphs.
-pub trait Node {
+pub trait BiDiNode {
     fn reverse(&self) -> Self;
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct SNode(pub u64, pub u64, pub u8);
+pub struct ShmmrGraphNode(pub u64, pub u64, pub u8);
 
-impl Node for SNode {
+impl BiDiNode for ShmmrGraphNode {
     fn reverse(&self) -> Self {
-        SNode(self.0, self.1, 1 - self.2)
+        ShmmrGraphNode(self.0, self.1, 1 - self.2)
     }
 }
 
 /// Code adapte from Petgraph's DFS
 ///
 #[derive(Clone, Debug)]
-pub struct WeightedDfs<'a, N, VM>
+pub struct BiDiGraphWeightedDfs<'a, N, VM>
 where
     N: Ord + Debug
 {
@@ -71,13 +71,13 @@ where
     pub node_score: Option<&'a FxHashMap<N, u32>>,
 }
 
-impl<'a, N, VM> Default for WeightedDfs<'a, N, VM>
+impl<'a, N, VM> Default for BiDiGraphWeightedDfs<'a, N, VM>
 where
     VM: Default,
     N: Ord + Debug
 {
     fn default() -> Self {
-        WeightedDfs {
+        BiDiGraphWeightedDfs {
             priority_queue: BinaryHeap::<WeightedNode<N>>::new(),
             discovered: VM::default(),
             next_node: None,
@@ -89,9 +89,9 @@ where
     }
 }
 
-impl<'a, N, VM> WeightedDfs<'a, N, VM>
+impl<'a, N, VM> BiDiGraphWeightedDfs<'a, N, VM>
 where
-    N: Copy + PartialEq + Eq + Hash + Ord + Node + Debug,
+    N: Copy + PartialEq + Eq + Hash + Ord + BiDiNode + Debug,
     VM: VisitMap<N>,
 {
     /// Create a new **Dfs**, using the graph's visitor map, and put **start**
@@ -100,7 +100,7 @@ where
     where
         G: GraphRef + Visitable<NodeId = N, Map = VM>,
     {
-        let mut dfs = WeightedDfs::empty(graph, node_score);
+        let mut dfs = BiDiGraphWeightedDfs::empty(graph, node_score);
         let s = node_score.get(&start).expect("Node not found");
         dfs.move_to(start);
         dfs.next_node = Some(WeightedNode(*s, start));
@@ -114,7 +114,7 @@ where
         discovered: VM,
         node_score: &'a FxHashMap<N, u32>,
     ) -> Self {
-        WeightedDfs {
+        BiDiGraphWeightedDfs {
             priority_queue: stack,
             discovered,
             next_node: None,
@@ -140,7 +140,7 @@ where
     where
         G: GraphRef + Visitable<NodeId = N, Map = VM>,
     {
-        WeightedDfs {
+        BiDiGraphWeightedDfs {
             priority_queue: BinaryHeap::<WeightedNode<N>>::new(),
             next_node: None,
             current_branch: 0_u32,
