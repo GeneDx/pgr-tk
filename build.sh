@@ -8,7 +8,7 @@ cargo build -p libwfa --release
 cargo build -p pgr-db --release
 cargo build -p pgr-bin --release
 
-pushd pgr-py-lite/
+pushd pgr-tk/
 maturin build --release
 maturin build --release --skip-auditwheel
 popd
