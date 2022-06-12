@@ -1,9 +1,9 @@
 use core::cmp::Ord;
-use std::fmt::Debug;
 use petgraph::visit::{GraphRef, IntoNeighbors, IntoNeighborsDirected, VisitMap, Visitable};
 use petgraph::EdgeDirection::{Incoming, Outgoing};
 use rustc_hash::FxHashMap;
 use std::collections::BinaryHeap;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 // A struct to support node weight prioritized path traversal.
@@ -58,7 +58,7 @@ impl BiDiNode for ShmmrGraphNode {
 #[derive(Clone, Debug)]
 pub struct BiDiGraphWeightedDfs<'a, N, VM>
 where
-    N: Ord + Debug
+    N: Ord + Debug,
 {
     /// The stack of nodes to visit
     pub priority_queue: BinaryHeap<WeightedNode<N>>,
@@ -74,7 +74,7 @@ where
 impl<'a, N, VM> Default for BiDiGraphWeightedDfs<'a, N, VM>
 where
     VM: Default,
-    N: Ord + Debug
+    N: Ord + Debug,
 {
     fn default() -> Self {
         BiDiGraphWeightedDfs {
@@ -181,7 +181,7 @@ where
                 }
                 node = self.priority_queue.pop().unwrap();
                 self.branch_rank = 0;
-                branch_rank = 0; 
+                branch_rank = 0;
                 self.current_branch += 1;
                 branch = self.current_branch;
             }
@@ -204,7 +204,6 @@ where
                     }
                 }
 
-                 
                 let mut succ_list_r = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors_directed(node.1.reverse(), Outgoing) {
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
@@ -223,7 +222,8 @@ where
                 } else {
                     succ_list_f.sort();
                     succ_list_r.sort();
-                    if succ_list_f.len() > 0 { // we prefer the same direction first
+                    if succ_list_f.len() > 0 {
+                        // we prefer the same direction first
                         self.next_node = succ_list_f.pop();
                     } else {
                         self.next_node = succ_list_r.pop();
@@ -236,13 +236,12 @@ where
                     succ_list_r.iter().for_each(|s| {
                         //println!("DBG, pushing1: {:?}", s);
                         self.priority_queue.push(*s);
-                        
                     });
                 }
                 //println!("DBG: next node: {:?}", self.next_node);
 
                 let mut node_rank = u32::MAX;
-                let mut p_node : Option<N> = None;
+                let mut p_node: Option<N> = None;
                 graph.neighbors_directed(node.1, Incoming).for_each(|n| {
                     if let Some(r) = global_rank.get(&n) {
                         if *r < node_rank {
@@ -251,16 +250,17 @@ where
                         }
                     }
                 });
-                
-                graph.neighbors_directed(node.1.reverse(), Incoming).for_each(|n| {
-                    if let Some(r) = global_rank.get(&n) {
-                        if *r < node_rank {
-                            node_rank = *r;
-                            p_node = Some(n);
+
+                graph
+                    .neighbors_directed(node.1.reverse(), Incoming)
+                    .for_each(|n| {
+                        if let Some(r) = global_rank.get(&n) {
+                            if *r < node_rank {
+                                node_rank = *r;
+                                p_node = Some(n);
+                            }
                         }
-                    }
-                });
-                
+                    });
 
                 node_rank += 1;
                 global_rank.insert(node.1, node_rank);
