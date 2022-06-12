@@ -20,7 +20,7 @@ jobs:
     - name: setup
       run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. 
     - name: Run tests
-      run: cargo test --verbose --workspace --exclude pgrlite
+      run: cargo test --verbose --workspace --exclude pgrtk
     - name: Build
       run: bash build.sh
     - uses: actions/upload-artifact@v3
