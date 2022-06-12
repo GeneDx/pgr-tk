@@ -4,16 +4,19 @@ pub mod agc_io;
 pub mod aln;
 pub mod bindings;
 pub mod ec;
+pub mod fasta_io;
+pub mod gff_db;
 pub mod graph_utils;
 pub mod kmer_filter;
 pub mod seq_db;
+pub mod seqs2variants;
 pub mod shmmrutils;
 
 #[cfg(test)]
 mod tests {
+    use crate::fasta_io::FastaReader;
     use crate::shmmrutils::{self, match_reads, DeltaPoint};
     use flate2::bufread::MultiGzDecoder;
-    use pgr_utils::fasta_io::FastaReader;
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read};

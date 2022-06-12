@@ -11,7 +11,7 @@ use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use pyo3::prelude::*;
 // use pyo3::types::PyString;
 use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
-use pgr_utils::seqs2variants;
+use pgr_db::seqs2variants;
 use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;

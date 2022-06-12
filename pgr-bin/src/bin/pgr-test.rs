@@ -1,6 +1,6 @@
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::agc_io::AGCFile;
-use pgr_utils::fasta_io::FastaReader;
+use pgr_db::fasta_io::FastaReader;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};

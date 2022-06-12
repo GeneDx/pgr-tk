@@ -9,7 +9,8 @@ edition = "2021"
 pgr-db = {path = "../pgr-db"}
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
 log = { version = "^0.4.5", features = ["std"] }
-pgr-utils = { path = "../pgr-utils/" }
 clap = { version = "3.1.12", features = ["derive"] }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
+libwfa = { path="../rs-wfa/" }
+regex = "1"

@@ -1,9 +1,9 @@
 use crate::agc_io::AGCFile;
+use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::graph_utils::ShmmrGraphNode;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
-use pgr_utils::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fmt;
