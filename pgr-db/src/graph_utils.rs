@@ -193,36 +193,47 @@ where
                 //println!("DBG, visited: {:?}, {:?}", node, rnode);
 
                 let mut out_count = 0_usize;
-                let mut succ_list = Vec::<WeightedNode<N>>::new();
+                let mut succ_list_f = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors_directed(node.1, Outgoing) {
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
                         //println!("DBG: pushing0: {:?}", succ);
                         out_count += 1;
                         let s = self.node_score.unwrap().get(&succ).unwrap();
-                        succ_list.push(WeightedNode(*s, succ));
+                        succ_list_f.push(WeightedNode(*s, succ));
                     }
                 }
-                
+
+                 
+                let mut succ_list_r = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors_directed(node.1.reverse(), Outgoing) {
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
                         //println!("DBG: pushing0: {:?}", succ);
                         out_count += 1;
                         let s = self.node_score.unwrap().get(&succ).unwrap();
-                        succ_list.push(WeightedNode(*s, succ));
+                        succ_list_r.push(WeightedNode(*s, succ));
                     }
                 }
-                
 
                 let mut is_leaf = false;
                 if out_count == 0 {
                     is_leaf = true;
                     self.next_node = None;
                 } else {
-                    succ_list.sort();
-                    self.next_node = succ_list.pop();
-                    succ_list.iter().for_each(|s| {
+                    succ_list_f.sort();
+                    succ_list_r.sort();
+                    if succ_list_f.len() > 0 { // we prefer the same direction first
+                        self.next_node = succ_list_f.pop();
+                    } else {
+                        self.next_node = succ_list_r.pop();
+                    }
+                    succ_list_f.iter().for_each(|s| {
+                        //println!("DBG, pushing1: {:?}", s);
+                        self.priority_queue.push(*s);
+                    });
+
+                    succ_list_r.iter().for_each(|s| {
                         //println!("DBG, pushing1: {:?}", s);
                         self.priority_queue.push(*s);
                         
