@@ -221,7 +221,7 @@ impl SeqIndexDB {
     #[args(source = "\"Memory\"", w = "80", k = "56", r = "4", min_span = "8")]
     pub fn load_from_seq_list(
         &mut self,
-        seq_list: Vec<(u32, String, Vec<u8>)>,
+        seq_list: Vec<(String, Vec<u8>)>,
         source: Option<&str>,
         w: u32,
         k: u32,
@@ -239,7 +239,8 @@ impl SeqIndexDB {
         let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
         let seq_vec = seq_list
             .into_iter()
-            .map(|v| (v.0, source.clone(), v.1, v.2))
+            .enumerate()
+            .map(|(sid, v)| (sid as u32, source.clone(), v.0, v.1))
             .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
         sdb.load_seqs_from_seq_vec(&seq_vec);
 

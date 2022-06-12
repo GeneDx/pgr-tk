@@ -729,6 +729,13 @@ impl CompactSeqDB {
         reconstructed_seq
     }
 
+    /* TODO */
+    /*
+    pub fn get_sub_seq(&self, seq: &CompactSeq, b: usize, e:usize) -> Vec<u8> {
+        vec![]
+    }
+    */
+
     pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
         self.get_seq(seq)
