@@ -1294,13 +1294,13 @@ pub fn naive_dbg_consensus(
     }
 }
 
-/// The internal `pgrlite` modules implemented with Rust.
-/// These classes and fucntion are re-exported as `pgrlite.*`
-/// so `import pgrlite` will bring these classes and function
-/// into `pgrlite.*` scope to avoid using the verbose
-/// `pgrlite.pgrlite.*`.
+/// The internal `pgrtk` modules implemented with Rust.
+/// These classes and fucntion are re-exported as `pgrtk.*`
+/// so `import pgrtk` will bring these classes and function
+/// into `pgrtk.*` scope to avoid using the verbose
+/// `pgrtk.pgrtk.*`.
 #[pymodule]
-fn pgrlite(_: Python, m: &PyModule) -> PyResult<()> {
+fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<SeqIndexDB>()?;
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;

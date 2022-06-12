@@ -7,14 +7,14 @@ Example
 
 This shows a simple example to query the pangenomics database::
 
-    import pgrlite
+    import pgrtk
   
     ## The AGCFile class is used to access the sequence data stored in a AGC file. 
-    ref_db =pgrlite.AGCFile("hg19.agc")
+    ref_db =pgrtk.AGCFile("hg19.agc")
 
     ## Load a pre-build index and sequence data from all humane genome assemblies 
     ## of the HPRC year one release. 
-    sdb = pgrlite.SeqIndexDB()
+    sdb = pgrtk.SeqIndexDB()
     sdb.load_from_agc_index("HPRC-y1-rebuild-04252022")
 
     ## Extract a sequence from the hg19 AGC file.
@@ -22,7 +22,7 @@ This shows a simple example to query the pangenomics database::
                                   160952514, 161087407)
 
     ## find hits in the pangenomic reference
-    alignment_ranges = pgrlite.query_sdb(sdb, gene_seq, 
+    alignment_ranges = pgrtk.query_sdb(sdb, gene_seq, 
                                          merge_range_tol=100000)
 
 """
@@ -269,7 +269,7 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
     Parameters
     ----------
     aln_segs : list of tuples
-        -  a list of tuples of "alignment segments" generate by ``pgrlite.pgrlite.get_aln_segements()``
+        -  a list of tuples of "alignment segments" generate by ``pgrtk.pgrtk.get_aln_segements()``
         -  the "alignment segments" are a list of ``(ref_loc: SeqLocus, tgt_loc: SeqLocus, align_type: AlnSegType)``. The data structures
            is defined as following Rust structs::
 
