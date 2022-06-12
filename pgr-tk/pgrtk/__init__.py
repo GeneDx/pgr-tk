@@ -27,7 +27,7 @@ This shows a simple example to query the pangenomics database::
 
 """
 
-from .pgrlite import *
+from .pgrtk import *
 
 __version__ = pgr_lib_version()
 
