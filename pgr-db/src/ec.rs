@@ -3,11 +3,10 @@
 
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::ShmmrGraphNode;
-use crate::seq_db::pair_shmmrs;
-use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
+use crate::seq_db;
+use crate::shmmrutils::ShmmrSpec;
 use petgraph::algo::toposort;
 use petgraph::{graphmap::DiGraphMap, EdgeDirection::Incoming};
-use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 /// perform error correction using de Bruijn graph
@@ -169,67 +168,36 @@ pub fn shmmr_dbg_consensus(
         sketch: false,
     });
 
-    let pairs = seqs
-        .par_iter()
-        .enumerate()
-        .flat_map(|(sid, seq)| {
-            //println!("len {}", seq.len());
-            let shmmrs = sequence_to_shmmrs(sid as u32, seq, shmmr_spec, true);
-            let mut pair_count = FxHashMap::<(u64, u64), u32>::default();
-            let pairs = pair_shmmrs(&shmmrs)
-                .iter()
-                .map(|(&shmmr0, &shmmr1)| {
-                    let s0 = shmmr0.x >> 8;
-                    let s1 = shmmr1.x >> 8;
-                    let p0 = ((shmmr0.y & 0xFFFF_FFFF) >> 1) as u32;
-                    let p1 = ((shmmr1.y & 0xFFFF_FFFF) >> 1) as u32;
-                    let shmmr_pair = if s0 <= s1 {
-                        *pair_count.entry((s0, s1)).or_insert(0) += 1;
-                        (s0, s1, 0_u8, sid as u32, p0, p1)
-                    } else {
-                        *pair_count.entry((s1, s0)).or_insert(0) += 1;
-                        (s1, s0, 1_u8, sid as u32, p0, p1)
-                    };
-                    shmmr_pair
-                })
-                .collect::<Vec<(u64, u64, u8, u32, u32, u32)>>();
-            let pairs = pairs
-                .into_iter()
-                .filter(|v| pair_count[&(v.0, v.1)] == 1)
-                .collect::<Vec<(u64, u64, u8, u32, u32, u32)>>();
-            pairs
+    let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
+    let seqs = (0..seqs.len())
+        .into_iter()
+        .map(|sid| {
+            (
+                sid as u32,
+                Some("Memory".to_string()),
+                format!("{}", sid),
+                seqs[sid].clone())
         })
-        .collect::<Vec<(u64, u64, u8, u32, u32, u32)>>();
+        .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
+    sdb.load_index_from_seq_vec(&seqs);
 
     let mut frg_seqs = FxHashMap::<(u64, u64, u8), Vec<u8>>::default();
-    pairs.iter().for_each(|&v| {
-        let (s0, s1, strand, sid, p0, p1) = v;
-        let b = (p0 - shmmr_spec.k) as usize;
-        let e = (p1 + 1) as usize;
-        let seq = seqs[sid as usize][b..e].to_vec();
-        if !frg_seqs.contains_key(&(s0, s1, strand)) {
-            frg_seqs.insert((s0, s1, strand), seq.clone());
+
+    sdb.frag_map.iter().for_each(|(k, v) | {
+        let (_, sid, b, e, strand) = v[0];
+        let b = (b - shmmr_spec.k) as usize;
+        let e = (e + 1) as usize;
+        let seq = seqs[sid as usize].3[b..e].to_vec(); 
+        if !frg_seqs.contains_key(&(k.0, k.1, strand)) {
+            frg_seqs.insert((k.0, k.1, strand), seq.clone());
         };
         let seq = reverse_complement(&seq);
-        if !frg_seqs.contains_key(&(s0, s1, 1 - strand)) {
-            frg_seqs.insert((s0, s1, 1 - strand), seq.clone());
+        if !frg_seqs.contains_key(&(k.0, k.1, 1 - strand)) {
+            frg_seqs.insert((k.0, k.1, 1 - strand), seq.clone());
         };
     });
 
-    let adj_list = (0..pairs.len() - 1)
-        .into_par_iter()
-        .flat_map(|i| {
-            let v = pairs[i];
-            let w = pairs[i + 1];
-            vec![
-                (v.3 as u32, (v.0, v.1, v.2), (w.0, w.1, w.2)),
-                (v.3 as u32, (w.0, w.1, 1 - w.2), (v.0, v.1, 1 - v.2)),
-            ]
-        })
-        .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>();
-
-    //adj_list.iter().for_each(|f|println!("{:?}", f));
-
+    let adj_list = sdb.generate_smp_adj_list(0);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -247,7 +215,7 @@ pub fn shmmr_dbg_consensus(
 
         //println!("DBG: add_edge {:?} {:?}", v, w);
         *score.entry(v).or_insert(0) += 1;
-        // *score.entry(w).or_insert(0) += 1;
+        *score.entry(w).or_insert(0) += 1;
     });
 
     //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
