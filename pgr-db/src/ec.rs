@@ -175,7 +175,7 @@ pub fn shmmr_dbg_consensus(
         .flat_map(|(sid, seq)| {
             //println!("len {}", seq.len());
             let shmmrs = sequence_to_shmmrs(sid as u32, seq, shmmr_spec, true);
-
+            let mut pair_count = FxHashMap::<(u64, u64), u32>::default();
             let pairs = pair_shmmrs(&shmmrs)
                 .iter()
                 .map(|(&shmmr0, &shmmr1)| {
@@ -184,12 +184,18 @@ pub fn shmmr_dbg_consensus(
                     let p0 = ((shmmr0.y & 0xFFFF_FFFF) >> 1) as u32;
                     let p1 = ((shmmr1.y & 0xFFFF_FFFF) >> 1) as u32;
                     let shmmr_pair = if s0 <= s1 {
+                        *pair_count.entry((s0, s1)).or_insert(0) += 1;
                         (s0, s1, 0_u8, sid as u32, p0, p1)
                     } else {
+                        *pair_count.entry((s1, s0)).or_insert(0) += 1;
                         (s1, s0, 1_u8, sid as u32, p0, p1)
                     };
                     shmmr_pair
                 })
+                .collect::<Vec<(u64, u64, u8, u32, u32, u32)>>();
+            let pairs = pairs
+                .into_iter()
+                .filter(|v| pair_count[&(v.0, v.1)] == 1)
                 .collect::<Vec<(u64, u64, u8, u32, u32, u32)>>();
             pairs
         })
