@@ -160,7 +160,7 @@ pub fn naive_dbg_consensus(
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
-) -> Result<Vec<u8>, &'static str> {
+) -> Result<Vec<(Vec<u8>,Vec<u32>)>, &'static str> {
     let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
         w: 12,
         k: 32,
@@ -247,7 +247,7 @@ pub fn shmmr_dbg_consensus(
 
         //println!("DBG: add_edge {:?} {:?}", v, w);
         *score.entry(v).or_insert(0) += 1;
-        *score.entry(w).or_insert(0) += 1;
+        // *score.entry(w).or_insert(0) += 1;
     });
 
     //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
@@ -276,21 +276,31 @@ pub fn shmmr_dbg_consensus(
         }
     }
 
-    let mut out_seq = vec![];
-    let n = out[0];
-    let seq = frg_seqs.get(&n.0).unwrap().clone();
+    let mut out_seqs = Vec::<(Vec<u8>, Vec<u32>)>::new();
 
-    out_seq.extend(seq[..1 + shmmr_spec.k as usize].to_vec());
-    for (node, _p_node, _node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
-        out_seq.extend(
-            frg_seqs.get(&(node.0, node.1, node.2)).unwrap()[1 + shmmr_spec.k as usize..].to_vec(),
-        );
+    let mut out_seq = vec![];
+    let mut out_cov = vec![];
+    for (node, _p_node, node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
+        if out_seq.len() == 0 {
+            let seq = frg_seqs.get(&node).unwrap().clone();
+            for _ in 0..seq.len() {
+                out_cov.push(node_count);
+            }
+            out_seq.extend(seq);
+        } else {
+            let seq = frg_seqs.get(&node).unwrap()[1 + shmmr_spec.k as usize..].to_vec();
+            for _ in 0..seq.len() {
+                out_cov.push(node_count);
+            }
+            out_seq.extend(seq);
+        }
         if is_leaf {
-            break;
+            out_seqs.push((out_seq.clone(), out_cov.clone()));
+            out_seq.clear();
+            out_cov.clear()
         }
     }
-
-    Ok(out_seq)
+    Ok(out_seqs)
 }
 
 #[cfg(test)]
@@ -336,6 +346,9 @@ mod test {
             .collect::<Vec<Vec<u8>>>();
 
         let r = shmmr_dbg_consensus(seqs, &None).unwrap();
-        println!("{}", String::from_utf8_lossy(&r[..]));
+        for (s, c) in r {
+            println!("{}", String::from_utf8_lossy(&s[..]));
+            println!("{:?}", c);
+        }
     }
 }
