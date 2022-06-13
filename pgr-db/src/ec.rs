@@ -162,7 +162,7 @@ pub fn shmmr_dbg_consensus(
     shmmr_spec: &Option<ShmmrSpec>,
 ) -> Result<Vec<u8>, &'static str> {
     let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
-        w: 1,
+        w: 12,
         k: 32,
         r: 1,
         min_span: 0,
@@ -226,7 +226,7 @@ pub fn shmmr_dbg_consensus(
 
     let s0 = adj_list[0];
 
-    println!("s0:{:?}", s0);
+    //println!("s0:{:?}", s0);
 
     let start = ShmmrGraphNode(s0.1 .0, s0.1 .1, s0.1 .2);
 
