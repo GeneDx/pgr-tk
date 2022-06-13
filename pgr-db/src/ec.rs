@@ -160,7 +160,7 @@ pub fn naive_dbg_consensus(
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
-) -> Result<Vec<(Vec<u8>,Vec<u32>)>, &'static str> {
+) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
     let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
         w: 12,
         k: 32,
