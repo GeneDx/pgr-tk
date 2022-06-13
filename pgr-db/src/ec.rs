@@ -185,8 +185,9 @@ pub fn shmmr_dbg_consensus(
 
     sdb.frag_map.iter().for_each(|(k, v) | {
         let (_, sid, b, e, strand) = v[0];
-        let b = (b - shmmr_spec.k) as usize;
-        let e = (e + 1) as usize;
+        let b = (b - shmmr_spec.k - 1) as usize;
+        let e = e as usize;
+        
         let seq = seqs[sid as usize].3[b..e].to_vec(); 
         if !frg_seqs.contains_key(&(k.0, k.1, strand)) {
             frg_seqs.insert((k.0, k.1, strand), seq.clone());
