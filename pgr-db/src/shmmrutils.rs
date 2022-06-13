@@ -492,7 +492,10 @@ pub fn sequence_to_shmmrs1(
             mdist = pos - ((min_mer.y & 0xFFFFFFFF) >> 1) as usize;
             pos += 1;
             continue;
-        } else if m.x <= min_mer.x && pos >= (w + k) as usize && pos < seq.len() - (w - k) as usize
+        } else if m.x <= min_mer.x
+            && pos >= (w + k) as usize
+            && pos < seq.len() - w as usize + k as usize
+            && pos < seq.len() 
         {
             shmmrs.push(m);
             //println!("dbg0: {} {}", pos, m.x >> 8);

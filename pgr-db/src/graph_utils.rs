@@ -261,7 +261,10 @@ where
                             }
                         }
                     });
-
+                
+                if node_rank == u32::MAX {
+                    node_rank = 0;
+                }
                 node_rank += 1;
                 global_rank.insert(node.1, node_rank);
                 global_rank.insert(node.1.reverse(), node_rank);
