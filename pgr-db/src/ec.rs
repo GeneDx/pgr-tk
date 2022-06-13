@@ -244,7 +244,7 @@ pub fn shmmr_dbg_consensus(
         *score.entry(w).or_insert(0) += 1;
     });
 
-    println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
+    //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
     //println!("DBG: {} {}", g.node_count(), g.edge_count());
 
     let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
@@ -274,7 +274,7 @@ pub fn shmmr_dbg_consensus(
     let n = out[0];
     let seq = frg_seqs.get(&n.0).unwrap().clone();
 
-    out_seq.extend(seq[..1+shmmr_spec.k as usize].to_vec()); 
+    out_seq.extend(seq[..1 + shmmr_spec.k as usize].to_vec());
     for (node, _p_node, _node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
         out_seq.extend(
             frg_seqs.get(&(node.0, node.1, node.2)).unwrap()[1 + shmmr_spec.k as usize..].to_vec(),
