@@ -8,7 +8,7 @@ use std::hash::Hash;
 
 // A struct to support node weight prioritized path traversal.
 #[derive(Copy, Clone)]
-pub struct WeightedNode<N>(u32, N);
+pub struct WeightedNode<N>(pub u32, pub N);
 
 impl<N> Ord for WeightedNode<N> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
@@ -172,7 +172,7 @@ where
         let mut branch = self.current_branch;
         loop {
             let node;
-            if let Some(n) = self.next_node {
+            if let Some(n) = self.next_node { // the next_node is the prioritized node 
                 node = n;
                 branch_rank = self.branch_rank;
             } else {
@@ -188,6 +188,7 @@ where
             //println!("DBG: current node: {:?}", node);
 
             if self.discovered.visit(node.1) {
+                //the node is not visited before
                 let rnode = node.1.reverse();
                 self.discovered.visit(rnode);
                 //println!("DBG, visited: {:?}, {:?}", node, rnode);
@@ -219,19 +220,17 @@ where
                     is_leaf = true;
                     self.next_node = None;
                 } else {
-                    succ_list_f.sort();
-                    succ_list_r.sort();
                     if succ_list_f.len() > 0 {
                         // we prefer the same direction first
+                        succ_list_f.sort();
                         self.next_node = succ_list_f.pop();
-                    } else {
-                        //self.next_node = succ_list_r.pop();
-                    }
-                    succ_list_f.iter().for_each(|s| {
-                        //println!("DBG, pushing1: {:?}", s);
-                        self.priority_queue.push(*s);
-                    });
+                        succ_list_f.iter().for_each(|s| {
+                            //println!("DBG, pushing1: {:?}", s);
+                            self.priority_queue.push(*s);
+                        });
+                    } 
 
+                    succ_list_r.sort();
                     succ_list_r.iter().for_each(|s| {
                         //println!("DBG, pushing1: {:?}", s);
                         self.priority_queue.push(*s);
@@ -271,7 +270,7 @@ where
                 self.branch_rank += 1;
                 //println!("DBG: out {:?}", node.1);
                 return Some((node.1, p_node, is_leaf, node_rank, branch, branch_rank));
-            }
+            } // else continue the loop
         }
     }
 }
