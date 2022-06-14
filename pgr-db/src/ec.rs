@@ -349,33 +349,33 @@ pub fn guided_shmmr_dbg_consensus(
         //println!("DBG: add_edge {:?} {:?}", v, w);
     });
 
-    let get_shmmr_nodes_from_seq = |seq: &Vec<u8>| -> Vec<(u64, u64, u8)> {
+    let get_shmmr_nodes_from_seq = |seq: &Vec<u8>| -> Vec<((u64, u64, u8), u32)> {
         let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
         seq_db::pair_shmmrs(&shmmrs)
             .iter()
             .map(|(s0, s1)| {
-                //let p0 = s0.pos() + 1;
+                let p0 = s0.pos() + 1;
                 //let p1 = s1.pos() + 1;
                 let s0 = s0.x >> 8;
                 let s1 = s1.x >> 8;
                 if s0 < s1 {
-                    (s0, s1, 0_u8)
+                    ((s0, s1, 0_u8), p0)
                 } else {
-                    (s1, s0, 1_u8)
+                    ((s1, s0, 1_u8), p0)
                 }
             })
-            .collect::<Vec<(u64, u64, u8)>>()
+            .collect::<Vec<((u64, u64, u8), u32)>>()
     };
 
-    let mut guide_nodes = FxHashSet::<ShmmrGraphNode>::default();
+    let mut guide_nodes = FxHashMap::<ShmmrGraphNode, u32>::default();
 
     get_shmmr_nodes_from_seq(&seqs[0].3)
         .into_iter()
-        .for_each(|n| {
+        .for_each(|(n,p)| {
             let node = ShmmrGraphNode(n.0, n.1, n.2);
             let s = *score.get(&node).unwrap();
             if s >= min_cov {
-                guide_nodes.insert(node);
+                guide_nodes.insert(node, p);
             }
         });
     //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
@@ -397,15 +397,33 @@ pub fn guided_shmmr_dbg_consensus(
             let mut out_count = 0_usize;
             let mut succ_list_f = Vec::<WeightedNode<ShmmrGraphNode>>::new();
             let mut next_guide_node: Option<WeightedNode<ShmmrGraphNode>> = None;
+            let mut min_dist: Option<u32> = None;
+            let current_node_position = guide_nodes.get(&node.1);
             for succ in g.neighbors_directed(node.1, Outgoing) {
                 //println!("DBG: succ: {:?} {:?}", node.1, succ);
                 if !visited.contains(&succ) {
                     //println!("DBG: pushing0: {:?}", succ);
                     out_count += 1;
                     let s = *score.get(&succ).unwrap();
-                    if guide_nodes.contains(&succ) {
-                        next_guide_node = Some(WeightedNode(s, succ));
-                        break;
+                    if guide_nodes.contains_key(&succ) {
+                        // choose the closest one for repetitive cases
+                        if let Some(pos) = current_node_position {
+                            let pos2 = *guide_nodes.get(&succ).unwrap();
+                            if pos2 > *pos {
+                                if min_dist.is_none() {
+                                    let dist = pos2 - *pos;
+                                    min_dist = Some(dist);
+                                    next_guide_node = Some(WeightedNode(s, succ));
+                                }
+                            } else {
+                                let dist = pos2 - *pos;
+                                if dist < min_dist.unwrap() {
+                                    next_guide_node = Some(WeightedNode(s, succ));
+                                }
+                            }
+                        } else {
+                            next_guide_node = Some(WeightedNode(s, succ));
+                        }
                     } else {
                         succ_list_f.push(WeightedNode(s, succ));
                     }
