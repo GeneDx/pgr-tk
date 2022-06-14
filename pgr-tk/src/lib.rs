@@ -619,7 +619,15 @@ impl SeqIndexDB {
         &self,
         adj_list: Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
         start: (u64, u64, u8),
-    ) -> Vec<((u64, u64, u8), Option<(u64, u64, u8)>, u32, bool, u32, u32, u32)> {
+    ) -> Vec<(
+        (u64, u64, u8),
+        Option<(u64, u64, u8)>,
+        u32,
+        bool,
+        u32,
+        u32,
+        u32,
+    )> {
         let frag_map = self.get_shmmr_map_internal();
         seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
     }
@@ -1279,7 +1287,7 @@ fn get_aln_map(
 /// list
 ///     a list of bytes representing the consensus sequence
 ///
-#[pyfunction(seqs, kmer_size, min_cov)]
+#[pyfunction(seqs, kmer_size = 33, min_cov = 2)]
 #[pyo3(text_signature = "($self, seqs, kmer_size, min_cov)")]
 pub fn naive_dbg_consensus(
     seqs: Vec<Vec<u8>>,
@@ -1294,7 +1302,6 @@ pub fn naive_dbg_consensus(
         )),
     }
 }
-
 
 /// Perform a shimmer de Bruijn graph consensus
 ///
@@ -1311,15 +1318,15 @@ pub fn naive_dbg_consensus(
 /// list
 ///     a list of a set of bytes representing the consensus sequences of all branches in the graph
 ///
-#[pyfunction(seqs, w, k, r, min_span)]
-#[pyo3(text_signature = "($self, seqs, w=12, k=32, r=1, min_span=0)")]
+#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0)]
+#[pyo3(text_signature = "($self, seqs, w, k, r, min_span)")]
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     w: u32,
     k: u32,
     r: u32,
     min_span: u32,
-) -> PyResult<Vec<(Vec<u8>,Vec<u32>)>> {
+) -> PyResult<Vec<(Vec<u8>, Vec<u32>)>> {
     let spec = ShmmrSpec {
         w,
         k,
@@ -1328,6 +1335,50 @@ pub fn shmmr_dbg_consensus(
         sketch: false,
     };
     let consensus = pgr_db::ec::shmmr_dbg_consensus(seqs, &Some(spec));
+    match consensus {
+        Ok(seq) => Ok(seq),
+        Err(_) => Err(exceptions::PyException::new_err(
+            "consensus failed, trying bigger kmer size",
+        )),
+    }
+}
+
+/// Perform a guided shimmer de Bruijn graph consensus
+///
+/// Parameters
+/// ----------
+/// aln_segs : list
+///     a list of the list of bytes representing the bases of each sequence
+///
+/// k, w, r, min_span : int  
+///     specification of the shimmers for construting graph
+///
+/// min_cov : int
+///     to keep hyplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept
+///
+/// Returns
+/// -------
+/// list
+///     a list of a set of bytes representing the consensus sequences of all branches in the graph
+///
+#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2)]
+#[pyo3(text_signature = "($self, seqs, w, k, r, min_span, min_cov)")]
+pub fn guided_shmmr_dbg_consensus(
+    seqs: Vec<Vec<u8>>,
+    w: u32,
+    k: u32,
+    r: u32,
+    min_span: u32,
+    min_cov: u32,
+) -> PyResult<(Vec<u8>, Vec<u32>)> {
+    let spec = ShmmrSpec {
+        w,
+        k,
+        r,
+        min_span,
+        sketch: false,
+    };
+    let consensus = pgr_db::ec::guided_shmmr_dbg_consensus(seqs, &Some(spec), min_cov);
     match consensus {
         Ok(seq) => Ok(seq),
         Err(_) => Err(exceptions::PyException::new_err(
@@ -1354,5 +1405,6 @@ fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
     m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;
     m.add_function(wrap_pyfunction!(shmmr_dbg_consensus, m)?)?;
+    m.add_function(wrap_pyfunction!(guided_shmmr_dbg_consensus, m)?)?;
     Ok(())
 }
