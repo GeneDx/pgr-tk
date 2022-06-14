@@ -161,13 +161,14 @@ pub fn shmmr_dbg_consensus(
     shmmr_spec: &Option<ShmmrSpec>,
 ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
     let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
-        w: 12,
-        k: 32,
+        w: 31,
+        k: 31,
         r: 1,
         min_span: 0,
         sketch: false,
     });
-
+    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry 
+    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path 
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let seqs = (0..seqs.len())
         .into_iter()
@@ -176,19 +177,19 @@ pub fn shmmr_dbg_consensus(
                 sid as u32,
                 Some("Memory".to_string()),
                 format!("{}", sid),
-                seqs[sid].clone())
+                seqs[sid].clone(),
+            )
         })
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
     sdb.load_index_from_seq_vec(&seqs);
 
     let mut frg_seqs = FxHashMap::<(u64, u64, u8), Vec<u8>>::default();
 
-    sdb.frag_map.iter().for_each(|(k, v) | {
+    sdb.frag_map.iter().for_each(|(k, v)| {
         let (_, sid, b, e, strand) = v[0];
-        let b = (b - shmmr_spec.k - 1) as usize;
+        let b = (b - shmmr_spec.k) as usize;
         let e = e as usize;
-        
-        let seq = seqs[sid as usize].3[b..e].to_vec(); 
+        let seq = seqs[sid as usize].3[b..e].to_vec();
         if !frg_seqs.contains_key(&(k.0, k.1, strand)) {
             frg_seqs.insert((k.0, k.1, strand), seq.clone());
         };
@@ -249,15 +250,19 @@ pub fn shmmr_dbg_consensus(
 
     let mut out_seq = vec![];
     let mut out_cov = vec![];
+    //let mut head_orientation = 0_u8;
     for (node, _p_node, node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
         if out_seq.len() == 0 {
-            let seq = frg_seqs.get(&node).unwrap().clone();
+            let seq = frg_seqs.get(&node).unwrap().clone(); 
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
             }
             out_seq.extend(seq);
         } else {
-            let seq = frg_seqs.get(&node).unwrap()[1 + shmmr_spec.k as usize..].to_vec();
+            let k = shmmr_spec.k as usize;
+            let seq = frg_seqs.get(&node).unwrap().clone(); 
+            assert!(out_seq[out_seq.len() - k..] == seq[..k]);
+            let seq = seq[k..].to_vec();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
             }
@@ -308,7 +313,7 @@ mod test {
             sketch: false,
         };
         let mut sdb = CompactSeqDB::new(spec);
-        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test3.fa".to_string());
         let seqs = (0..sdb.seqs.len())
             .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))

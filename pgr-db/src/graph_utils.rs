@@ -209,7 +209,6 @@ where
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
                         //println!("DBG: pushing0: {:?}", succ);
-                        out_count += 1;
                         let s = self.node_score.unwrap().get(&succ).unwrap();
                         succ_list_r.push(WeightedNode(*s, succ));
                     }
@@ -226,7 +225,7 @@ where
                         // we prefer the same direction first
                         self.next_node = succ_list_f.pop();
                     } else {
-                        self.next_node = succ_list_r.pop();
+                        //self.next_node = succ_list_r.pop();
                     }
                     succ_list_f.iter().for_each(|s| {
                         //println!("DBG, pushing1: {:?}", s);
