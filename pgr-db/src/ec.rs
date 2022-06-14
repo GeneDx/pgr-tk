@@ -2,12 +2,13 @@
 //! function for error correction
 
 use crate::fasta_io::reverse_complement;
-use crate::graph_utils::ShmmrGraphNode;
+use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
 use crate::seq_db;
-use crate::shmmrutils::ShmmrSpec;
+use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
+use petgraph::EdgeDirection::Outgoing;
 use petgraph::{graphmap::DiGraphMap, EdgeDirection::Incoming};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// perform error correction using de Bruijn graph
 /// just a naive approach for now
@@ -167,8 +168,8 @@ pub fn shmmr_dbg_consensus(
         min_span: 0,
         sketch: false,
     });
-    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry 
-    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path 
+    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
+    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let seqs = (0..seqs.len())
         .into_iter()
@@ -183,19 +184,24 @@ pub fn shmmr_dbg_consensus(
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
     sdb.load_index_from_seq_vec(&seqs);
 
-    let mut frg_seqs = FxHashMap::<(u64, u64, u8), Vec<u8>>::default();
+    let mut frg_seqs = FxHashMap::<ShmmrGraphNode, Vec<u8>>::default();
 
+    let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
     sdb.frag_map.iter().for_each(|(k, v)| {
         let (_, sid, b, e, strand) = v[0];
         let b = (b - shmmr_spec.k) as usize;
         let e = e as usize;
         let seq = seqs[sid as usize].3[b..e].to_vec();
-        if !frg_seqs.contains_key(&(k.0, k.1, strand)) {
-            frg_seqs.insert((k.0, k.1, strand), seq.clone());
+        let node = ShmmrGraphNode(k.0, k.1, strand);
+        score.insert(node, v.len() as u32);
+        if !frg_seqs.contains_key(&node) {
+            frg_seqs.insert(node, seq.clone());
         };
         let seq = reverse_complement(&seq);
-        if !frg_seqs.contains_key(&(k.0, k.1, 1 - strand)) {
-            frg_seqs.insert((k.0, k.1, 1 - strand), seq.clone());
+        let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
+        score.insert(node, v.len() as u32);
+        if !frg_seqs.contains_key(&node) {
+            frg_seqs.insert(node, seq.clone());
         };
     });
 
@@ -209,15 +215,14 @@ pub fn shmmr_dbg_consensus(
     use crate::graph_utils::BiDiGraphWeightedDfs;
 
     let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
-    let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
     adj_list.into_iter().for_each(|(_sid, v, w)| {
         let v = ShmmrGraphNode(v.0, v.1, v.2);
         let w = ShmmrGraphNode(w.0, w.1, w.2);
         g.add_edge(v, w, ());
 
         //println!("DBG: add_edge {:?} {:?}", v, w);
-        *score.entry(v).or_insert(0) += 1;
-        *score.entry(w).or_insert(0) += 1;
+        //*score.entry(v).or_insert(0) += 1;
+        //*score.entry(w).or_insert(0) += 1;
     });
 
     //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
@@ -233,7 +238,7 @@ pub fn shmmr_dbg_consensus(
                 None => None,
             };
             out.push((
-                (node.0, node.1, node.2),
+                node,
                 p_node,
                 node_count,
                 is_leaf,
@@ -253,14 +258,14 @@ pub fn shmmr_dbg_consensus(
     //let mut head_orientation = 0_u8;
     for (node, _p_node, node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
         if out_seq.len() == 0 {
-            let seq = frg_seqs.get(&node).unwrap().clone(); 
+            let seq = frg_seqs.get(&node).unwrap().clone();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
             }
             out_seq.extend(seq);
         } else {
             let k = shmmr_spec.k as usize;
-            let seq = frg_seqs.get(&node).unwrap().clone(); 
+            let seq = frg_seqs.get(&node).unwrap().clone();
             assert!(out_seq[out_seq.len() - k..] == seq[..k]);
             let seq = seq[k..].to_vec();
             for _ in 0..seq.len() {
@@ -277,8 +282,204 @@ pub fn shmmr_dbg_consensus(
     Ok(out_seqs)
 }
 
+/// perform error correction using shimmer de Bruijn graph
+///
+/// this methods try to perseve SNP specific to a guide read (the first one in the list)
+/// if there is more or equal to the "min_cov"
+///
+pub fn guided_shmmr_dbg_consensus(
+    seqs: Vec<Vec<u8>>,
+    shmmr_spec: &Option<ShmmrSpec>,
+    min_cov: u32,
+) -> Result<(Vec<u8>, Vec<u32>), &'static str> {
+    let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
+        w: 31,
+        k: 31,
+        r: 1,
+        min_span: 0,
+        sketch: false,
+    });
+    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
+    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
+    let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
+    let seqs = (0..seqs.len())
+        .into_iter()
+        .map(|sid| {
+            (
+                sid as u32,
+                Some("Memory".to_string()),
+                format!("{}", sid),
+                seqs[sid].clone(),
+            )
+        })
+        .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
+    sdb.load_index_from_seq_vec(&seqs);
+
+    let mut frg_seqs = FxHashMap::<ShmmrGraphNode, Vec<u8>>::default();
+    let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
+    sdb.frag_map.iter().for_each(|(k, v)| {
+        let (_, sid, b, e, strand) = v[0];
+        let b = (b - shmmr_spec.k) as usize;
+        let e = e as usize;
+        let seq = seqs[sid as usize].3[b..e].to_vec();
+        let node = ShmmrGraphNode(k.0, k.1, strand);
+        score.insert(node, v.len() as u32);
+        if !frg_seqs.contains_key(&node) {
+            frg_seqs.insert(node, seq.clone());
+        };
+        let seq = reverse_complement(&seq);
+        let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
+        score.insert(node, v.len() as u32);
+        if !frg_seqs.contains_key(&node) {
+            frg_seqs.insert(node, seq.clone());
+        };
+    });
+
+    let adj_list = sdb.generate_smp_adj_list(0);
+    let s0 = adj_list[0];
+
+    //println!("s0:{:?}", s0);
+
+    let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    adj_list.into_iter().for_each(|(_sid, v, w)| {
+        let v = ShmmrGraphNode(v.0, v.1, v.2);
+        let w = ShmmrGraphNode(w.0, w.1, w.2);
+        g.add_edge(v, w, ());
+
+        //println!("DBG: add_edge {:?} {:?}", v, w);
+    });
+
+    let get_shmmr_nodes_from_seq = |seq: &Vec<u8>| -> Vec<(u64, u64, u8)> {
+        let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+        seq_db::pair_shmmrs(&shmmrs)
+            .iter()
+            .map(|(s0, s1)| {
+                //let p0 = s0.pos() + 1;
+                //let p1 = s1.pos() + 1;
+                let s0 = s0.x >> 8;
+                let s1 = s1.x >> 8;
+                if s0 < s1 {
+                    (s0, s1, 0_u8)
+                } else {
+                    (s1, s0, 1_u8)
+                }
+            })
+            .collect::<Vec<(u64, u64, u8)>>()
+    };
+
+    let mut guide_nodes = FxHashSet::<ShmmrGraphNode>::default();
+
+    get_shmmr_nodes_from_seq(&seqs[0].3)
+        .into_iter()
+        .for_each(|n| {
+            let node = ShmmrGraphNode(n.0, n.1, n.2);
+            let s = *score.get(&node).unwrap();
+            if s >= min_cov {
+                guide_nodes.insert(node);
+            }
+        });
+    //println!("DBG: node_count {:?} {:?}", g.node_count(), g.edge_count());
+    //println!("DBG: {} {}", g.node_count(), g.edge_count());
+
+    //let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
+
+    let start = ShmmrGraphNode(s0.1 .0, s0.1 .1, s0.1 .2);
+    let w = *score.get(&start).unwrap();
+
+    let mut out = vec![];
+    let mut next_node: WeightedNode<ShmmrGraphNode> = WeightedNode(w, start);
+    let mut visited = FxHashSet::<ShmmrGraphNode>::default();
+    let mut last_in_guide_nodes: Option<ShmmrGraphNode> = None;
+    loop {
+        let node = next_node;
+        if visited.insert(node.1) {
+            // the node is not visited before if insert() return true
+            let mut out_count = 0_usize;
+            let mut succ_list_f = Vec::<WeightedNode<ShmmrGraphNode>>::new();
+            let mut next_guide_node: Option<WeightedNode<ShmmrGraphNode>> = None;
+            for succ in g.neighbors_directed(node.1, Outgoing) {
+                //println!("DBG: succ: {:?} {:?}", node.1, succ);
+                if !visited.contains(&succ) {
+                    //println!("DBG: pushing0: {:?}", succ);
+                    out_count += 1;
+                    let s = *score.get(&succ).unwrap();
+                    if guide_nodes.contains(&succ) {
+                        next_guide_node = Some(WeightedNode(s, succ));
+                        break;
+                    } else {
+                        succ_list_f.push(WeightedNode(s, succ));
+                    }
+                }
+            }
+            if out_count == 0 {
+                break;
+            } else {
+                if next_guide_node.is_some() {
+                    next_node = next_guide_node.unwrap();
+                    last_in_guide_nodes = Some(next_node.1.clone());
+                } else {
+                    if succ_list_f.len() > 0 {
+                        succ_list_f.sort();
+                        next_node = succ_list_f.pop().unwrap();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            out.push((node.1, *score.get(&node.1).unwrap()));
+        }
+    }
+
+    let mut out_seq = vec![];
+    let mut out_cov = vec![];
+    //let mut head_orientation = 0_u8;
+    for (node, node_count) in out {
+        if out_seq.len() == 0 {
+            let seq = frg_seqs.get(&node).unwrap().clone();
+            for _ in 0..seq.len() {
+                out_cov.push(node_count);
+            }
+            out_seq.extend(seq);
+        } else {
+            let k = shmmr_spec.k as usize;
+            let seq = frg_seqs.get(&node).unwrap().clone();
+            /*
+            println!(
+                "{} {} {} {} {}",
+                node.0,
+                node.1,
+                node.2,
+                String::from_utf8_lossy(&out_seq[out_seq.len() - k..]),
+                String::from_utf8_lossy(&seq[..k])
+            );
+            */
+            assert!(out_seq[out_seq.len() - k..] == seq[..k]);
+            let seq = seq[k..].to_vec();
+            for _ in 0..seq.len() {
+                out_cov.push(node_count);
+            }
+            out_seq.extend(seq);
+        }
+        /*
+        if guide_nodes.contains(&node) {
+            println!("XX");
+        } else {
+            println!("YY");
+        }
+        */
+        if last_in_guide_nodes.is_some() {
+            if node == last_in_guide_nodes.unwrap() {
+                break;
+            }
+        }
+        
+    }
+    Ok((out_seq, out_cov))
+}
+
 #[cfg(test)]
 mod test {
+    use crate::ec::guided_shmmr_dbg_consensus;
     use crate::ec::naive_dbg_consensus;
     use crate::ec::shmmr_dbg_consensus;
     use crate::seq_db::CompactSeqDB;
@@ -324,5 +525,26 @@ mod test {
             println!("{}", String::from_utf8_lossy(&s[..]));
             println!("{:?}", c);
         }
+    }
+
+    #[test]
+    fn test_guided_shmmr_dbg_consensus() {
+        let spec = ShmmrSpec {
+            w: 24,
+            k: 24,
+            r: 12,
+            min_span: 12,
+            sketch: false,
+        };
+        let mut sdb = CompactSeqDB::new(spec);
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
+        let seqs = (0..sdb.seqs.len())
+            .into_iter()
+            .map(|sid| sdb.get_seq_by_id(sid as u32))
+            .collect::<Vec<Vec<u8>>>();
+
+        let (s, c) = guided_shmmr_dbg_consensus(seqs, &None, 2).unwrap();
+        println!("{}", String::from_utf8_lossy(&s[..]));
+        println!("{:?}", c);
     }
 }
