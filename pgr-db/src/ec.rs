@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! function for error correction
 
+use crate::aln::query_fragment_to_hps;
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
 use crate::seq_db;
@@ -371,7 +372,7 @@ pub fn guided_shmmr_dbg_consensus(
 
     get_shmmr_nodes_from_seq(&seqs[0].3)
         .into_iter()
-        .for_each(|(n,p)| {
+        .for_each(|(n, p)| {
             let node = ShmmrGraphNode(n.0, n.1, n.2);
             let s = *score.get(&node).unwrap();
             if s >= min_cov {
@@ -490,9 +491,147 @@ pub fn guided_shmmr_dbg_consensus(
                 break;
             }
         }
-        
     }
     Ok((out_seq, out_cov))
+}
+
+/// perform error correction using shimmer alignment
+///
+/// this methods try to perseve SNP specific to a guide read (the first one in the list)
+/// if there is more or equal to the "min_cov"
+///
+pub fn shmmr_sparse_aln_consensus(
+    seqs: Vec<Vec<u8>>,
+    shmmr_spec: &Option<ShmmrSpec>,
+    min_cov: u32,
+) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
+    let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
+        w: 31,
+        k: 31,
+        r: 1,
+        min_span: 0,
+        sketch: false,
+    });
+    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
+    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
+    let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
+    let seqs = (0..seqs.len())
+        .into_iter()
+        .map(|sid| {
+            (
+                sid as u32,
+                Some("Memory".to_string()),
+                format!("{}", sid),
+                seqs[sid].clone(),
+            )
+        })
+        .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
+    sdb.load_index_from_seq_vec(&seqs);
+    let hit_pairs = query_fragment_to_hps(
+        &sdb.frag_map,
+        &seqs[0].3,
+        &shmmr_spec,
+        0.1,
+        Some(32),
+        Some(32),
+        Some(32),
+        Some(33),
+    );
+
+    let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
+    hit_pairs.into_iter().for_each(|(sid, hits)| {
+        hits.into_iter().for_each(|(_score, hps)| {
+            hps.into_iter().for_each(|(v, w)| {
+                hit_map.entry(v).or_insert(vec![]).push((sid, w));
+            })
+        })
+    });
+
+    let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
+    let mut reliable_regions = Vec::<((u32, u32, u8), u32)>::new();
+    keys.sort();
+    keys.into_iter().for_each(|k| {
+        let m = hit_map.get(&k).unwrap();
+        //println!("{:?} {:?}",k ,m.len());
+        if m.len() >= min_cov as usize {
+            reliable_regions.push((k, m.len() as u32));
+        };
+        //m.into_iter().for_each(|v| {
+        //    println!("{:?} {:?}", k, v);
+        //})
+    });
+
+    let mut out_seqs = vec![];
+    let mut seq = vec![];
+    let mut cov = vec![];
+    let mut p_region: Option<((u32, u32, u8), u32)> = None;
+    reliable_regions.into_iter().for_each(|(r, c)| {
+        if p_region.is_none() {
+            p_region = Some((r, c));
+            seq.extend(seqs[0].3[0..r.1 as usize].to_vec());
+            (0..r.1).into_iter().for_each(|_| {
+                cov.push(c);
+            });
+        } else {
+            //println!("R : {:?} {:?}", r, p_region);
+            if r.0 == p_region.unwrap().0 .1 {
+                seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                (r.0..r.1).into_iter().for_each(|_| {
+                    cov.push(c);
+                });
+            } else {
+                //println!("X : {:?} {}", r, seq.len());
+                let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
+                let c_hit = hit_map.get(&r).unwrap();
+                let p_hit = p_hit
+                    .into_iter()
+                    .map(|v| *v)
+                    .collect::<FxHashMap<u32, (u32, u32, u8)>>();
+                let c_hit = c_hit
+                    .into_iter()
+                    .map(|v| *v)
+                    .collect::<FxHashMap<u32, (u32, u32, u8)>>();
+
+                let mut s = vec![];
+                let mut c2 = 0_u32;
+                for (k, v) in p_hit {
+                    if k == 0 {
+                        continue;
+                    }
+                    if c_hit.contains_key(&k) {
+                        let w = *c_hit.get(&k).unwrap();
+                        //println!("S: {} {:?} {:?}", k, v, c_hit.get(&k).unwrap());
+                        if s.len() == 0 { // patch in, TODO: we will need to do some sub-consensus 
+                            s = seqs[k as usize].3[v.1 as usize..w.0 as usize].to_vec();
+                        }
+                        //println!("S2: {}", String::from_utf8_lossy(&s[..]));
+                        c2 += 1;
+                    }
+                }
+                if c2 >= min_cov {
+                    (0..s.len()).into_iter().for_each(|_| cov.push(c2));
+                    seq.extend(s);
+                    seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                    (r.0..r.1).into_iter().for_each(|_| {
+                        cov.push(c);
+                    });
+                } else {
+                    out_seqs.push((seq.clone(), cov.clone()));
+                    seq.clear();
+                    cov.clear();
+                    seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                    (r.0..r.1).into_iter().for_each(|_| {
+                        cov.push(c);
+                    });
+                }
+            }
+            p_region = Some((r, c));
+        }
+    });
+
+    out_seqs.push((seq.clone(), cov.clone()));
+
+    Ok(out_seqs)
 }
 
 #[cfg(test)]
@@ -500,6 +639,7 @@ mod test {
     use crate::ec::guided_shmmr_dbg_consensus;
     use crate::ec::naive_dbg_consensus;
     use crate::ec::shmmr_dbg_consensus;
+    use crate::ec::shmmr_sparse_aln_consensus;
     use crate::seq_db::CompactSeqDB;
     use crate::shmmrutils::ShmmrSpec;
     #[test]
@@ -564,5 +704,28 @@ mod test {
         let (s, c) = guided_shmmr_dbg_consensus(seqs, &None, 2).unwrap();
         println!("{}", String::from_utf8_lossy(&s[..]));
         println!("{:?}", c);
+    }
+
+    #[test]
+    fn test_shmmr_sparse_aln_consensus() {
+        let spec = ShmmrSpec {
+            w: 24,
+            k: 24,
+            r: 12,
+            min_span: 12,
+            sketch: false,
+        };
+        let mut sdb = CompactSeqDB::new(spec);
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
+        let seqs = (0..sdb.seqs.len())
+            .into_iter()
+            .map(|sid| sdb.get_seq_by_id(sid as u32))
+            .collect::<Vec<Vec<u8>>>();
+
+        let r = shmmr_sparse_aln_consensus(seqs, &None, 2).unwrap();
+        for (s, c) in r {
+            println!("{}", String::from_utf8_lossy(&s[..]));
+            println!("{:?}", c);
+        }
     }
 }

@@ -1387,6 +1387,47 @@ pub fn guided_shmmr_dbg_consensus(
     }
 }
 
+/// Perform a shimmer de Bruijn graph consensus
+///
+/// Parameters
+/// ----------
+/// aln_segs : list
+///     a list of the list of bytes representing the bases of each sequence
+///
+/// k, w, r, min_span : int  
+///     specification of the shimmers for construting graph
+///
+/// Returns
+/// -------
+/// list
+///     a list of a set of bytes representing the consensus sequences of all branches in the graph
+///
+#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov=2)]
+#[pyo3(text_signature = "($self, seqs, w, k, r, min_span, min_cov)")]
+pub fn shmmr_sparse_aln_consensus(
+    seqs: Vec<Vec<u8>>,
+    w: u32,
+    k: u32,
+    r: u32,
+    min_span: u32,
+    min_cov: u32,
+) -> PyResult<Vec<(Vec<u8>, Vec<u32>)>> {
+    let spec = ShmmrSpec {
+        w,
+        k,
+        r,
+        min_span,
+        sketch: false,
+    };
+    let consensus = pgr_db::ec::shmmr_sparse_aln_consensus(seqs, &Some(spec), min_cov);
+    match consensus {
+        Ok(seq) => Ok(seq),
+        Err(_) => Err(exceptions::PyException::new_err(
+            "consensus failed, trying bigger kmer size",
+        )),
+    }
+}
+
 /// The internal `pgrtk` modules implemented with Rust.
 /// These classes and fucntion are re-exported as `pgrtk.*`
 /// so `import pgrtk` will bring these classes and function
@@ -1406,5 +1447,6 @@ fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;
     m.add_function(wrap_pyfunction!(shmmr_dbg_consensus, m)?)?;
     m.add_function(wrap_pyfunction!(guided_shmmr_dbg_consensus, m)?)?;
+    m.add_function(wrap_pyfunction!(shmmr_sparse_aln_consensus, m)?)?;
     Ok(())
 }
