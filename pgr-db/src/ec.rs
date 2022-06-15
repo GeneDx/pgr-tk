@@ -415,11 +415,11 @@ pub fn guided_shmmr_dbg_consensus(
                                     let dist = pos2 - *pos;
                                     min_dist = Some(dist);
                                     next_guide_node = Some(WeightedNode(s, succ));
-                                }
-                            } else {
-                                let dist = pos2 - *pos;
-                                if dist < min_dist.unwrap() {
-                                    next_guide_node = Some(WeightedNode(s, succ));
+                                } else {
+                                    let dist = pos2 - *pos;
+                                    if dist < min_dist.unwrap() {
+                                        next_guide_node = Some(WeightedNode(s, succ));
+                                    }
                                 }
                             }
                         } else {
@@ -506,8 +506,8 @@ pub fn shmmr_sparse_aln_consensus(
     min_cov: u32,
 ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
     let shmmr_spec = shmmr_spec.as_ref().unwrap_or(&ShmmrSpec {
-        w: 31,
-        k: 31,
+        w: 33,
+        k: 33,
         r: 1,
         min_span: 0,
         sketch: false,
@@ -540,11 +540,13 @@ pub fn shmmr_sparse_aln_consensus(
 
     let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
     hit_pairs.into_iter().for_each(|(sid, hits)| {
-        hits.into_iter().for_each(|(_score, hps)| {
-            hps.into_iter().for_each(|(v, w)| {
+        if hits.len() > 0 { // only use the main chian
+            let hps = &hits[0].1;
+            hps.into_iter().for_each(|&(v, w)| {
                 hit_map.entry(v).or_insert(vec![]).push((sid, w));
             })
-        })
+        }
+ 
     });
 
     let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
@@ -557,7 +559,7 @@ pub fn shmmr_sparse_aln_consensus(
             reliable_regions.push((k, m.len() as u32));
         };
         //m.into_iter().for_each(|v| {
-        //    println!("{:?} {:?}", k, v);
+        //    println!("M : {:?} {:?}", k, v);
         //})
     });
 
@@ -594,6 +596,7 @@ pub fn shmmr_sparse_aln_consensus(
 
                 let mut s = vec![];
                 let mut c2 = 0_u32;
+
                 for (k, v) in p_hit {
                     if k == 0 {
                         continue;
@@ -601,8 +604,14 @@ pub fn shmmr_sparse_aln_consensus(
                     if c_hit.contains_key(&k) {
                         let w = *c_hit.get(&k).unwrap();
                         //println!("S: {} {:?} {:?}", k, v, c_hit.get(&k).unwrap());
-                        if s.len() == 0 { // patch in, TODO: we will need to do some sub-consensus 
-                            s = seqs[k as usize].3[v.1 as usize..w.0 as usize].to_vec();
+                        if s.len() == 0 {
+                            // patch in, TODO: we will need to do some sub-consensus
+                            if v.1 < w.0 {
+                                s = seqs[k as usize].3[v.1 as usize..w.0 as usize].to_vec();
+                            } else {
+                                s = seqs[k as usize].3[w.1 as usize..v.0 as usize].to_vec();
+                                s = reverse_complement(&s);
+                            }
                         }
                         //println!("S2: {}", String::from_utf8_lossy(&s[..]));
                         c2 += 1;
@@ -716,7 +725,7 @@ mod test {
             sketch: false,
         };
         let mut sdb = CompactSeqDB::new(spec);
-        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test4.fa".to_string());
         let seqs = (0..sdb.seqs.len())
             .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
