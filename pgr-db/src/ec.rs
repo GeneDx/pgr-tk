@@ -596,20 +596,20 @@ pub fn shmmr_sparse_aln_consensus(
 
                 let mut s = vec![];
                 let mut c2 = 0_u32;
-
-                for (k, v) in p_hit {
-                    if k == 0 {
+                let k = shmmr_spec.k as usize;
+                for (sid, v) in p_hit {
+                    if sid == 0 {
                         continue;
                     }
-                    if c_hit.contains_key(&k) {
-                        let w = *c_hit.get(&k).unwrap();
+                    if c_hit.contains_key(&sid) {
+                        let w = *c_hit.get(&sid).unwrap();
                         //println!("S: {} {:?} {:?}", k, v, c_hit.get(&k).unwrap());
                         if s.len() == 0 {
                             // patch in, TODO: we will need to do some sub-consensus
                             if v.1 < w.0 {
-                                s = seqs[k as usize].3[v.1 as usize..w.0 as usize].to_vec();
+                                s = seqs[sid as usize].3[v.1 as usize..w.0 as usize].to_vec();
                             } else {
-                                s = seqs[k as usize].3[w.1 as usize..v.0 as usize].to_vec();
+                                s = seqs[sid as usize].3[w.1 as usize - k..v.0 as usize - k].to_vec();
                                 s = reverse_complement(&s);
                             }
                         }
