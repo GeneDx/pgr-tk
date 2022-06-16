@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
 
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-a-match")]
+#[clap(name = "pgr-probe-match")]
 #[clap(author, version)]
 #[clap(about = "using Cuckoo Filter for Matching Reads To A Reference Set of Sequences", long_about = None)]
 struct CmdOptions {

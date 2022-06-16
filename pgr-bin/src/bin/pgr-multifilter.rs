@@ -15,7 +15,7 @@ enum GZFastaReader {
 }
 
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-filter")]
+#[clap(name = "pgr-multi-filter")]
 #[clap(author, version)]
 #[clap(about = "using Cuckoo Filter for Matching Reads To A Reference Set of Sequences", long_about = None)]
 struct CmdOptions {
