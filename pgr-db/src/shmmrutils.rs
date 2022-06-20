@@ -85,10 +85,7 @@ pub fn match_reads<'a>(
     let mut uv_map = FxHashMap::<i32, (u32, u32)>::default();
     // uv_map: maping k to the u, v, which keep the d path end in k
     let mut delta_pts = FxHashMap::<(u32, i32), DeltaPoint>::default();
-    let mut x: u32;
-    let mut y: u32;
-    let mut x1: u32;
-    let mut y1: u32;
+   
     let mut best_m = -1_i32;
     let mut matched = false;
     let mut d_final = 0_u32;
@@ -117,6 +114,10 @@ pub fn match_reads<'a>(
             break;
         }
         for k in (k_min..=k_max).step_by(2) {
+            let mut x: u32;
+            let mut y: u32;
+            let x1: u32;
+            let y1: u32;
             let (_, vn) = uv_map.get(&(k - 1)).unwrap();
             let (_, vp) = uv_map.get(&(k + 1)).unwrap();
             if k == k_min || ((k != k_max) && vn < vp) {
