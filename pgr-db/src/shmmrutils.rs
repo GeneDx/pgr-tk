@@ -246,22 +246,27 @@ impl fmt::Display for MM128 {
 }
 
 impl MM128 {
+    #[inline(always)]
     pub fn hash(&self) -> u64 {
         self.x >> 8
-    }
 
+    }
+    #[inline(always)]
     pub fn span(&self) -> u8 {
         (self.x & 0xFF) as u8
     }
 
+    #[inline(always)]
     pub fn rid(&self) -> u32 {
         (self.y >> 32) as u32
     }
 
+    #[inline(always)]
     pub fn pos(&self) -> u32 {
         ((self.y & 0xFFFFFFFF) >> 1) as u32
     }
 
+    #[inline(always)]
     pub fn strand(&self) -> u8 {
         (self.y & 0x1) as u8
     }

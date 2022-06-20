@@ -137,7 +137,7 @@ pub fn query_fragment_to_hps(
     .iter()
     .for_each(|sp| {
         let e = sp_count_query
-            .entry((sp.0.x >> 8, sp.1.x >> 8))
+            .entry((sp.0.hash(), sp.1.hash()))
             .or_insert(0);
         *e += 1;
     });

@@ -357,8 +357,8 @@ pub fn guided_shmmr_dbg_consensus(
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 //let p1 = s1.pos() + 1;
-                let s0 = s0.x >> 8;
-                let s1 = s1.x >> 8;
+                let s0 = s0.hash();
+                let s1 = s1.hash();
                 if s0 < s1 {
                     ((s0, s1, 0_u8), p0)
                 } else {

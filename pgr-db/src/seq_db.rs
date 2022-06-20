@@ -208,14 +208,13 @@ impl CompactSeqDB {
         let internal_frags = pair_shmmrs(&shmmrs)
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let s0 = shmmr0.x >> 8;
-                let s1 = shmmr1.x >> 8;
+                let s0 = shmmr0.hash();
+                let s1 = shmmr1.hash();
                 let (shmmr_pair, orientation) = if s0 <= s1 {
                     ((s0, s1), 0_u8)
                 } else {
                     ((s1, s0), 1_u8)
                 };
-                //let shmmr_pair = (shmmr0.x >> 8, shmmr1.x >> 8);
                 let bgn = shmmr0.pos() + 1;
                 let end = shmmr1.pos() + 1;
                 let frg_len = end - bgn;
@@ -341,8 +340,8 @@ impl CompactSeqDB {
         let internal_frags = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let s0 = shmmr0.x >> 8;
-                let s1 = shmmr1.x >> 8;
+                let s0 = shmmr0.hash();
+                let s1 = shmmr1.hash();
                 let (shmmr_pair, orientation) = if s0 <= s1 {
                     ((s0, s1), 0_u8)
                 } else {
@@ -403,8 +402,8 @@ impl CompactSeqDB {
         let internal_frags: Vec<((u64, u64), u32, u32, u8)> = shmmr_pairs
             .par_iter()
             .map(|(shmmr0, shmmr1)| {
-                let s0 = shmmr0.x >> 8;
-                let s1 = shmmr1.x >> 8;
+                let s0 = shmmr0.hash();
+                let s1 = shmmr1.hash();
                 let (shmmr_pair, orientation) = if s0 <= s1 {
                     ((s0, s1), 0_u8)
                 } else {
@@ -905,8 +904,8 @@ pub fn query_fragment(
         .map(|(s0, s1)| {
             let p0 = s0.pos() + 1;
             let p1 = s1.pos() + 1;
-            let s0 = s0.x >> 8;
-            let s1 = s1.x >> 8;
+            let s0 = s0.hash();
+            let s1 = s1.hash();
             if s0 < s1 {
                 (s0, s1, p0, p1, 0_u8)
             } else {

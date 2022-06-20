@@ -167,8 +167,8 @@ mod tests {
         let shmmr_spec = seq_db::SHMMRSPEC;
         let shmmr0 = shmmrutils::sequence_to_shmmrs(0, &cs0, &shmmr_spec, false);
         let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec, false);
-        let shmmr0 = shmmr0.iter().map(|m| m.x >> 8).collect::<Vec<u64>>();
-        let shmmr1 = shmmr1.iter().rev().map(|m| m.x >> 8).collect::<Vec<u64>>();
+        let shmmr0 = shmmr0.iter().map(|m| m.hash()).collect::<Vec<u64>>();
+        let shmmr1 = shmmr1.iter().rev().map(|m| m.hash()).collect::<Vec<u64>>();
         assert!(shmmr0.len() > 0);
         assert_eq!(shmmr0, shmmr1);
     }
