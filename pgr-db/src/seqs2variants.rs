@@ -118,10 +118,10 @@ pub fn get_aln_segements(
 }
 
 pub fn get_aln_map(aln_segs: &Vec<AlnSegment>, s0: &str, s1: &str) -> Result<AlnMap, &'static str> {
-    let mut pmap = Vec::<(u32, u32)>::with_capacity(10000);
-    let mut ref_a_seq = Vec::<u8>::with_capacity(10000);
-    let mut tgt_a_seq = Vec::<u8>::with_capacity(10000);
-    let mut aln_seq = Vec::<u8>::with_capacity(10000);
+    let mut pmap = Vec::<(u32, u32)>::with_capacity(1 << 14);
+    let mut ref_a_seq = Vec::<u8>::with_capacity(1 << 14);
+    let mut tgt_a_seq = Vec::<u8>::with_capacity(1 << 14);
+    let mut aln_seq = Vec::<u8>::with_capacity(1 << 14 );
     let mut aln_p = 0;
     aln_segs.iter().for_each(|f| {
         let ref_bgn = f.ref_loc.bgn;
