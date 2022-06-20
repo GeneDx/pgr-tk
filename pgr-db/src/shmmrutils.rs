@@ -85,7 +85,7 @@ pub fn match_reads<'a>(
     let mut uv_map = FxHashMap::<i32, (u32, u32)>::default();
     // uv_map: maping k to the u, v, which keep the d path end in k
     let mut delta_pts = FxHashMap::<(u32, i32), DeltaPoint>::default();
-   
+
     let mut best_m = -1_i32;
     let mut matched = false;
     let mut d_final = 0_u32;
@@ -233,17 +233,37 @@ pub struct MM128 {
 
 impl fmt::Display for MM128 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hash = self.x >> 8;
-        let span = (self.x & 0xFF) as u8;
-        let rid = (self.y >> 32) as u32;
-        let pos = ((self.y & 0xFFFFFFFF) >> 1) as u32;
-        let strand = (self.y & 0x1) as u8;
-        write!(f, "({}, {}, {}, {}, {})", hash, span, rid, pos, strand)
+        write!(
+            f,
+            "({}, {}, {}, {}, {})",
+            self.hash(),
+            self.span(),
+            self.rid(),
+            self.pos(),
+            self.strand()
+        )
     }
 }
+
 impl MM128 {
+    pub fn hash(&self) -> u64 {
+        self.x >> 8
+    }
+
+    pub fn span(&self) -> u8 {
+        (self.x & 0xFF) as u8
+    }
+
+    pub fn rid(&self) -> u32 {
+        (self.y >> 32) as u32
+    }
+
     pub fn pos(&self) -> u32 {
         ((self.y & 0xFFFFFFFF) >> 1) as u32
+    }
+
+    pub fn strand(&self) -> u8 {
+        (self.y & 0x1) as u8
     }
 }
 
@@ -270,7 +290,7 @@ fn _u64hash(key: u64) -> u64 {
 }
 
 pub struct RingBuffer {
-    pub v: Vec<MM128>,
+    v: Vec<MM128>,
     pub size: usize,
     pub start_pos: usize,
     pub end_pos: usize,
