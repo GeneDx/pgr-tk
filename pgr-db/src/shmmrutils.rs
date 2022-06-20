@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
+use rustc_hash::FxHashMap;
 use std::fmt;
-
-use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub struct OvlpMatch {
@@ -33,8 +32,8 @@ pub struct DeltaPoint {
     pub dk: i32,
 }
 
-fn track_delta_point(
-    delta_pts: &HashMap<(u32, i32), DeltaPoint>,
+fn track_delta_point<'a>(
+    delta_pts: &'a FxHashMap<(u32, i32), DeltaPoint>,
     d_final: u32,
     k_final: i32,
     s: u32,
@@ -54,9 +53,9 @@ fn track_delta_point(
     dpts
 }
 
-pub fn match_reads(
-    seq0: &Vec<u8>,
-    seq1: &Vec<u8>,
+pub fn match_reads<'a>(
+    seq0: &'a Vec<u8>,
+    seq1: &'a Vec<u8>,
     get_delta: bool,
     tol: f64,
     min_match_len: u32,
@@ -83,9 +82,9 @@ pub fn match_reads(
     let band_tolerance = bandwidth;
     let mut k_min = 0_i32;
     let mut k_max = 0_i32;
-    let mut uv_map = HashMap::<i32, (u32, u32)>::new();
+    let mut uv_map = FxHashMap::<i32, (u32, u32)>::default();
     // uv_map: maping k to the u, v, which keep the d path end in k
-    let mut delta_pts = HashMap::<(u32, i32), DeltaPoint>::new();
+    let mut delta_pts = FxHashMap::<(u32, i32), DeltaPoint>::default();
     let mut x: u32;
     let mut y: u32;
     let mut x1: u32;
@@ -495,7 +494,7 @@ pub fn sequence_to_shmmrs1(
         } else if m.x <= min_mer.x
             && pos >= (w + k) as usize
             && pos < seq.len() - w as usize + k as usize
-            && pos < seq.len() 
+            && pos < seq.len()
         {
             shmmrs.push(m);
             //println!("dbg0: {} {}", pos, m.x >> 8);
