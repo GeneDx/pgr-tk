@@ -390,15 +390,16 @@ impl SeqIndexDB {
     /// -------
     ///
     /// list
-    ///     a list of tuples of (
-    ///                          position_in_the_context, 
-    ///                          (target_seq_id, target_position, orientation), 
-    ///                          (context_end, context_end), 
-    ///                          (target_end, target_end) 
-    ///                         )
-    ///     the sequences from (context_end, context_end) in the context sequence and
-    ///     the sequences from  (target_end, target_end)  in the target sequnence are
+    ///     a list of tuples of 
+    ///     (``position_in_the_context``, 
+    ///     (``target_seq_id``, ``target_position``, ``orientation``), 
+    ///     (``context_end``, ``context_end``), 
+    ///     (``target_end``, ``target_end``)) 
+    /// 
+    ///     the sequences from (``context_end``, ``context_end``) in the context sequence and
+    ///     the sequences from (``target_end``, ``target_end``) in the target sequnence are
     ///     used for the detailed alignment to pin down the exact mapped positions. 
+    /// 
     #[pyo3(
         text_signature = "($self, positions, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
     )]
