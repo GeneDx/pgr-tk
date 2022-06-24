@@ -4,7 +4,6 @@
 */libagc.so
 */test/test_data/test_shmmr.db
 libagc.so
-*/*.pyc
+*.pyc
 Cargo.lock
-pgr-tk/pgrtk/pgrlite.cpython-38-x86_64-linux-gnu.so
-pgr-tk/pgrtk/__pycache__/__init__.cpython-38.pyc
+pgr-tk/pgrtk/*.so
