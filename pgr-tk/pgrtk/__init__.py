@@ -203,6 +203,51 @@ def query_sdb(seq_index_db, query_seq,
     return aln_range
 
 
+def map_intervals_in_sdb(seq_index_db, interval, query_seq,
+              gap_penality_factor=0.001,
+              merge_range_tol=100,
+              max_count=32,
+              max_query_count=32,
+              max_target_count=32,
+              max_aln_span=8):
+    """
+    TODO: Document
+    
+    """
+
+    assert(len(interval) == 2)
+    
+    pos_map = seq_index_db.map_positions_in_seq(interval, query_seq, 0.001, 32, 32, 32, 100)
+    
+    seqid_to_positions = {}
+    
+    for res in pos_map:
+
+        pos = res[0]
+        sid, tpos, orientation = res[1]
+        
+        seqid_to_positions.setdefault(sid, {})
+        seqid_to_positions[sid].setdefault(pos, [])
+        seqid_to_positions[sid][pos].append((tpos, orientation))
+    
+    rtn = {}
+    for sid in seqid_to_positions:
+        #print(sid, seqid_to_positions[sid])
+        if interval[0] in seqid_to_positions[sid] and interval[1] in seqid_to_positions[sid]:
+            left_p = seqid_to_positions[sid][interval[0]]
+            right_p = seqid_to_positions[sid][interval[1]]
+            if len(left_p) != 1:
+                continue
+            if len(right_p) != 1:
+                continue
+            left_p, left_o = left_p[0]
+            right_p, right_o = right_p[0]
+            if left_o != right_o:
+                continue
+          
+            rtn[sid] = (left_o, left_p, right_p)
+    return rtn
+
 def merge_regions(rgns, tol=1000):
     """ Take a list of ranges and merge them if two regions are within ``tol``.
     Parameters
