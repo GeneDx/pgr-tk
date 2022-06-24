@@ -27,9 +27,10 @@ This shows a simple example to query the pangenomics database::
 
 """
 
+import pgrtk
 from .pgrtk import *
 
-__version__ = pgr_lib_version()
+__version__ = pgrtk.pgr_lib_version()
 
 byte_rc_map = dict(zip([ord(c) for c in "ACGTNnacgt"],
                    [ord(c) for c in "TGCANntgca"]))

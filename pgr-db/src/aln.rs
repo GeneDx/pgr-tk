@@ -1,7 +1,7 @@
 // use rayon::prelude::*;
 use crate::seq_db::{self, query_fragment, ShmmrToFrags};
 use crate::shmmrutils::{self, ShmmrSpec};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashSet;
 
 pub type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
@@ -72,7 +72,7 @@ pub fn sparse_aln(
         }
     });
 
-    let mut unvisited_v = HashSet::<HitPair>::new();
+    let mut unvisited_v = FxHashSet::<HitPair>::default();
     unvisited_v.extend(sp_hits.iter());
     let mut out = Vec::<(f32, Vec<HitPair>)>::new();
     while unvisited_v.len() > 0 {
