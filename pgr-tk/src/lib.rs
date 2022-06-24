@@ -354,9 +354,53 @@ impl SeqIndexDB {
         Ok(res)
     }
 
-    /// TODO: Document
+    /// Given a sequence context, this function maps the specific positions in the context
+    /// to the sequences in the database. The context sequence is aligned to the sequences 
+    /// in the database with sparse dynamic programming, then the regions include the 
+    /// positions of interest are identified. A wavefront alginment is performed to pin 
+    /// down the exact mapped poitions in the sequences in the database.
+    ///
+    /// Parameters
+    /// ----------
+    /// positions : list of integer
+    ///    a list of integers of the position to map
+    ///  
+    /// seq : list of bytes
+    ///    a list of bytes representing the DNA sequence providing to context
+    ///
+    /// penality : float
+    ///    the gap penalty factor used in sparse dyanmic programming for finding the hits
+    ///
+    /// merge_range_tol : int
+    ///    a parameter used to merge the alignment ranges
+    ///
+    /// max_count : int
+    ///    only use the shimmer pairs that less than the ``max_count`` for sparse dynamic programming
+    ///
+    /// max_query_count : int
+    ///    only use the shimmer pairs that less than the ``max_count`` in the query sequence for sparse dynamic programming
+    ///
+    /// max_query_count : int
+    ///    only use the shimmer pairs that less than the ``max_count`` in the target sequence for sparse dynamic programming
+    ///
+    /// max_aln_span : int
+    ///    the size of span used in the sparse dynamic alignment for finding the hits
+    ///
+    /// Returns
+    /// -------
+    ///
+    /// list
+    ///     a list of tuples of (
+    ///                          position_in_the_context, 
+    ///                          (target_seq_id, target_position, orientation), 
+    ///                          (context_end, context_end), 
+    ///                          (target_end, target_end) 
+    ///                         )
+    ///     the sequences from (context_end, context_end) in the context sequence and
+    ///     the sequences from  (target_end, target_end)  in the target sequnence are
+    ///     used for the detailed alignment to pin down the exact mapped positions. 
     #[pyo3(
-        text_signature = "($self, position, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
+        text_signature = "($self, positions, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
     )]
     pub fn map_positions_in_seq(
         &self,
