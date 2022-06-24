@@ -454,12 +454,12 @@ impl SeqIndexDB {
 
         // fetch the sequence for each match if possible
         let mut out = vec![];
+        if self.seq_info.is_none() {
+            return Ok(out);
+        };
         pos2hits.iter().for_each(|(pos, hits)| {
             hits.iter()
                 .for_each(|(seq_id, _score, left_match, right_match)| {
-                    if self.seq_info.is_none() {
-                        return;
-                    };
                     let (ctg, src, t_len) = self.seq_info.as_ref().unwrap().get(&seq_id).unwrap(); //TODO, check if seq_info is None
                     let same_orientation = if left_match.0 .2 == left_match.1 .2 {
                         true
