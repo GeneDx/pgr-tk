@@ -1,12 +1,12 @@
 // src/lib.rs
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
-use pgr_db::agc_io;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
+use pgr_db::{agc_io, fasta_io};
 use pyo3::exceptions;
 // use pgr_utils::fasta_io;
-use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
+use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec, DeltaPoint};
 // use pyo3::exceptions;
 use pyo3::prelude::*;
 // use pyo3::types::PyString;
@@ -354,6 +354,143 @@ impl SeqIndexDB {
         Ok(res)
     }
 
+    /// TODO: Document
+    #[pyo3(
+        text_signature = "($self, position, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
+    )]
+    pub fn map_positions_in_seq(
+        &self,
+        positions: Vec<u32>,
+        seq: Vec<u8>,
+        penality: f32,
+        max_count: Option<u32>,
+        max_count_query: Option<u32>,
+        max_count_target: Option<u32>,
+        max_aln_span: Option<u32>,
+    ) -> PyResult<Vec<(u32, (u32, u32, u8), (u32, u32), (u32, u32))>> {
+        let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let mut all_alns = aln::query_fragment_to_hps(
+            shmmr_to_frags,
+            &seq,
+            shmmr_spec,
+            penality,
+            max_count,
+            max_count_query,
+            max_count_target,
+            max_aln_span,
+        );
+
+        // for reach position, we find the left_match and right_match shimmer pair that sandwiched the
+        // positions. the algorithm is based on brute force search and should be optimized in the future
+        let mut pos2hits = FxHashMap::<u32, Vec<(u32, f32, HitPair, HitPair)>>::default();
+        all_alns.iter_mut().for_each(|(t_id, alns)| {
+            alns.iter_mut().for_each(|(score, hits)| {
+                hits.sort();
+                positions.iter().for_each(|&pos| {
+                    let mut out: Vec<(u32, f32, HitPair, HitPair)> = vec![];
+                    let mut left_match = None;
+                    let mut right_match = None;
+                    hits.iter().for_each(|&(v, w)| {
+                        if v.0 < pos {
+                            left_match = Some((v, w));
+                        }
+                        if right_match.is_none() && pos < v.1 {
+                            right_match = Some((v, w));
+                        }
+                    });
+                    if left_match.is_some() && right_match.is_some() {
+                        out.push((*t_id, *score, left_match.unwrap(), right_match.unwrap()));
+                    };
+                    pos2hits.entry(pos).or_insert(vec![]).extend(out);
+                });
+            });
+        });
+
+        // fetch the sequence for each match if possible
+        let mut out = vec![];
+        pos2hits.iter().for_each(|(pos, hits)| {
+            hits.iter()
+                .for_each(|(seq_id, _score, left_match, right_match)| {
+                    if self.seq_info.is_none() {
+                        return;
+                    };
+                    let (ctg, src, t_len) = self.seq_info.as_ref().unwrap().get(&seq_id).unwrap(); //TODO, check if seq_info is None
+                    let same_orientation = if left_match.0 .2 == left_match.1 .2 {
+                        true
+                    } else {
+                        false
+                    };
+
+                    let qb = left_match.0 .0;
+                    let qe = right_match.0 .1;
+                    let tb;
+                    let te;
+
+                    match same_orientation {
+                        true => {
+                            tb = left_match.1 .0;
+                            te = right_match.1 .1;
+                        }
+                        false => {
+                            tb = right_match.1 .0 - shmmr_spec.k;
+                            te = left_match.1 .1 - shmmr_spec.k;
+                        }
+                    };
+                    // println!("{:?} {:?} {} {} {} {}", left_match, right_match, qb, qe, tb, te);
+                    let mut t_seq = self
+                        .get_sub_seq(
+                            src.clone().unwrap().to_string(),
+                            ctg.clone(),
+                            tb as usize,
+                            te as usize,
+                        )
+                        .unwrap();
+
+                    if !same_orientation {
+                        t_seq = fasta_io::reverse_complement(&t_seq);
+                    }
+                    let q_seq = seq[qb as usize..qe as usize].to_vec();
+                    let ovlp =
+                        pgr_db::shmmrutils::match_reads(&q_seq, &t_seq, true, 0.05, 1, 1, 100);
+
+                    if ovlp.is_some() {
+                        let dpos = pos - qb;
+
+                        let mut delta = ovlp.unwrap().deltas.unwrap();
+                        
+                        delta.push( DeltaPoint{x:0, y:0, dk:0} );
+
+                        let mut dref = None;
+                        
+                        for dp in delta.iter() {
+                            if dp.x <= dpos {
+                                dref = Some( (dp.x, dp.y) );
+                                break;
+                            };
+                        };
+
+                        let dref = dref.unwrap();
+                        
+                        let orientation = if same_orientation {0_u8} else {1_u8}; 
+                        let dpos =  dpos + dref.1 - dref.0; 
+                        let (tb, te, tpos) = if same_orientation { (tb, te, tb + dpos) } else {
+                            (*t_len - te, *t_len - tb, *t_len - (te - dpos))
+                        };
+
+                        out.push((
+                            *pos,
+                            (*seq_id, tpos, orientation),
+                            (qb, qe),
+                            (tb, te)
+                        ));
+                    }
+                });
+        });
+
+        Ok(out)
+    }
+
     /// count the number of shimmer hits in the database
     ///
     /// Parameters
@@ -611,7 +748,7 @@ impl SeqIndexDB {
     /// Returns
     /// -------
     /// list
-    ///     list of node (node.0, node.1, node_count, is_leaf)
+    ///     list of node in the tuple (node, node_weight, is_leaf, global_rank, branch, branch_rank)
     ///
     ///
 
@@ -1236,6 +1373,7 @@ fn get_aln_map(
 ) -> PyResult<AlnMap> {
     let s0 = ref_seq.to_string();
     let s1 = tgt_seq.to_string();
+
     let aln_segs = aln_segs
         .par_iter()
         .map(|s| seqs2variants::AlnSegment {
@@ -1402,7 +1540,7 @@ pub fn guided_shmmr_dbg_consensus(
 /// list
 ///     a list of a set of bytes representing the consensus sequences of all branches in the graph
 ///
-#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov=2)]
+#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2)]
 #[pyo3(text_signature = "($self, seqs, w, k, r, min_span, min_cov)")]
 pub fn shmmr_sparse_aln_consensus(
     seqs: Vec<Vec<u8>>,
