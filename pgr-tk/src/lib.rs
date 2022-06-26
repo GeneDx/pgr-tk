@@ -482,7 +482,11 @@ impl SeqIndexDB {
                             te = left_match.1 .1 - shmmr_spec.k;
                         }
                     };
-                    // println!("{:?} {:?} {} {} {} {}", left_match, right_match, qb, qe, tb, te);
+                    //println!("{:?} {:?} {} {} {} {}", left_match, right_match, qb, qe, tb, te);
+                    if tb > te {
+                        // TBD: raise an warning? or error? The coordinates are not consistent wit the shimmer alignment orientation
+                        return
+                    }
                     let mut t_seq = self
                         .get_sub_seq(
                             src.clone().unwrap().to_string(),
