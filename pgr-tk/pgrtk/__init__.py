@@ -463,7 +463,7 @@ def output_variants_to_vcf_records(variant_calls, ref_name):
     return vcf_recs
 
 
-def compute_graph_diffusion_entropy(gfa_fn):
+def compute_graph_diffusion_entropy(gfa_fn, max_nodes = 6000):
     """ Give a GFA file name, compute an entropy by a simple diffusion model on the grap
         and generate the list of the final diffusion weight for each node
     
@@ -501,7 +501,7 @@ def compute_graph_diffusion_entropy(gfa_fn):
             adj_list[ n2 ]. append((n1, weight))
     
     n_node = len(adj_list)
-    if n_node > 5000:
+    if n_node > max_nodes:
         ## TODO: proper message to hanle big graph
         return None
 
