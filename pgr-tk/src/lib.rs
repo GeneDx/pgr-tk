@@ -840,7 +840,7 @@ impl SeqIndexDB {
     ///
     ///     the adj_list is written to a file in GFA v.1 format
     ///
-    pub fn generate_smp_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
+    pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
         let mut overlaps =
