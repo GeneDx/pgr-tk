@@ -777,7 +777,9 @@ pub fn frag_map_to_adj_list(
                 .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>()
         })
         .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
-
+    if out.len() < 2 {
+        return vec![];
+    }
     out.par_sort();
     let out = out
         .into_par_iter()
@@ -790,7 +792,8 @@ pub fn frag_map_to_adj_list(
         })
         .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>();
 
-    (0..out.len() - 1)
+    
+    (0..out.len()- 1)
         .into_par_iter()
         .flat_map(|i| {
             let v = out[i];
