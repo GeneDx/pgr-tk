@@ -804,7 +804,7 @@ impl SeqIndexDB {
     /// Returns
     /// -------
     /// list
-    ///     list of node in the tuple (node, node_weight, is_leaf, global_rank, branch, branch_rank)
+    ///     list of node in the tuple (node, parent_node, node_weight, is_leaf, global_rank, branch, branch_rank)
     ///
     ///
 
