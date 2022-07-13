@@ -4,8 +4,11 @@ use crate::graph_utils::ShmmrGraphNode;
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
+use petgraph::graphmap::DiGraphMap;
+use petgraph::visit::Dfs;
+use petgraph::EdgeDirection::{Incoming, Outgoing};
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -792,8 +795,7 @@ pub fn frag_map_to_adj_list(
         })
         .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>();
 
-    
-    (0..out.len()- 1)
+    (0..out.len() - 1)
         .into_par_iter()
         .flat_map(|i| {
             let v = out[i];
@@ -837,7 +839,6 @@ pub fn sort_adj_list_by_weighted_dfs(
 )> {
     // node, node_weight, is_leaf, global_rank, branch, branch_rank
     use crate::graph_utils::BiDiGraphWeightedDfs;
-    use petgraph::graphmap::DiGraphMap;
 
     let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
     let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
@@ -885,6 +886,104 @@ pub fn sort_adj_list_by_weighted_dfs(
         }
     }
     out
+}
+
+pub fn get_principle_paths_from_adj_list(
+    frag_map: &ShmmrToFrags,
+    adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
+    path_len_cut_off: usize,
+) -> Vec<Vec<ShmmrGraphNode>> {
+    assert!(adj_list.len() > 0);
+    let s = adj_list[0].1;
+    let sorted_adj_list = sort_adj_list_by_weighted_dfs(frag_map, adj_list, s);
+
+    let mut paths: Vec<Vec<(u64, u64, u8)>> = vec![];
+    let mut path: Vec<(u64, u64, u8)> = vec![];
+    for v in sorted_adj_list.into_iter() {
+        path.push(v.0);
+        if v.3 == true {
+            // it is a leaf node
+            paths.push(path.clone());
+            path.clear()
+        }
+    }
+
+    let paths: Vec<Vec<(u64, u64, u8)>> = paths
+        .into_iter()
+        .filter(|p| p.len() > path_len_cut_off as usize)
+        .collect();
+
+    let mut main_path_bundle_vertices = FxHashSet::<(u64, u64)>::default();
+
+    paths.into_iter().for_each(|p| {
+        p.into_iter().for_each(|v| {
+            main_path_bundle_vertices.insert((v.0, v.1));
+        })
+    });
+
+    let mut g0 = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    adj_list.into_iter().for_each(|&(_sid, v, w)| {
+        if main_path_bundle_vertices.contains(&(v.0, v.1))
+            && main_path_bundle_vertices.contains(&(w.0, w.1))
+        {
+            g0.add_edge(
+                ShmmrGraphNode(v.0, v.1, v.2),
+                ShmmrGraphNode(w.0, w.1, w.2),
+                (),
+            );
+        }
+    });
+
+    let mut g1 = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    let mut terminal_vertices = FxHashSet::<ShmmrGraphNode>::default();
+    for (v, w, _) in g0.all_edges() {
+        let mut remove_edge = false;
+        if g0.neighbors_directed(v, Outgoing).count() > 1
+            || g0.neighbors_directed(v, Incoming).count() > 1
+        {
+            terminal_vertices.insert(v);
+            remove_edge = true;
+        };
+        if g0.neighbors_directed(w, Outgoing).count() > 1
+            || g0.neighbors_directed(w, Incoming).count() > 1
+        {
+            terminal_vertices.insert(w);
+            remove_edge = true;
+        };
+        if !remove_edge {
+            g1.add_edge(
+                ShmmrGraphNode(v.0, v.1, v.2),
+                ShmmrGraphNode(w.0, w.1, w.2),
+                (),
+            );
+        }
+    }
+
+    let mut starts = Vec::<ShmmrGraphNode>::default();
+    for v in g1.nodes() {
+        if g1.neighbors_directed(v, Incoming).count() == 0 {
+            starts.push(v);
+        }
+    }
+
+    let mut principle_paths = Vec::<Vec<ShmmrGraphNode>>::new();
+
+    while starts.len() != 0 {
+        let s = starts.pop().unwrap();
+        let mut dfs = Dfs::new(&g1, s);
+        let mut path = Vec::<ShmmrGraphNode>::new();
+        while let Some(v) = dfs.next(&g1) {
+            path.push(v);
+        }
+        if path.len() > 0 {
+            path.iter().for_each(|&v| {
+                g1.remove_node(v);
+                g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
+            });
+            principle_paths.push(path);
+        }
+    }
+    principle_paths
 }
 
 impl CompactSeqDB {

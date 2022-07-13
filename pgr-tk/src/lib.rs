@@ -6,7 +6,7 @@ use pgr_db::seq_db;
 use pgr_db::{agc_io, fasta_io};
 use pyo3::exceptions;
 // use pgr_utils::fasta_io;
-use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec, DeltaPoint};
+use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
 // use pyo3::exceptions;
 use pyo3::prelude::*;
 // use pyo3::types::PyString;
@@ -355,9 +355,9 @@ impl SeqIndexDB {
     }
 
     /// Given a sequence context, this function maps the specific positions in the context
-    /// to the sequences in the database. The context sequence is aligned to the sequences 
-    /// in the database with sparse dynamic programming, then the regions include the 
-    /// positions of interest are identified. A wavefront alginment is performed to pin 
+    /// to the sequences in the database. The context sequence is aligned to the sequences
+    /// in the database with sparse dynamic programming, then the regions include the
+    /// positions of interest are identified. A wavefront alginment is performed to pin
     /// down the exact mapped poitions in the sequences in the database.
     ///
     /// Parameters
@@ -390,16 +390,16 @@ impl SeqIndexDB {
     /// -------
     ///
     /// list
-    ///     a list of tuples of 
-    ///     (``position_in_the_context``, 
-    ///     (``target_seq_id``, ``target_position``, ``orientation``), 
-    ///     (``context_end``, ``context_end``), 
-    ///     (``target_end``, ``target_end``)) 
-    /// 
+    ///     a list of tuples of
+    ///     (``position_in_the_context``,
+    ///     (``target_seq_id``, ``target_position``, ``orientation``),
+    ///     (``context_end``, ``context_end``),
+    ///     (``target_end``, ``target_end``))
+    ///
     ///     the sequences from (``context_end``, ``context_end``) in the context sequence and
     ///     the sequences from (``target_end``, ``target_end``) in the target sequnence are
-    ///     used for the detailed alignment to pin down the exact mapped positions. 
-    /// 
+    ///     used for the detailed alignment to pin down the exact mapped positions.
+    ///
     #[pyo3(
         text_signature = "($self, positions, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
     )]
@@ -488,7 +488,7 @@ impl SeqIndexDB {
                     if tb >= te {
                         // println!("{:?} {:?} {} {} {} {}", left_match, right_match, qb, qe, tb, te);
                         // TBD: raise an warning? or error? The coordinates are not consistent wit the shimmer alignment orientation
-                        return
+                        return;
                     }
                     let mut t_seq = self
                         .get_sub_seq(
@@ -514,32 +514,29 @@ impl SeqIndexDB {
                         let dpos = pos - qb;
 
                         let mut delta = ovlp.unwrap().deltas.unwrap();
-                        
-                        delta.push( DeltaPoint{x:0, y:0, dk:0} );
+
+                        delta.push(DeltaPoint { x: 0, y: 0, dk: 0 });
 
                         let mut dref = None;
-                        
+
                         for dp in delta.iter() {
                             if dp.x <= dpos {
-                                dref = Some( (dp.x, dp.y) );
+                                dref = Some((dp.x, dp.y));
                                 break;
                             };
-                        };
+                        }
 
                         let dref = dref.unwrap();
-                        
-                        let orientation = if same_orientation {0_u8} else {1_u8}; 
-                        let dpos =  dpos + dref.1 - dref.0; 
-                        let (tb, te, tpos) = if same_orientation { (tb, te, tb + dpos) } else {
+
+                        let orientation = if same_orientation { 0_u8 } else { 1_u8 };
+                        let dpos = dpos + dref.1 - dref.0;
+                        let (tb, te, tpos) = if same_orientation {
+                            (tb, te, tb + dpos)
+                        } else {
                             (*t_len - te, *t_len - tb, *t_len - (te - dpos))
                         };
 
-                        out.push((
-                            *pos,
-                            (*seq_id, tpos, orientation),
-                            (qb, qe),
-                            (tb, te)
-                        ));
+                        out.push((*pos, (*seq_id, tpos, orientation), (qb, qe), (tb, te)));
                     }
                 });
         });
@@ -823,6 +820,42 @@ impl SeqIndexDB {
     )> {
         let frag_map = self.get_shmmr_map_internal();
         seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+    }
+
+    /// Ger the principle paths in MAPG
+    ///
+    /// Parameters
+    /// ----------
+    /// min_count : int
+    ///     minimum coverage count to be included in the graph
+    ///
+    /// path_len_cut_off : int
+    ///     remove short path less than path_len_cut_off when generating the principle path
+    ///     
+    ///     if the number is small, the generated principle paths will be more fragemented.
+    ///  
+    /// Returns
+    /// -------
+    /// list
+    ///     list of paths, each path is a list of nodes
+    ///
+    ///
+    pub fn get_princple_paths(
+        &self,
+        min_count: usize,
+        path_len_cut_off: usize,
+    ) -> Vec<Vec<(u64, u64, u8)>> {
+        let frag_map = self.get_shmmr_map_internal();
+        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
+
+        let mut princple_paths =
+            seq_db::get_principle_paths_from_adj_list(frag_map, &adj_list, path_len_cut_off)
+                .into_iter()
+                .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
+                .collect::<Vec<Vec<(u64, u64, u8)>>>();
+
+        princple_paths.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
+        princple_paths
     }
 
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
