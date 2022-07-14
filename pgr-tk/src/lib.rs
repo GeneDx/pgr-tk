@@ -822,7 +822,7 @@ impl SeqIndexDB {
         seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
     }
 
-    /// Ger the principle paths in MAPG
+    /// Ger the principle bundles in MAPG
     ///
     /// Parameters
     /// ----------
@@ -840,7 +840,7 @@ impl SeqIndexDB {
     ///     list of paths, each path is a list of nodes
     ///
     ///
-    pub fn get_princple_paths(
+    pub fn get_princple_bundles(
         &self,
         min_count: usize,
         path_len_cut_off: usize,
@@ -848,14 +848,14 @@ impl SeqIndexDB {
         let frag_map = self.get_shmmr_map_internal();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
 
-        let mut princple_paths =
-            seq_db::get_principle_paths_from_adj_list(frag_map, &adj_list, path_len_cut_off)
+        let mut principle_bundles =
+            seq_db::get_principle_bundles_from_adj_list(frag_map, &adj_list, path_len_cut_off)
                 .into_iter()
                 .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
                 .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
-        princple_paths.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
-        princple_paths
+        principle_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
+        principle_bundles
     }
 
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
