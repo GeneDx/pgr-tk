@@ -888,7 +888,7 @@ pub fn sort_adj_list_by_weighted_dfs(
     out
 }
 
-pub fn get_principle_bundles_from_adj_list(
+pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     path_len_cut_off: usize,
@@ -966,7 +966,7 @@ pub fn get_principle_bundles_from_adj_list(
         }
     }
 
-    let mut principle_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
+    let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
 
     while starts.len() != 0 {
         let s = starts.pop().unwrap();
@@ -980,10 +980,10 @@ pub fn get_principle_bundles_from_adj_list(
                 g1.remove_node(v);
                 g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
             });
-            principle_bundles.push(path);
+            principal_bundles.push(path);
         }
     }
-    principle_bundles
+    principal_bundles
 }
 
 impl CompactSeqDB {
