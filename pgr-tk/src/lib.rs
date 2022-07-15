@@ -840,7 +840,7 @@ impl SeqIndexDB {
     ///     list of paths, each path is a list of nodes
     ///
     ///
-    pub fn get_princpal_bundles(
+    pub fn get_principal_bundles(
         &self,
         min_count: usize,
         path_len_cut_off: usize,
