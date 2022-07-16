@@ -502,7 +502,7 @@ def compute_graph_diffusion_entropy(gfa_fn, max_nodes = 6000):
     
     n_node = len(adj_list)
     if n_node > max_nodes:
-        ## TODO: proper message to hanle big graph
+        ## TODO: proper message to handle big graph
         return None
 
     adj_matrix = np.zeros( (n_node, n_node), dtype=np.float32 )
