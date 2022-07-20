@@ -989,7 +989,14 @@ impl SeqIndexDB {
             })?;
         Ok(())
     }
+   
+    // for backward compatibility 
+    pub fn write_midx_to_text_file(&self, filepath: &str) ->  Result<(), std::io::Error>  {
+        self.write_mapg_idx(filepath)
+    }
 }
+
+
 
 impl SeqIndexDB {
     // depending on the storage type, return the corresponding index
