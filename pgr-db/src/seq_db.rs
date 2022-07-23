@@ -891,8 +891,9 @@ pub fn sort_adj_list_by_weighted_dfs(
 pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
-    path_len_cut_off: usize,
+    path_len_cutoff: usize,
 ) -> Vec<Vec<ShmmrGraphNode>> {
+
     assert!(adj_list.len() > 0);
     let s = adj_list[0].1;
     let sorted_adj_list = sort_adj_list_by_weighted_dfs(frag_map, adj_list, s);
@@ -910,7 +911,7 @@ pub fn get_principal_bundles_from_adj_list(
 
     let long_paths: Vec<Vec<(u64, u64, u8)>> = paths
         .into_iter()
-        .filter(|p| p.len() > path_len_cut_off as usize)
+        .filter(|p| p.len() > path_len_cutoff as usize)
         .collect();
 
     let mut main_bundle_path_vertices = FxHashSet::<(u64, u64)>::default();
