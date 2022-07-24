@@ -962,7 +962,31 @@ impl SeqIndexDB {
 
     /// Get the principal bundles and bundle decomposition of all seqeuences
     ///
+    /// Parameters
+    /// ----------
+    /// min_count : int
+    ///     minimum coverage count to be included in the graph
     ///
+    /// path_len_cut_off : int
+    ///     remove short path less than path_len_cut_off when generating the principal path
+    ///     
+    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///  
+    /// Returns
+    /// -------
+    /// tuple
+    ///     a tuple consist of two lists: (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
+    ///  
+    ///     principal_bundles = list of (principal_bundle_id, size_of_the_principal_bundle, list_bundle_vertex)
+    ///    
+    ///     list_of_bundle_vertex = list of (hash0:u64, hash0:u64, direction:u8) 
+    /// 
+    ///     seqid_smps_with_bundle_id_seg_direction = list of shimmer pairs in the database annotated with principal bundle id and direction
+    ///     
+    ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0), 
+    ///                                   (principal_bundle_is, direction, order_in_the_bundle))
+    /// 
+    /// 
     pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
@@ -1005,11 +1029,11 @@ impl SeqIndexDB {
         let mut vertex_to_bundle_id_direction_pos: FxHashMap<(u64, u64), (usize, u8, usize)> = pb
             .iter()
             .enumerate()
-            .flat_map(|(i, path)| {
+            .flat_map(|(bundle_id, path)| {
                 path.iter()
                     .enumerate()
                     .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
-                    .map(|(p, v)| ((v.0, v.1), (i, v.2, p)))
+                    .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
                     .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
             })
             .collect();
@@ -1134,7 +1158,8 @@ impl SeqIndexDB {
     /// Returns
     /// -------
     ///
-    ///     the adj_list is written to a file in GFA v.1 format
+    /// None
+    ///     The data is written into the file at filepath
     ///
     pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
@@ -1171,7 +1196,7 @@ impl SeqIndexDB {
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line = format!(
-                    "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\n",
+                    "S\t{}\t*\tLN:bundle_id:{}\tSN:Z:{:016x}_{:016x}\n",
                     id, ave_len, smp.0, smp.1
                 );
                 out_file.write(seg_line.as_bytes())?;
@@ -1188,7 +1213,7 @@ impl SeqIndexDB {
                 let id0 = frag_id.get(&(op.0 .0, op.0 .1)).unwrap();
                 let id1 = frag_id.get(&(op.1 .0, op.1 .1)).unwrap();
                 let overlap_line = format!(
-                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:i:{}\n",
+                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:bundle_id:{}\n",
                     id0,
                     o1,
                     id1,
@@ -1202,6 +1227,21 @@ impl SeqIndexDB {
 
         Ok(())
     }
+
+    
+    /// Write addtional meta data for GFA into a file
+    ///
+    /// Parameters
+    /// ----------
+    /// filenpath : string
+    ///     the path to the output file
+    /// 
+    /// Returns
+    /// -------
+    ///
+    /// None
+    ///     The data is written into the file at filepath
+    ///
 
     fn write_mapg_idx(&self, filepath: &str) -> Result<(), std::io::Error> {
         let mut writer = BufWriter::new(File::create(filepath)?);
