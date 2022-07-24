@@ -861,7 +861,7 @@ impl SeqIndexDB {
     /// Get the principal bundles and bundle decomposition of all seqeuences
     ///
     ///
-    pub fn get_bundle_decomposition(
+    pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
         path_len_cutoff: usize,
