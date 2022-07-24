@@ -16,7 +16,7 @@ use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -288,6 +288,32 @@ impl SeqIndexDB {
         let shmmr_to_frags = self.get_shmmr_map_internal();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
             seq_db::query_fragment(shmmr_to_frags, &seq, shmmr_spec);
+        Ok(res)
+    }
+
+    /// use a fragement of sequence to query the database to get all hits and sort it by the data base sequence id
+    ///
+    /// Parameters
+    /// ----------
+    ///
+    /// seq : list
+    ///     the sequnece in bytes used for query
+    ///
+    /// Returns
+    /// -------
+    ///
+    /// dict
+    ///   a dictionary maps sequence id in the database to a list of tuple (position0, position1, direction)
+    ///       
+    ///
+    #[pyo3(text_signature = "($self, seq)")]
+    pub fn get_match_positions_with_fragment(
+        &self,
+        seq: Vec<u8>,
+    ) -> PyResult<FxHashMap<u32, Vec<(u32, u32, u8)>>> {
+        let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let res = seq_db::get_match_positions_with_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
     }
 
@@ -738,12 +764,53 @@ impl SeqIndexDB {
         }
     }
 
+    /// fetch a contiguous sub-sequence by a sequence id
+    ///
+    /// Parameters
+    /// ----------
+    /// sid : int
+    ///     sequence id in the database
+    ///
+    /// bgn : int
+    ///     the starting coordinate (0-based)
+    /// end : int
+    ///     the ending coordinate (exclusive)  
+    ///
+    /// Returns
+    /// -------
+    /// list
+    ///     a list of bytes representing the sequence
+    #[pyo3(text_signature = "($self, sample_name, ctg_name, bgn, end)")]
+    pub fn get_sub_seq_by_id(&self, sid: u32, bgn: usize, end: usize) -> PyResult<Vec<u8>> {
+        let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+        let ctg_name = ctg_name.clone();
+        let sample_name = sample_name.as_ref().unwrap().clone();
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_sub_seq(sample_name, ctg_name, bgn, end))
+        } else {
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name)))
+                .unwrap();
+            let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
+            Ok(seq[bgn..end].to_vec())
+        }
+    }
+
     /// fetch a sequence
     ///
     /// Parameters
     /// ----------
     /// sample_name : string
     ///     the sample name stored in the AGC file
+    ///
     /// ctg_name : string
     ///     the contig name stored in the AGC file
     ///
@@ -753,6 +820,43 @@ impl SeqIndexDB {
     ///     a list of bytes representing the sequence
     #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_seq(sample_name, ctg_name))
+        } else {
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name)))
+                .unwrap();
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
+        }
+    }
+
+    /// fetch a sequence by the sequence id in the database
+    ///
+    /// Parameters
+    /// ----------
+    /// sid : int
+    ///     sequence id in the database
+    ///
+    /// ctg_name : string
+    ///     the contig name stored in the AGC file
+    ///
+    /// Returns
+    /// -------
+    /// list
+    ///     a list of bytes representing the sequence
+    #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
+    pub fn get_seq_by_id(&self, sid: u32) -> PyResult<Vec<u8>> {
+        let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+        let ctg_name = ctg_name.clone();
+        let sample_name = sample_name.as_ref().unwrap().clone();
         if self.agc_db.is_some() {
             Ok(self
                 .agc_db
@@ -822,7 +926,7 @@ impl SeqIndexDB {
         seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
     }
 
-    /// Ger the principal bundles in MAPG
+    /// Get the principal bundles in MAPG
     ///
     /// Parameters
     /// ----------
@@ -843,19 +947,204 @@ impl SeqIndexDB {
     pub fn get_principal_bundles(
         &self,
         min_count: usize,
-        path_len_cut_off: usize,
+        path_len_cutoff: usize,
     ) -> Vec<Vec<(u64, u64, u8)>> {
         let frag_map = self.get_shmmr_map_internal();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
 
         let mut principal_bundles =
-            seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cut_off)
+            seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
                 .into_iter()
                 .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
                 .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
         principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
         principal_bundles
+    }
+
+    /// Get the principal bundles and bundle decomposition of all seqeuences
+    ///
+    /// Parameters
+    /// ----------
+    /// min_count : int
+    ///     minimum coverage count to be included in the graph
+    ///
+    /// path_len_cut_off : int
+    ///     remove short path less than path_len_cut_off when generating the principal path
+    ///     
+    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///  
+    /// Returns
+    /// -------
+    /// tuple
+    ///     a tuple consist of two lists: (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
+    ///  
+    ///     principal_bundles = list of (principal_bundle_id, size_of_the_principal_bundle, list_bundle_vertex)
+    ///    
+    ///     list_of_bundle_vertex = list of (hash0:u64, hash0:u64, direction:u8) 
+    /// 
+    ///     seqid_smps_with_bundle_id_seg_direction = list of shimmer pairs in the database annotated with principal bundle id and direction
+    ///     
+    ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0), 
+    ///                                   (principal_bundle_is, direction, order_in_the_bundle))
+    /// 
+    /// 
+    pub fn get_principal_bundle_decomposition(
+        &self,
+        min_count: usize,
+        path_len_cutoff: usize,
+    ) -> (
+        Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
+        Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>,
+    ) {
+        fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
+            let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+            seq_db::pair_shmmrs(&shmmrs)
+                .par_iter()
+                .map(|(s0, s1)| {
+                    let p0 = s0.pos() + 1;
+                    let p1 = s1.pos() + 1;
+                    let s0 = s0.x >> 8;
+                    let s1 = s1.x >> 8;
+                    if s0 < s1 {
+                        (s0, s1, p0, p1, 0_u8)
+                    } else {
+                        (s1, s0, p0, p1, 1_u8)
+                    }
+                })
+                .collect::<Vec<(u64, u64, u32, u32, u8)>>()
+        }
+
+        let pb = self.get_principal_bundles(min_count, path_len_cutoff);
+
+        // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
+        let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
+        pb.iter().for_each(|bundle| {
+            bundle.iter().for_each(|v| {
+                *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
+            })
+        });
+
+        let mut vertex_to_bundle_id_direction_pos: FxHashMap<(u64, u64), (usize, u8, usize)> = pb
+            .iter()
+            .enumerate()
+            .flat_map(|(bundle_id, path)| {
+                path.iter()
+                    .enumerate()
+                    .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
+                    .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
+                    .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
+            })
+            .collect();
+
+        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
+            .seq_info
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|(sid, data)| {
+                let (ctg_name, source, _) = data;
+                let source = source.clone().unwrap();
+                let seq = self.get_seq(source.clone(), ctg_name.clone()).unwrap();
+                (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
+            })
+            .collect();
+
+        // data for reordering the bundles and for re-ordering them along the sequnces
+        let mut bundle_id_to_directions = FxHashMap::<usize, Vec<u32>>::default();
+        let mut bundle_id_to_orders = FxHashMap::<usize, Vec<f32>>::default();
+        seqid_smps.iter().for_each(|(_sid, smps)| {
+            let mut bundle_visited = FxHashSet::<usize>::default();
+            smps.iter().enumerate().for_each(|(order, v)| {
+                if let Some(bid) = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)) {
+                    if !bundle_visited.contains(&bid.0) {
+                        bundle_id_to_orders
+                            .entry(bid.0)
+                            .or_insert(vec![])
+                            .push(order as f32);
+                        bundle_visited.insert(bid.0);
+                    }
+                    let direction = match bid.1 == v.4 {
+                        true => 0,
+                        false => 1,
+                    };
+                    bundle_id_to_directions
+                        .entry(bid.0)
+                        .or_insert(vec![])
+                        .push(direction);
+                }
+            })
+        });
+
+        // determine the bundles' overall orders and directions by consensus voting
+        let mut bundle_mean_order_direction = bundle_id_to_orders
+            .iter()
+            .map(|(bid, orders)| {
+                let sum: f32 = orders.iter().sum();
+                let mean_ord = sum / (orders.len() as f32);
+                let mean_ord = mean_ord as usize;
+                let directions = bundle_id_to_directions.get(bid).unwrap();
+                let dir_sum = directions.iter().sum::<u32>() as usize;
+                let direction = if dir_sum < (directions.len() >> 1) {
+                    0_u8
+                } else {
+                    1_u8
+                };
+                (mean_ord, *bid, direction)
+            })
+            .collect::<Vec<(usize, usize, u8)>>();
+
+        bundle_mean_order_direction.sort();
+        // re-order the principal bundles
+        let principal_bundles = bundle_mean_order_direction
+            .iter()
+            .map(|(ord, bid, direction)| {
+                let bundle = if *direction == 1 {
+                    let rpb = pb[*bid]
+                        .iter()
+                        .rev()
+                        .map(|v| (v.0, v.1, 1 - v.2))
+                        .collect::<Vec<(u64, u64, u8)>>();
+                    rpb.iter().enumerate().for_each(|(p, v)| {
+                        vertex_to_bundle_id_direction_pos.insert((v.0, v.1), (*bid, v.2, p));
+                        // overide what in the hashpmap
+                    });
+                    rpb
+                } else {
+                    pb[*bid].clone()
+                };
+
+                (*bid, *ord, bundle)
+            })
+            .collect::<Vec<(usize, usize, Vec<(u64, u64, u8)>)>>();
+
+        // loop through each sequnece and generate the decomposition for the sequence
+        let seqid_smps_with_bundle_id_seg_direction = seqid_smps
+            .iter()
+            .map(|(sid, smps)| {
+                let smps = smps
+                    .into_iter()
+                    .map(|v| {
+                        let seg_match =
+                            if let Some(m) = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)) {
+                                Some(*m)
+                            } else {
+                                None
+                            };
+                        (*v, seg_match)
+                    })
+                    .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
+                (*sid, smps)
+            })
+            .collect::<Vec<(
+                u32,
+                Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+            )>>();
+
+        (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     }
 
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
@@ -871,7 +1160,8 @@ impl SeqIndexDB {
     /// Returns
     /// -------
     ///
-    ///     the adj_list is written to a file in GFA v.1 format
+    /// None
+    ///     The data is written into the file at filepath
     ///
     pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
@@ -908,7 +1198,7 @@ impl SeqIndexDB {
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line = format!(
-                    "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\n",
+                    "S\t{}\t*\tLN:bundle_id:{}\tSN:Z:{:016x}_{:016x}\n",
                     id, ave_len, smp.0, smp.1
                 );
                 out_file.write(seg_line.as_bytes())?;
@@ -925,7 +1215,7 @@ impl SeqIndexDB {
                 let id0 = frag_id.get(&(op.0 .0, op.0 .1)).unwrap();
                 let id1 = frag_id.get(&(op.1 .0, op.1 .1)).unwrap();
                 let overlap_line = format!(
-                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:i:{}\n",
+                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:bundle_id:{}\n",
                     id0,
                     o1,
                     id1,
@@ -939,6 +1229,21 @@ impl SeqIndexDB {
 
         Ok(())
     }
+
+    
+    /// Write addtional meta data for GFA into a file
+    ///
+    /// Parameters
+    /// ----------
+    /// filenpath : string
+    ///     the path to the output file
+    /// 
+    /// Returns
+    /// -------
+    ///
+    /// None
+    ///     The data is written into the file at filepath
+    ///
 
     fn write_mapg_idx(&self, filepath: &str) -> Result<(), std::io::Error> {
         let mut writer = BufWriter::new(File::create(filepath)?);
@@ -989,14 +1294,12 @@ impl SeqIndexDB {
             })?;
         Ok(())
     }
-   
-    // for backward compatibility 
-    pub fn write_midx_to_text_file(&self, filepath: &str) ->  Result<(), std::io::Error>  {
+
+    // for backward compatibility
+    pub fn write_midx_to_text_file(&self, filepath: &str) -> Result<(), std::io::Error> {
         self.write_mapg_idx(filepath)
     }
 }
-
-
 
 impl SeqIndexDB {
     // depending on the storage type, return the corresponding index
