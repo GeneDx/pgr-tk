@@ -291,6 +291,32 @@ impl SeqIndexDB {
         Ok(res)
     }
 
+    /// use a fragement of sequence to query the database to get all hits and sort it by the data base sequence id
+    ///
+    /// Parameters
+    /// ----------
+    ///
+    /// seq : list
+    ///     the sequnece in bytes used for query
+    ///
+    /// Returns
+    /// -------
+    ///
+    /// dict
+    ///   a dictionary maps sequence id in the database to a list of tuple (position0, position1, direction)
+    ///       
+    ///
+    #[pyo3(text_signature = "($self, seq)")]
+    pub fn get_match_positions_with_fragment(
+        &self,
+        seq: Vec<u8>,
+    ) -> PyResult<FxHashMap<u32, Vec<(u32, u32, u8)>>> {
+        let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let res = seq_db::get_match_positions_with_fragment(shmmr_to_frags, &seq, shmmr_spec);
+        Ok(res)
+    }
+
     /// use a fragement of sequence to query the database to get all hits
     ///
     /// sparese dynamic programming is performed to long chain of alignment
@@ -738,12 +764,52 @@ impl SeqIndexDB {
         }
     }
 
+    /// fetch a contiguous sub-sequence by a sequence id
+    ///
+    /// Parameters
+    /// ----------
+    /// sid : int
+    ///     sequence id in the database
+    ///
+    /// bgn : int
+    ///     the starting coordinate (0-based)
+    /// end : int
+    ///     the ending coordinate (exclusive)  
+    ///
+    /// Returns
+    /// -------
+    /// list
+    ///     a list of bytes representing the sequence
+    #[pyo3(text_signature = "($self, sample_name, ctg_name, bgn, end)")]
+    pub fn get_sub_seq_by_id(&self, sid: u32, bgn: usize, end: usize) -> PyResult<Vec<u8>> {
+        let (sample_name, ctg_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+        let ctg_name = ctg_name.as_ref().unwrap().clone();
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_sub_seq(sample_name.clone(), ctg_name, bgn, end))
+        } else {
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name.clone())))
+                .unwrap();
+            let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
+            Ok(seq[bgn..end].to_vec())
+        }
+    }
+
     /// fetch a sequence
     ///
     /// Parameters
     /// ----------
     /// sample_name : string
     ///     the sample name stored in the AGC file
+    ///
     /// ctg_name : string
     ///     the contig name stored in the AGC file
     ///
@@ -766,6 +832,42 @@ impl SeqIndexDB {
                 .as_ref()
                 .unwrap()
                 .get(&(ctg_name, Some(sample_name)))
+                .unwrap();
+            Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
+        }
+    }
+
+    /// fetch a sequence by the sequence id in the database
+    ///
+    /// Parameters
+    /// ----------
+    /// sid : int
+    ///     sequence id in the database
+    ///
+    /// ctg_name : string
+    ///     the contig name stored in the AGC file
+    ///
+    /// Returns
+    /// -------
+    /// list
+    ///     a list of bytes representing the sequence
+    #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
+    pub fn get_seq_by_id(&self, sid: u32) -> PyResult<Vec<u8>> {
+        let (sample_name, ctg_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+        let ctg_name = ctg_name.as_ref().unwrap().clone();
+        if self.agc_db.is_some() {
+            Ok(self
+                .agc_db
+                .as_ref()
+                .unwrap()
+                .0
+                .get_seq(sample_name.clone(), ctg_name))
+        } else {
+            let &(sid, _) = self
+                .seq_index
+                .as_ref()
+                .unwrap()
+                .get(&(ctg_name, Some(sample_name.clone())))
                 .unwrap();
             Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
         }
@@ -867,7 +969,10 @@ impl SeqIndexDB {
         path_len_cutoff: usize,
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
-        Vec<(u32, Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>)>,
+        Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>,
     ) {
         fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
             let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
@@ -901,7 +1006,8 @@ impl SeqIndexDB {
             .iter()
             .enumerate()
             .flat_map(|(i, path)| {
-                path.iter().enumerate()
+                path.iter()
+                    .enumerate()
                     .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
                     .map(|(p, v)| ((v.0, v.1), (i, v.2, p)))
                     .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
@@ -1007,7 +1113,10 @@ impl SeqIndexDB {
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
                 (*sid, smps)
             })
-            .collect::<Vec<(u32, Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>)>>();
+            .collect::<Vec<(
+                u32,
+                Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+            )>>();
 
         (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     }
