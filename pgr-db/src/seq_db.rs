@@ -891,7 +891,7 @@ pub fn sort_adj_list_by_weighted_dfs(
 pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
-    path_len_cut_off: usize,
+    path_len_cutoff: usize,
 ) -> Vec<Vec<ShmmrGraphNode>> {
     assert!(adj_list.len() > 0);
     let s = adj_list[0].1;
@@ -910,7 +910,7 @@ pub fn get_principal_bundles_from_adj_list(
 
     let long_paths: Vec<Vec<(u64, u64, u8)>> = paths
         .into_iter()
-        .filter(|p| p.len() > path_len_cut_off as usize)
+        .filter(|p| p.len() > path_len_cutoff as usize)
         .collect();
 
     let mut main_bundle_path_vertices = FxHashSet::<(u64, u64)>::default();
@@ -1023,6 +1023,26 @@ pub fn query_fragment(
         })
         .collect::<Vec<_>>();
     query_results
+}
+
+pub fn get_match_positions_with_fragment(
+    shmmr_map: &ShmmrToFrags,
+    frag: &Vec<u8>,
+    shmmr_spec: &ShmmrSpec,
+) -> FxHashMap<u32, Vec<(u32, u32, u8)>> {
+    let mut res = FxHashMap::<u32, Vec<(u32, u32, u8)>>::default();
+    query_fragment(shmmr_map, &frag, shmmr_spec)
+        .into_iter()
+        .for_each(|v| {
+            let q_direction = v.1 .2;
+            v.2.into_iter().for_each(|w| {
+                let (_, sid, p0, p1, direction) = w;
+                let direction = if direction == q_direction { 0 } else { 1 };
+                res.entry(sid).or_insert(vec![]).push((p0, p1, direction));
+            });
+        });
+    res.iter_mut().for_each(|(_k, v)| v.sort());
+    res
 }
 
 pub fn write_shmr_map_file(
