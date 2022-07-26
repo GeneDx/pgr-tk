@@ -959,6 +959,7 @@ impl SeqIndexDB {
                 .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
         principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
+        //println!("DBG: # bundles {}", principal_bundles.len());
         principal_bundles
     }
 
@@ -1019,6 +1020,7 @@ impl SeqIndexDB {
         }
 
         let pb = self.get_principal_bundles(min_count, path_len_cutoff);
+        //println!("DBG: # bundles {}", pb.len());
 
         // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
         let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
@@ -1080,22 +1082,26 @@ impl SeqIndexDB {
         });
 
         // determine the bundles' overall orders and directions by consensus voting
-        let mut bundle_mean_order_direction = bundle_id_to_orders
-            .iter()
-            .map(|(bid, orders)| {
-                let sum: f32 = orders.iter().sum();
+        let mut bundle_mean_order_direction = (0..pb.len()).into_iter().map(|bid| {
+            if let Some(orders) = bundle_id_to_orders.get(&bid) { 
+                let sum: f32 = orders.into_iter().sum();
                 let mean_ord = sum / (orders.len() as f32);
                 let mean_ord = mean_ord as usize;
-                let directions = bundle_id_to_directions.get(bid).unwrap();
+                let directions = bundle_id_to_directions.get(&bid).unwrap();
                 let dir_sum = directions.iter().sum::<u32>() as usize;
                 let direction = if dir_sum < (directions.len() >> 1) {
                     0_u8
                 } else {
                     1_u8
                 };
-                (mean_ord, *bid, direction)
-            })
-            .collect::<Vec<(usize, usize, u8)>>();
+                (mean_ord, bid, direction)
+            } else {
+                let mean_ord = usize::MAX;
+                (mean_ord, bid, 0)
+            }
+        }).collect::<Vec<(usize, usize, u8)>>();
+        
+        //println!("DBG: length of bundle_mean_order_direction: {}", bundle_mean_order_direction.len());
 
         bundle_mean_order_direction.sort();
         // re-order the principal bundles
