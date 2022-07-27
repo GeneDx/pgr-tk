@@ -7,3 +7,4 @@ libagc.so
 *.pyc
 Cargo.lock
 pgr-tk/pgrtk/*.so
+pgr-tk-workstation/*.whl
