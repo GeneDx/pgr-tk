@@ -547,7 +547,7 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
 
         each element of the list SHIMMER is a tuple of 
         `((shimmer0, shimmer1, pos0, pos1, direction), 
-           bundle_id, direction_to_the_bundle, postion_in bundle)`
+        bundle_id, direction_to_the_bundle, postion_in bundle)`
     """
 
     pbid, pdirection = None, None
