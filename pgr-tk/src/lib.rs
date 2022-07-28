@@ -1343,7 +1343,7 @@ impl SeqIndexDB {
         let mut id = 0_usize;
         let (pb, filtered_adj_list) =
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff);
-        
+
         // TODO: we will remove this redundant converion in the future
         let pb = pb
             .into_iter()
@@ -1351,7 +1351,7 @@ impl SeqIndexDB {
             .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
         let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_priciple_bundles(pb);
-        
+
         filtered_adj_list.iter().for_each(|(k, v, w)| {
             if v.0 <= w.0 {
                 let key = (*v, *w);
@@ -1389,7 +1389,7 @@ impl SeqIndexDB {
                         smp.0,
                         smp.1,
                         bundle_id.0,
-                        bundle_id.2 
+                        bundle_id.2
                     );
                 } else {
                     seg_line = format!(
