@@ -1229,7 +1229,7 @@ impl SeqIndexDB {
                 let id0 = frag_id.get(&(op.0 .0, op.0 .1)).unwrap();
                 let id1 = frag_id.get(&(op.1 .0, op.1 .1)).unwrap();
                 let overlap_line = format!(
-                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:{}\n",
+                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:i:{}\n",
                     id0,
                     o1,
                     id1,
@@ -1412,7 +1412,7 @@ impl SeqIndexDB {
                 let id0 = frag_id.get(&(op.0 .0, op.0 .1)).unwrap();
                 let id1 = frag_id.get(&(op.1 .0, op.1 .1)).unwrap();
                 let overlap_line = format!(
-                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:{}\n",
+                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:i:{}\n",
                     id0,
                     o1,
                     id1,
