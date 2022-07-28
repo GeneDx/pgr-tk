@@ -952,15 +952,35 @@ impl SeqIndexDB {
         let frag_map = self.get_shmmr_map_internal();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
 
-        let mut principal_bundles =
-            seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
-                .into_iter()
-                .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
-                .collect::<Vec<Vec<(u64, u64, u8)>>>();
+        seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
+            .0
+            .into_iter()
+            .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
+            .collect::<Vec<Vec<(u64, u64, u8)>>>()
+    }
 
-        principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
-        //println!("DBG: # bundles {}", principal_bundles.len());
-        principal_bundles
+    fn get_vertex_map_from_priciple_bundles(
+        &self,
+        pb: Vec<Vec<(u64, u64, u8)>>,
+    ) -> FxHashMap<(u64, u64), (usize, u8, usize)> {
+        // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
+        let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
+        pb.iter().for_each(|bundle| {
+            bundle.iter().for_each(|v| {
+                *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
+            })
+        });
+
+        pb.iter()
+            .enumerate()
+            .flat_map(|(bundle_id, path)| {
+                path.iter()
+                    .enumerate()
+                    .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
+                    .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
+                    .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
+            })
+            .collect()
     }
 
     /// Get the principal bundles and bundle decomposition of all seqeuences
@@ -980,16 +1000,16 @@ impl SeqIndexDB {
     /// tuple
     ///     a tuple consist of two lists: (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     ///  
-    ///     principal_bundles = list of (principal_bundle_id, size_of_the_principal_bundle, list_bundle_vertex)
+    ///     principal_bundles = list of (principal_bundle_id, ave_bundle_position, list_bundle_vertex)
     ///    
-    ///     list_of_bundle_vertex = list of (hash0:u64, hash0:u64, direction:u8) 
-    /// 
+    ///     list_of_bundle_vertex = list of (hash0:u64, hash0:u64, direction:u8)
+    ///
     ///     seqid_smps_with_bundle_id_seg_direction = list of shimmer pairs in the database annotated with principal bundle id and direction
     ///     
-    ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0), 
+    ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
     ///                                   (principal_bundle_is, direction, order_in_the_bundle))
-    /// 
-    /// 
+    ///
+    ///
     pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
@@ -1022,25 +1042,8 @@ impl SeqIndexDB {
         let pb = self.get_principal_bundles(min_count, path_len_cutoff);
         //println!("DBG: # bundles {}", pb.len());
 
-        // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
-        let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
-        pb.iter().for_each(|bundle| {
-            bundle.iter().for_each(|v| {
-                *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
-            })
-        });
-
-        let mut vertex_to_bundle_id_direction_pos: FxHashMap<(u64, u64), (usize, u8, usize)> = pb
-            .iter()
-            .enumerate()
-            .flat_map(|(bundle_id, path)| {
-                path.iter()
-                    .enumerate()
-                    .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
-                    .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
-                    .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
-            })
-            .collect();
+        let mut vertex_to_bundle_id_direction_pos =
+            self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
         let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
             .seq_info
@@ -1082,25 +1085,28 @@ impl SeqIndexDB {
         });
 
         // determine the bundles' overall orders and directions by consensus voting
-        let mut bundle_mean_order_direction = (0..pb.len()).into_iter().map(|bid| {
-            if let Some(orders) = bundle_id_to_orders.get(&bid) { 
-                let sum: f32 = orders.into_iter().sum();
-                let mean_ord = sum / (orders.len() as f32);
-                let mean_ord = mean_ord as usize;
-                let directions = bundle_id_to_directions.get(&bid).unwrap();
-                let dir_sum = directions.iter().sum::<u32>() as usize;
-                let direction = if dir_sum < (directions.len() >> 1) {
-                    0_u8
+        let mut bundle_mean_order_direction = (0..pb.len())
+            .into_iter()
+            .map(|bid| {
+                if let Some(orders) = bundle_id_to_orders.get(&bid) {
+                    let sum: f32 = orders.into_iter().sum();
+                    let mean_ord = sum / (orders.len() as f32);
+                    let mean_ord = mean_ord as usize;
+                    let directions = bundle_id_to_directions.get(&bid).unwrap();
+                    let dir_sum = directions.iter().sum::<u32>() as usize;
+                    let direction = if dir_sum < (directions.len() >> 1) {
+                        0_u8
+                    } else {
+                        1_u8
+                    };
+                    (mean_ord, bid, direction)
                 } else {
-                    1_u8
-                };
-                (mean_ord, bid, direction)
-            } else {
-                let mean_ord = usize::MAX;
-                (mean_ord, bid, 0)
-            }
-        }).collect::<Vec<(usize, usize, u8)>>();
-        
+                    let mean_ord = usize::MAX;
+                    (mean_ord, bid, 0)
+                }
+            })
+            .collect::<Vec<(usize, usize, u8)>>();
+
         //println!("DBG: length of bundle_mean_order_direction: {}", bundle_mean_order_direction.len());
 
         bundle_mean_order_direction.sort();
@@ -1205,13 +1211,15 @@ impl SeqIndexDB {
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line = format!(
-                    "S\t{}\t*\tLN:{}\tSN:Z:{:016x}_{:016x}\n",
-                    id, ave_len + kmer_size, smp.0, smp.1
+                    "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\n",
+                    id,
+                    ave_len + kmer_size,
+                    smp.0,
+                    smp.1
                 );
                 out_file.write(seg_line.as_bytes())?;
                 Ok(())
             })?;
-
 
         overlaps
             .into_iter()
@@ -1236,14 +1244,13 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    
     /// Write addtional meta data for GFA into a file
     ///
     /// Parameters
     /// ----------
     /// filenpath : string
     ///     the path to the output file
-    /// 
+    ///
     /// Returns
     /// -------
     ///
@@ -1304,6 +1311,120 @@ impl SeqIndexDB {
     // for backward compatibility
     pub fn write_midx_to_text_file(&self, filepath: &str) -> Result<(), std::io::Error> {
         self.write_mapg_idx(filepath)
+    }
+
+    /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
+    ///
+    /// Parameters
+    /// ----------
+    /// min_count : int
+    ///     the minimum number of times a pair of shimmers must be observed to be included in the graph
+    ///
+    /// filenpath : string
+    ///     the path to the output file
+    ///
+    /// Returns
+    /// -------
+    ///
+    /// None
+    ///     The data is written into the file at filepath
+    ///
+    pub fn generate_principal_mapg_gfa(
+        &self,
+        min_count: usize,
+        path_len_cutoff: usize,
+        filepath: &str,
+    ) -> PyResult<()> {
+        let frag_map = self.get_shmmr_map_internal();
+        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
+        let mut overlaps =
+            FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
+        let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
+        let mut id = 0_usize;
+        let (pb, filtered_adj_list) =
+            seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff);
+        
+        // TODO: we will remove this redundant converion in the future
+        let pb = pb
+            .into_iter()
+            .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
+            .collect::<Vec<Vec<(u64, u64, u8)>>>();
+
+        let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_priciple_bundles(pb);
+        
+        filtered_adj_list.iter().for_each(|(k, v, w)| {
+            if v.0 <= w.0 {
+                let key = (*v, *w);
+                let val = (*k, v.2, w.2);
+                overlaps.entry(key).or_insert_with(|| vec![]).push(val);
+                frag_id.entry((v.0, v.1)).or_insert_with(|| {
+                    let c_id = id;
+                    id += 1;
+                    c_id
+                });
+                frag_id.entry((w.0, w.1)).or_insert_with(|| {
+                    let c_id = id;
+                    id += 1;
+                    c_id
+                });
+            }
+        });
+
+        let mut out_file = BufWriter::new(File::create(filepath).unwrap());
+
+        let kmer_size = self.shmmr_spec.as_ref().unwrap().k;
+        out_file.write("H\tVN:Z:1.0\tCM:Z:Sparse Genome Graph Generated By pgr-tk\n".as_bytes())?;
+        (&frag_id)
+            .into_iter()
+            .try_for_each(|(smp, id)| -> PyResult<()> {
+                let hits = frag_map.get(&smp).unwrap();
+                let ave_len =
+                    hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
+                let seg_line;
+                if let Some(bundle_id) = vertex_to_bundle_id_direction_pos.get(smp) {
+                    seg_line = format!(
+                        "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\tBN:i:{}\tBP:i:{}\n",
+                        id,
+                        ave_len + kmer_size,
+                        smp.0,
+                        smp.1,
+                        bundle_id.0,
+                        bundle_id.2 
+                    );
+                } else {
+                    seg_line = format!(
+                        "S\t{}\t*\tLN:i:{}\tSN:Z:{:016x}_{:016x}\n",
+                        id,
+                        ave_len + kmer_size,
+                        smp.0,
+                        smp.1
+                    );
+                }
+                out_file.write(seg_line.as_bytes())?;
+                Ok(())
+            })?;
+
+        overlaps
+            .into_iter()
+            .try_for_each(|(op, vs)| -> PyResult<()> {
+                let o1 = if op.0 .2 == 0 { "+" } else { "-" };
+                let o2 = if op.1 .2 == 0 { "+" } else { "-" };
+                let id0 = frag_id.get(&(op.0 .0, op.0 .1)).unwrap();
+                let id1 = frag_id.get(&(op.1 .0, op.1 .1)).unwrap();
+                let overlap_line = format!(
+                    "L\t{}\t{}\t{}\t{}\t{}M\tSC:{}\n",
+                    id0,
+                    o1,
+                    id1,
+                    o2,
+                    kmer_size,
+                    vs.len()
+                );
+                out_file.write(overlap_line.as_bytes())?;
+                Ok(())
+            })?;
+
+        Ok(())
     }
 }
 
