@@ -892,7 +892,7 @@ pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
     adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
     path_len_cutoff: usize,
-) -> Vec<Vec<ShmmrGraphNode>> {
+) -> (Vec<Vec<ShmmrGraphNode>>, Vec<(u32, (u64, u64, u8), (u64, u64, u8))>) {
     assert!(adj_list.len() > 0);
     let s = adj_list[0].1;
     let sorted_adj_list = sort_adj_list_by_weighted_dfs(frag_map, adj_list, s);
@@ -922,7 +922,8 @@ pub fn get_principal_bundles_from_adj_list(
     });
 
     let mut g0 = DiGraphMap::<ShmmrGraphNode, ()>::new();
-    adj_list.into_iter().for_each(|&(_sid, v, w)| {
+    let mut filtered_adj_list = Vec::<(u32, (u64, u64, u8), (u64, u64, u8))>::new();
+    adj_list.into_iter().for_each(|&(sid, v, w)| {
         if main_bundle_path_vertices.contains(&(v.0, v.1))
             && main_bundle_path_vertices.contains(&(w.0, w.1))
         {
@@ -931,6 +932,7 @@ pub fn get_principal_bundles_from_adj_list(
                 ShmmrGraphNode(w.0, w.1, w.2),
                 (),
             );
+            filtered_adj_list.push( (sid, v, w) ); 
         }
     });
 
@@ -983,7 +985,8 @@ pub fn get_principal_bundles_from_adj_list(
             principal_bundles.push(path);
         }
     }
-    principal_bundles
+    principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
+    (principal_bundles, filtered_adj_list)
 }
 
 impl CompactSeqDB {

@@ -522,3 +522,79 @@ def compute_graph_diffusion_entropy(gfa_fn, max_nodes = 6000):
     weight_list = list(enumerate(yy*n_node))
   
     return (entropy, weight_list)
+
+
+def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
+    """ Filter and group SHIMMER pair output from SeqIndexDB.get_principal_bundle_decomposition() 
+        by bundle id. This function will filter out small bundle segment with lenght smaller than
+        `len_curoff` and merge two bundle with the same id and direction within `merge_length` 
+
+        TODO: This is currently implemented in python, we plan to move this as 
+        Rust code in the future.
+    
+    Parameters
+    ----------
+    len_cutoff: int
+        the length cutoff used for filtering small bundle segement
+
+    merge_length: int
+        the length determining if two bundles should be merged 
+    
+    Returns
+    -------
+    list
+        a list of the lists of SHIMMER pairs tagged with bundle id, direction, position in the bundle  
+
+        each element of the list SHIMMER is a tuple of 
+        `((shimmer0, shimmer1, pos0, pos1, direction), 
+           bundle_id, direction_to_the_bundle, postion_in bundle)`
+    """
+
+    pbid, pdirection = None, None
+    all_partitions = []
+    for smp, bundle_info in smps:
+        if bundle_info is None:
+            continue
+        d = 0 if smp[4] == bundle_info[1] else 1
+        bid = bundle_info[0]
+        bpos = bundle_info[2]
+        if pbid is None and pdirection is None:
+            new_partition = []
+            new_partition.append( (smp, bid, d, bpos) )
+            pbid = bid
+            pdirection = d
+            continue
+        if bid != pbid or d != pdirection:
+            if new_partition[-1][0][3] -  new_partition[0][0][2] > len_cutoff:
+                all_partitions.append(new_partition)
+                new_partition = []
+            else:
+                new_partition = []
+            pbid = bid
+            pdirection = d
+            
+        new_partition.append( (smp, bid, d, bpos) )
+          
+    if len(new_partition) != 0 and new_partition[-1][0][3] -  new_partition[0][0][2] > len_cutoff:
+        all_partitions.append(new_partition)
+        
+    partition = all_partitions[0]
+    rtn_partitions = []
+    for p in all_partitions[1:]:
+        
+        p_end = partition[-1][0][3]
+        p_bid = partition[-1][1]
+        p_d = partition[-1][2]
+        np_bgn = p[0][0][2]
+        np_bid = p[0][1]
+        np_d = p[0][2]
+        if p_bid == np_bid and p_d == np_d and abs(np_bgn - p_end) < merge_length:
+            partition.extend(p)
+        else:
+            rtn_partitions.append(partition)
+            partition = p
+        
+    return rtn_partitions
+
+
+
