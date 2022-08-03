@@ -782,10 +782,10 @@ impl SeqIndexDB {
     ///     a list of bytes representing the sequence
     #[pyo3(text_signature = "($self, sample_name, ctg_name, bgn, end)")]
     pub fn get_sub_seq_by_id(&self, sid: u32, bgn: usize, end: usize) -> PyResult<Vec<u8>> {
-        let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
-        let ctg_name = ctg_name.clone();
-        let sample_name = sample_name.as_ref().unwrap().clone();
         if self.agc_db.is_some() {
+            let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+            let ctg_name = ctg_name.clone();
+            let sample_name = sample_name.as_ref().unwrap().clone();
             Ok(self
                 .agc_db
                 .as_ref()
@@ -793,12 +793,6 @@ impl SeqIndexDB {
                 .0
                 .get_sub_seq(sample_name, ctg_name, bgn, end))
         } else {
-            let &(sid, _) = self
-                .seq_index
-                .as_ref()
-                .unwrap()
-                .get(&(ctg_name, Some(sample_name)))
-                .unwrap();
             let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
             Ok(seq[bgn..end].to_vec())
         }
