@@ -35,9 +35,9 @@ RUN pip3 install -U --no-cache-dir \
     pydot==1.4.2 \
     sklearn
 
-COPY pgrtk-0.3.3-cp38-cp38-linux_x86_64.whl /tmp
-RUN pip install /tmp/pgrtk-0.3.3-cp38-cp38-linux_x86_64.whl
-RUN rm /tmp/pgrtk-0.3.3-cp38-cp38-linux_x86_64.whl
+COPY pgrtk-0.3.4-cp38-cp38-linux_x86_64.whl /tmp
+RUN pip install /tmp/pgrtk-0.3.4-cp38-cp38-linux_x86_64.whl
+RUN rm /tmp/pgrtk-0.3.4-cp38-cp38-linux_x86_64.whl
 RUN mkdir -p /opt/bin/ /wd/
 COPY jupyterlab.sh /opt/bin/
 CMD /bin/bash /opt/bin/jupyterlab.sh
