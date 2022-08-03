@@ -20,8 +20,9 @@ docker build -t pgr-tk-ws:v0.x.y .
 You can also use us a prebuilt docker image bye
 
 ```
-docker pull cschin/pgr-tk-ws:v0.3.3
+docker pull cschin/pgr-tk-ws:v0.x.y
 ```
+(check `https://hub.docker.com/r/cschin/pgr-tk-ws` the latest version.)
 
 
 ## Set up environment 
