@@ -9,7 +9,8 @@ This tutorual assumes the user is familiar with a typical Linux environment and 
 
 ## Build the Docker Image
 
-After bullding the python wheel for version `0.x.y` (check the `../target/wheels` directory).
+After bullding the python wheel for version `0.x.y` (check the `../target/wheels` 
+directory for proper version `0.x.y`).
 The image uses python3.8.
  
 ```
@@ -63,7 +64,7 @@ popd
 Execute the Jupyter Lab server through docker
 
 ```
-docker run -v $PWD:/wd/ -p 8888:8888 pgr-tk-ws:v0.3.3
+docker run -v $PWD:/wd/ -p 8888:8888 pgr-tk-ws:v0.x.y
 ```
 
 or use a pre-built docker
