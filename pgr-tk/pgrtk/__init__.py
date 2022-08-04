@@ -54,6 +54,23 @@ def rc_byte_seq(seq):
     seq = [byte_rc_map[_] for _ in seq[::-1]]
     return seq
 
+def rc_u8_seq(seg):
+    """ Reverse complement a sequence as a list of bytes (unsigned 8bit interger).
+
+    Parameters
+    ----------
+    seq : list of bytes / usigned 8bit interger
+        ascii code of the DNA sequence 
+
+    Returns
+    -------
+    list of bytes 
+        the list of bytes of the reverse complement DNA sequence
+
+    """
+    seq = [byte_rc_map[_] for _ in seq[::-1]]
+    return seq
+
 
 rc_map = dict(zip("ACGTNnactg", "TGCANntgca"))
 
