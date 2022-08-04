@@ -4,6 +4,12 @@
 
 This repository is a project to provide Python and Rust libraries to facilitate pangenomics analysis. Several algorithms and data structures used for the Peregrine Genome Assembler are useful for Pangenomics analysis as well. This repo takes those algorithms and data structure, combining other handy 3rd party tools to expose them as a library in Python (with Rust code for those computing parts that need performance.) 
 
+## Documentation, Usage and Examples
+
+You can find the API documentation at https://sema4-research.github.io/pgr-tk/
+A collection of Jupyter Notebooks are at https://github.com/sema4-Research/pgr-tk-notebooks/
+
+
 ## Build
 
 See `docker/Dockerfile.build_env-20.04` for a build enviroment under ubuntu 20.04.
