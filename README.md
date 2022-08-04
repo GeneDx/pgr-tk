@@ -10,6 +10,10 @@ You can find the API documentation at https://sema4-research.github.io/pgr-tk/
 
 A collection of Jupyter Notebooks are at https://github.com/sema4-Research/pgr-tk-notebooks/
 
+## Built Binaries
+
+Check https://github.com/Sema4-Research/pgr-tk/releases
+
 
 ## Build
 
