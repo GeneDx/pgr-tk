@@ -11,6 +11,7 @@ Research Preprint:
 [Multiscale Analysis of Pangenome Enables Improved Representation of Genomic Diversity For Repetitive And Clinically Relevant Genes](https://www.biorxiv.org/content/10.1101/2022.08.05.502980v2)
 
 PGR-TK provides pangenome assembly management, query and Minimizer Anchored Pangenome (MAP) Graph Generation
+
 ![Pangenome Data Management and Minimizer Anchored Pangenome Graph Generation](/images/PGR_TK_Sketch_MAPG_construction.png)
 
 With the MAP graph, we can use the "principal bundle decomposition" to study complicated structure variants and genome re-arragenment in the human populations.
