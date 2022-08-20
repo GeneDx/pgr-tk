@@ -4,6 +4,20 @@
 
 This repository is a project to provide Python and Rust libraries to facilitate pangenomics analysis. Several algorithms and data structures used for the Peregrine Genome Assembler are useful for Pangenomics analysis as well. This repo takes those algorithms and data structure, combining other handy 3rd party tools to expose them as a library in Python (with Rust code for those computing parts that need performance.) 
 
+## What is PGR-tk?
+
+Research Preprint: 
+
+[Multiscale Analysis of Pangenome Enables Improved Representation of Genomic Diversity For Repetitive And Clinically Relevant Genes](https://www.biorxiv.org/content/10.1101/2022.08.05.502980v2)
+
+PGR-TK provides pangenome assembly management, query and Minimizer Anchored Pangenome (MAP) Graph Generation
+![Pangenome Data Management and Minimizer Anchored Pangenome Graph Generation](/images/PGR_TK_Sketch_MAPG_construction.png)
+
+With the MAP graph, we can use the "principal bundle decomposition" to study complicated structure variants and genome re-arragenment in the human populations.
+
+![AMY1A Example](/images/AMY1A_example.png)
+
+
 ## Documentation, Usage and Examples
 
 The API documentation is at https://sema4-research.github.io/pgr-tk/
