@@ -610,6 +610,7 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
         else:
             rtn_partitions.append(partition)
             partition = p
+    rtn_partitions.append(partition)
         
     return rtn_partitions
 
