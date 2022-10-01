@@ -32,12 +32,20 @@ struct CmdOptions {
     /// using sketch k-mer than minimizer
     #[clap(short, long)]
     sketch: bool,
+    /// set to use agc prefecting feature (more memory usage but faster, useful for agcfile with many small contigs)
+    #[clap(short, long)]
+    prefetching: bool,
+    /// number of parallel agc reader threads (more memory usage) 
+    #[clap(long, short, default_value_t = 4)]
+    number_of_readers: usize,
 }
 
 fn load_write_index_from_agcfile(
     path: String,
     prefix: String,
     shmmr_spec: &ShmmrSpec,
+    prefetching: bool,
+    number_of_readers: usize
 ) -> Result<(), std::io::Error> {
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let filelist = File::open(path)?;
@@ -45,7 +53,11 @@ fn load_write_index_from_agcfile(
     BufReader::new(filelist).lines().into_iter().try_for_each(
         |fp| -> Result<(), std::io::Error> {
             let fp = fp.unwrap();
-            let agcfile: AGCFile = AGCFile::new(fp)?;
+            //println!("load file {}", fp);
+            let mut agcfile: AGCFile = AGCFile::new(fp)?;
+            agcfile.set_iter_thread(number_of_readers);
+            agcfile.set_prefetching(prefetching);
+            //println!("start to load index");
             let _ = sdb.load_index_from_agcfile(agcfile);
             Ok(())
         },
@@ -60,8 +72,8 @@ fn main() {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
     // TODO: to log file
-    // println!("read data from files in {:?}", args.filepath);
-    // println!("output prefix {:?}", args.prefix);
+    //println!("read data from files in {:?}", args.filepath);
+    //println!("output prefix {:?}", args.prefix);
     let shmmr_spec = pgr_db::shmmrutils::ShmmrSpec {
         w: args.w,
         k: args.k,
@@ -69,5 +81,12 @@ fn main() {
         min_span: args.min_span,
         sketch: args.sketch,
     };
-    load_write_index_from_agcfile(args.filepath, args.prefix.clone(), &shmmr_spec).unwrap();
+    load_write_index_from_agcfile(
+        args.filepath,
+        args.prefix.clone(),
+        &shmmr_spec,
+        args.prefetching,
+        args.number_of_readers,
+    )
+    .unwrap();
 }
