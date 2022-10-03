@@ -110,6 +110,7 @@ impl SeqIndexDB {
 
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
         let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+
         let midx_file = BufReader::new(File::open(prefix.to_string() + ".midx")?);
         midx_file
             .lines()
@@ -125,6 +126,7 @@ impl SeqIndexDB {
                 seq_info.insert(sid, (ctg_name, Some(source), len));
                 Ok(())
             })?;
+
         self.seq_index = Some(seq_index);
         self.seq_info = Some(seq_info);
         Ok(())
@@ -185,6 +187,25 @@ impl SeqIndexDB {
         self.seq_info = Some(seq_info);
         self.seq_db = Some(sdb);
         self.agc_db = None;
+        Ok(())
+    }
+
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn append_from_fastx(
+        &mut self,
+        filepath: String,
+    ) -> PyResult<()> {
+        let sdb = self.seq_db.as_mut().unwrap();
+        sdb.load_seqs_from_fastx(filepath)?;
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
         Ok(())
     }
 
@@ -848,7 +869,6 @@ impl SeqIndexDB {
     ///     a list of bytes representing the sequence
     #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
     pub fn get_seq_by_id(&self, sid: u32) -> PyResult<Vec<u8>> {
-
         if self.agc_db.is_some() {
             let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
             let ctg_name = ctg_name.clone();
@@ -1415,6 +1435,17 @@ impl SeqIndexDB {
 
         Ok(())
     }
+
+    fn write_sdb_to_files(&self, file_prefix: String) -> () {
+        if self.seq_db.is_some() {
+            let internal = self.seq_db.as_ref().unwrap();
+
+            internal.write_to_bincode_files(file_prefix.clone());
+            internal
+                .write_shmr_map_index(file_prefix.clone())
+                .expect("write mdb file fail");
+        };
+    }
 }
 
 impl SeqIndexDB {
@@ -1429,6 +1460,7 @@ impl SeqIndexDB {
         shmmr_to_frags
     }
 }
+
 /// A PyO3 class wrapping an exising AGC file for reading
 ///
 /// Examaple::

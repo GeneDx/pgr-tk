@@ -70,7 +70,7 @@ mod tests {
     pub fn gz_file_read_test() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs2.fa.gz".to_string());
-        println!("{:?}", sdb.seqs[0].seq_frags);
+        println!("{:?}", sdb.seqs[0].seq_frag_range);
     }
 
     #[test]

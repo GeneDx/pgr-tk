@@ -23,3 +23,5 @@ serde = { version = "1.0.137", features = ["derive", "rc"] }
 serde_json = "1.0.81"
 libwfa = { path="../rs-wfa/" }
 regex = "1"
+bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
+
