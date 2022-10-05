@@ -194,7 +194,7 @@ impl SeqIndexDB {
     ///     None
     ///
     #[pyo3(text_signature = "($self, w, k, r, min_span)")]
-    #[args(w = "80", k = "56", r = "4", min_span = "8")]
+    #[args(w = "80", k = "56", r = "4", min_span = "64")]
     pub fn load_from_fastx(
         &mut self,
         filepath: String,
