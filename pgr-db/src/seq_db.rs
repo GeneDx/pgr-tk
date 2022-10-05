@@ -187,7 +187,7 @@ impl CompactSeqDB {
 
         assert!(self.frags.is_some());
         let frags: &mut Vec<Fragment> = self.frags.as_mut().unwrap();
-        
+
         let mut frg_id = frags.len() as u32;
 
         //assert!(shmmrs.len() > 0);
@@ -327,7 +327,6 @@ impl CompactSeqDB {
             len: seq.len(),
         }
     }
-
 
     pub fn seq_to_index(
         source: Option<String>,
@@ -688,7 +687,6 @@ impl CompactSeqDB {
         reconstructed_seq
     }
 
-
     /* TODO */
     /*
     pub fn get_sub_seq(&self, seq: &CompactSeq, b: usize, e:usize) -> Vec<u8> {
@@ -698,7 +696,9 @@ impl CompactSeqDB {
 
     pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
-        self.reconstruct_seq_from_frags((seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter()) 
+        self.reconstruct_seq_from_frags(
+            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+        )
     }
 
     pub fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
@@ -710,7 +710,7 @@ impl CompactSeqDB {
         let mut sub_seq_frag = vec![];
         let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
-            let f =&frags[frag_id as usize];
+            let f = &frags[frag_id as usize];
             let frag_len = match f {
                 Fragment::AlnSegments(d) => d.2,
                 Fragment::Prefix(b) => b.len() as u32,
@@ -720,8 +720,7 @@ impl CompactSeqDB {
             if base_offset <= end && base_offset + frag_len >= bgn {
                 sub_seq_frag.push((frag_id, base_offset));
             }
-            base_offset += frag_len-self.shmmr_spec.k;
-
+            base_offset += frag_len - self.shmmr_spec.k;
         }
 
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
@@ -731,9 +730,10 @@ impl CompactSeqDB {
     }
 
     pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
-        self.reconstruct_seq_from_frags((seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter()) 
+        self.reconstruct_seq_from_frags(
+            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+        )
     }
-
 }
 
 impl CompactSeqDB {
