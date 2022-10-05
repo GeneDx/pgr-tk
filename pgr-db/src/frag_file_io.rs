@@ -77,9 +77,9 @@ impl CompactSeqDBStorage {
         let base_offset = 0_u32;
         let mut sub_seq_frag = vec![];
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
-            let (_, _, mut size) = self.frag_addr_offsets[frag_id as usize];
-            size -= self.shmmr_spec.k;
-            if base_offset <= end && base_offset + size >= bgn {
+            let (_, _, mut frag_len) = self.frag_addr_offsets[frag_id as usize];
+            frag_len -= self.shmmr_spec.k;
+            if base_offset <= end && base_offset + frag_len >= bgn {
                 sub_seq_frag.push((frag_id, base_offset));
             }
         }
