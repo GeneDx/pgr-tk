@@ -371,13 +371,17 @@ impl CompactSeqDB {
             .collect::<Vec<_>>();
 
         let seq_frags: Vec<u32> = (0..(shmmr_pairs.len() as u32)).collect();
-
+        let seq_frag_range = if seq_frags.len() == 0 {
+            (0, 0)
+        } else {
+            (seq_frags[0] as u32, seq_frags.len() as u32)
+        };
         (
             CompactSeq {
                 source,
                 name,
                 id,
-                seq_frag_range: (seq_frags[0] as u32, seq_frags.len() as u32),
+                seq_frag_range,
                 len: seqlen,
             },
             internal_frags,

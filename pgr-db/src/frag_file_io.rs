@@ -28,7 +28,7 @@ impl CompactSeqDBStorage {
         let (shmmr_spec, frag_map) =
             read_mdb_file_parallel(frag_file_prefix.clone() + ".mdb").unwrap();
         let mut sdx_file =
-            File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error");
+            BufReader::new(File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error"));
         let config = config::standard();
         let (frag_addr_offsets, seqs): (Vec<(usize, usize, u32)>, Vec<CompactSeq>) =
             bincode::decode_from_std_read(&mut sdx_file, config).expect("read sdx file error");
