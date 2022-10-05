@@ -187,7 +187,7 @@ impl CompactSeqDB {
 
         assert!(self.frags.is_some());
         let frags: &mut Vec<Fragment> = self.frags.as_mut().unwrap();
-
+        
         let mut frg_id = frags.len() as u32;
 
         //assert!(shmmrs.len() > 0);
@@ -328,72 +328,6 @@ impl CompactSeqDB {
         }
     }
 
-    pub fn _seq_to_index(
-        &mut self,
-        source: Option<String>,
-        name: String,
-        id: u32,
-        seqlen: usize,
-        shmmrs: Vec<MM128>,
-    ) -> CompactSeq {
-        assert!(self.frags.is_none());
-        let mut seq_frags = Vec::<u32>::new();
-        let mut frg_id = 0;
-
-        //assert!(shmmrs.len() > 0);
-        if shmmrs.len() == 0 {
-            return CompactSeq {
-                source,
-                name,
-                id,
-                seq_frag_range: (0, 0),
-                len: seqlen,
-            };
-        }
-
-        seq_frags.push(frg_id);
-        frg_id += 1;
-
-        let shmmr_pairs = shmmrs[0..shmmrs.len() - 1]
-            .iter()
-            .zip(shmmrs[1..shmmrs.len()].iter())
-            .collect::<Vec<_>>();
-
-        let internal_frags = shmmr_pairs
-            .par_iter()
-            .map(|(shmmr0, shmmr1)| {
-                let s0 = shmmr0.hash();
-                let s1 = shmmr1.hash();
-                let (shmmr_pair, orientation) = if s0 <= s1 {
-                    ((s0, s1), 0_u8)
-                } else {
-                    ((s1, s0), 1_u8)
-                };
-                let bgn = shmmr0.pos() + 1;
-                let end = shmmr1.pos() + 1;
-                (shmmr_pair, bgn, end, orientation)
-            })
-            .collect::<Vec<_>>();
-
-        internal_frags
-            .iter()
-            .for_each(|(shmmr, bgn, end, orientation)| {
-                let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
-                e.push((frg_id, id, *bgn, *end, *orientation));
-                seq_frags.push(frg_id);
-                frg_id += 1;
-            });
-
-        seq_frags.push(frg_id);
-
-        CompactSeq {
-            source,
-            name,
-            id,
-            seq_frag_range: (seq_frags[0] as u32, seq_frags.len() as u32),
-            len: seqlen,
-        }
-    }
 
     pub fn seq_to_index(
         source: Option<String>,
@@ -715,13 +649,13 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
+    fn reconstruct_seq_from_frags<I: Iterator<Item = u32>>(&self, frag_ids: I) -> Vec<u8> {
         let mut reconstructed_seq = <Vec<u8>>::new();
         let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
         let mut _p = 0;
-        for frg_id in seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1 {
+        frag_ids.for_each(|frag_id| {
             //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
-            match frags.get(frg_id as usize).unwrap() {
+            match frags.get(frag_id as usize).unwrap() {
                 Fragment::Prefix(b) => {
                     reconstructed_seq.extend_from_slice(&b[..]);
                     //println!("p: {} {}", p, p + b.len());
@@ -749,10 +683,11 @@ impl CompactSeqDB {
                     }
                 }
             }
-        }
+        });
 
         reconstructed_seq
     }
+
 
     /* TODO */
     /*
@@ -763,8 +698,41 @@ impl CompactSeqDB {
 
     pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
-        self.get_seq(seq)
+        self.reconstruct_seq_from_frags((seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter()) 
     }
+
+    pub fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
+        assert!((sid as usize) < self.seqs.len());
+        let frag_range = &self.seqs[sid as usize].seq_frag_range;
+
+        let mut _p = 0;
+        let base_offset = 0_u32;
+        let mut sub_seq_frag = vec![];
+        let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
+        for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
+            let f =&frags[frag_id as usize];
+            let mut frag_len = match f {
+                Fragment::AlnSegments(d) => d.2,
+                Fragment::Prefix(b) => b.len() as u32,
+                Fragment::Internal(b) => b.len() as u32,
+                Fragment::Suffix(b) => b.len() as u32,
+            };
+            frag_len -= self.shmmr_spec.k;
+            if base_offset <= end && base_offset + frag_len >= bgn {
+                sub_seq_frag.push((frag_id, base_offset));
+            }
+        }
+
+        let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
+
+        let offset = bgn - sub_seq_frag[0].1;
+        reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
+    }
+
+    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
+        self.reconstruct_seq_from_frags((seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter()) 
+    }
+
 }
 
 impl CompactSeqDB {
@@ -816,7 +784,7 @@ impl CompactSeqDB {
                     Fragment::Internal(b) => b.len() as u32,
                     Fragment::Suffix(b) => b.len() as u32,
                 };
-                let w = bincode::encode_to_vec( f, config).unwrap();
+                let w = bincode::encode_to_vec(f, config).unwrap();
                 let mut compressor = DeflateEncoder::new(Vec::new(), Compression::default());
                 compressor.write_all(&w).unwrap();
                 let compress_frag = compressor.finish().unwrap();
@@ -828,10 +796,10 @@ impl CompactSeqDB {
         let mut offset = 0_usize;
         compressed_frags.iter().for_each(|(frag_len, v)| {
             let l = v.len();
-            frag_addr_offeset.push( (offset, v.len(), *frag_len) );
+            frag_addr_offeset.push((offset, v.len(), *frag_len));
             offset += l;
             frg_file.write(v).expect(" frag file writing error");
-        } );
+        });
 
         bincode::encode_into_std_write((frag_addr_offeset, &self.seqs), &mut sdx_file, config)
             .expect("csq file writing error");

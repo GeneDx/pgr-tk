@@ -836,8 +836,7 @@ impl SeqIndexDB {
                     .unwrap()
                     .get(&(ctg_name, Some(sample_name)))
                     .unwrap();
-                let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
-                Ok(seq[bgn..end].to_vec())
+                Ok(self.seq_db.as_ref().unwrap().get_sub_seq_by_id(sid, bgn as u32, end as u32))
             }
             Backend::FRG => {
                 let &(sid, _) = self
@@ -883,8 +882,7 @@ impl SeqIndexDB {
                     .get_sub_seq(sample_name, ctg_name, bgn, end))
             }
             Backend::MEMORY | Backend::FASTX => {
-                let seq = self.seq_db.as_ref().unwrap().get_seq_by_id(sid);
-                Ok(seq[bgn..end].to_vec())
+                Ok(self.seq_db.as_ref().unwrap().get_sub_seq_by_id(sid, bgn as u32, end as u32))
             }
             Backend::FRG => Ok(self
                 .frg_db
