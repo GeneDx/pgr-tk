@@ -33,7 +33,7 @@ pub enum AlnSegment {
     // this still use a lot of space, we will find way to reduce the memory footprint later
     FullMatch,
     // u16 should be enough, the max span should be less than 128 * 144 = 18423 * 2 < 2**16
-    Match(u16, u16),
+    Match(u32, u32),
     Insertion(u8),
 }
 
@@ -123,7 +123,7 @@ pub fn deltas_to_aln_segs(
         let x1 = d.x as usize;
         let y1 = d.y as usize;
         if x1 < x {
-            aln_segs.push(AlnSegment::Match(x1 as u16, x as u16));
+            aln_segs.push(AlnSegment::Match(x1 as u32, x as u32));
         }
         x = x1;
         y = y1;
@@ -136,7 +136,7 @@ pub fn deltas_to_aln_segs(
         }
     }
     if x != 0 {
-        aln_segs.push(AlnSegment::Match(0, x as u16));
+        aln_segs.push(AlnSegment::Match(0, x as u32));
     };
     aln_segs.reverse();
     //println!("aln_segs: {:?}", aln_segs);
@@ -232,7 +232,7 @@ impl CompactSeqDB {
                 let mut aligned = false;
                 let mut out_frag = None;
 
-                if frg_len > 64 && try_compress && self.frag_map.contains_key(&shmmr_pair) {
+                if frg_len > 128 && try_compress && self.frag_map.contains_key(&shmmr_pair) {
                     let e = self.frag_map.get(&shmmr_pair).unwrap();
                     for t_frg_id in e.iter() {
                         let base_frg = frags.get(t_frg_id.0 as usize).unwrap();
@@ -253,7 +253,7 @@ impl CompactSeqDB {
                             }
                             //assert!(frg.len() > KMERSIZE as usize);
                             //the max span should be less than 128 * 144 = 18423 * 2 < 2**16
-                            assert!(base_frg.len() < (1 << 16) - 1);
+                            assert!(base_frg.len() < (1 << 32) - 1);
                             let m = match_reads(base_frg, &frg, true, 0.1, 0, 0, 32);
                             if let Some(m) = m {
                                 let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
@@ -263,6 +263,10 @@ impl CompactSeqDB {
                                     m.end1 as usize,
                                     &frg,
                                 );
+
+                                if std::mem::align_of_val(&aln_segs) > (frg.len() >> 2) {
+                                    continue;
+                                }
 
                                 out_frag = Some((
                                     shmmr_pair,
@@ -500,11 +504,11 @@ impl CompactSeqDB {
 
     fn load_seq_from_reader(&mut self, reader: &mut dyn Iterator<Item = io::Result<SeqRec>>) {
         let mut seqs = <Vec<(u32, Option<String>, String, Vec<u8>)>>::new();
-        let mut sid = 0;
+        let mut sid = self.seqs.len() as u32;
         if self.frags.is_none() {
             self.frags = Some(Fragments::new());
         };
-        
+
         loop {
             let mut count = 0;
             let mut end_ext_loop = false;
@@ -788,9 +792,9 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn write_to_bincode_files(&self, file_prefix: String) -> () {
-        let mut csq_file =
-            BufWriter::new(File::create(file_prefix.clone() + ".csq").expect("csq file open fail"));
+    pub fn write_to_frag_files(&self, file_prefix: String) -> () {
+        let mut sdx_file =
+            BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("csq file open fail"));
         let mut frg_file =
             BufWriter::new(File::create(file_prefix + ".frg").expect("frg file open fail"));
 
@@ -812,7 +816,7 @@ impl CompactSeqDB {
                     Fragment::Internal(b) => b.len() as u32,
                     Fragment::Suffix(b) => b.len() as u32,
                 };
-                let w = bincode::encode_to_vec(f, config).unwrap();
+                let w = bincode::encode_to_vec( f, config).unwrap();
                 let mut compressor = DeflateEncoder::new(Vec::new(), Compression::default());
                 compressor.write_all(&w).unwrap();
                 let compress_frag = compressor.finish().unwrap();
@@ -820,10 +824,19 @@ impl CompactSeqDB {
             })
             .collect::<Vec<(u32, Vec<u8>)>>();
 
-        bincode::encode_into_std_write(&self.seqs, &mut csq_file, config)
+        let mut frag_addr_offeset = vec![];
+        let mut offset = 0_usize;
+        compressed_frags.iter().for_each(|(frag_len, v)| {
+            let l = v.len();
+            frag_addr_offeset.push( (offset, v.len(), *frag_len) );
+            offset += l;
+            frg_file.write(v).expect(" frag file writing error");
+        } );
+
+        bincode::encode_into_std_write((frag_addr_offeset, &self.seqs), &mut sdx_file, config)
             .expect("csq file writing error");
-        bincode::encode_into_std_write(compressed_frags, &mut frg_file, config)
-            .expect(" frag file writing error");
+        //bincode::encode_into_std_write(compressed_frags, &mut frg_file, config)
+        //    .expect(" frag file writing error");
     }
 }
 

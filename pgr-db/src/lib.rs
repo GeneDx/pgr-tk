@@ -11,6 +11,7 @@ pub mod kmer_filter;
 pub mod seq_db;
 pub mod seqs2variants;
 pub mod shmmrutils;
+pub mod frag_file_io;
 
 #[cfg(test)]
 mod tests {
@@ -349,5 +350,16 @@ mod tests {
         println!("out2: {} {:?}", out2.len(), out2);
         assert!(out1.len() == 2);
         assert!(out2.len() == 2);
+    }
+
+
+    #[test]
+    fn test_open_compact_seq_db_storage() {
+        use crate::frag_file_io::CompactSeqDBStorage;
+        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string()); 
+        let seq = seq_storage.get_seq_by_id(0);
+        println!("{}", String::from_utf8_lossy(&seq[..]));
+        let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
+        println!("{}", String::from_utf8_lossy(&seq[..]));
     }
 }

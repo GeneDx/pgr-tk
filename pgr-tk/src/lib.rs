@@ -1270,6 +1270,20 @@ impl SeqIndexDB {
     fn write_mapg_idx(&self, filepath: &str) -> Result<(), std::io::Error> {
         let mut writer = BufWriter::new(File::create(filepath)?);
 
+        if let Some(shmmr_spec) = self.shmmr_spec.clone() {
+            writer.write(
+                format!(
+                    "K\t{}\t{}\t{}\t{}\t{}\n",
+                    shmmr_spec.w,
+                    shmmr_spec.k,
+                    shmmr_spec.r,
+                    shmmr_spec.min_span,
+                    shmmr_spec.sketch
+                )
+                .as_bytes(),
+            )?;
+        }
+        
         self.seq_info.as_ref().unwrap().iter().try_for_each(
             |(k, v)| -> Result<(), std::io::Error> {
                 let line = format!(
@@ -1284,19 +1298,6 @@ impl SeqIndexDB {
             },
         )?;
 
-        if let Some(shmmr_spec) = self.shmmr_spec.clone() {
-            writer.write(
-                format!(
-                    "K\t{}\t{}\t{}\t{}\t{}\n",
-                    shmmr_spec.w,
-                    shmmr_spec.k,
-                    shmmr_spec.r,
-                    shmmr_spec.min_span,
-                    shmmr_spec.sketch
-                )
-                .as_bytes(),
-            )?;
-        }
         let frag_map = self.get_shmmr_map_internal();
         frag_map
             .iter()
@@ -1436,11 +1437,11 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    fn write_sdb_to_files(&self, file_prefix: String) -> () {
+    fn write_frag_and_index_files(&self, file_prefix: String) -> () {
         if self.seq_db.is_some() {
             let internal = self.seq_db.as_ref().unwrap();
 
-            internal.write_to_bincode_files(file_prefix.clone());
+            internal.write_to_frag_files(file_prefix.clone());
             internal
                 .write_shmr_map_index(file_prefix.clone())
                 .expect("write mdb file fail");
