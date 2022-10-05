@@ -1,15 +1,14 @@
 use crate::seq_db::{
-    self, read_mdb_file_parallel, AlnSegment, AlnSegments, Bases, CompactSeq, CompactSeqDB,
-    Fragment, FragmentSignature, ShmmrToFrags, SHMMRSPEC,
+    self, read_mdb_file_parallel, CompactSeq, 
+    Fragment, ShmmrToFrags 
 };
-use crate::shmmrutils::{ShmmrSpec, MM128};
-use bincode::{config, Decode, Encode};
+use crate::shmmrutils::ShmmrSpec;
+use bincode::config;
 use flate2::read::DeflateDecoder;
-use memmap::{Mmap, MmapOptions};
+use memmap::Mmap;
 use rustc_hash::FxHashMap;
-use std::fmt;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, Read};
 
 pub struct CompactSeqDBStorage {
     pub shmmr_spec: ShmmrSpec,
