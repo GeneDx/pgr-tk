@@ -706,21 +706,22 @@ impl CompactSeqDB {
         let frag_range = &self.seqs[sid as usize].seq_frag_range;
 
         let mut _p = 0;
-        let base_offset = 0_u32;
+        let mut base_offset = 0_u32;
         let mut sub_seq_frag = vec![];
         let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let f =&frags[frag_id as usize];
-            let mut frag_len = match f {
+            let frag_len = match f {
                 Fragment::AlnSegments(d) => d.2,
                 Fragment::Prefix(b) => b.len() as u32,
                 Fragment::Internal(b) => b.len() as u32,
                 Fragment::Suffix(b) => b.len() as u32,
             };
-            frag_len -= self.shmmr_spec.k;
             if base_offset <= end && base_offset + frag_len >= bgn {
                 sub_seq_frag.push((frag_id, base_offset));
             }
+            base_offset += frag_len-self.shmmr_spec.k;
+
         }
 
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
