@@ -3,7 +3,7 @@ pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
-use pgr_db::{agc_io, fasta_io};
+use pgr_db::{agc_io, fasta_io, frag_file_io};
 use pyo3::exceptions;
 // use pgr_utils::fasta_io;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
@@ -12,6 +12,7 @@ use pyo3::prelude::*;
 // use pyo3::types::PyString;
 use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
 use pgr_db::seqs2variants;
+use pyo3::exceptions::PyValueError;
 use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
@@ -20,6 +21,15 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+
+#[derive(Clone, Copy, PartialEq)]
+enum Backend {
+    AGC,
+    FRG,
+    FASTX,
+    MEMORY,
+    UNKNOWN,
+}
 
 /// Get the revision (git-hashtag) of the build
 #[pyfunction]
@@ -55,7 +65,6 @@ pub fn pgr_lib_version() -> PyResult<String> {
 /// the ``query_fragment_to_hps()`` method.
 ///  
 #[pyclass]
-#[derive(Clone)]
 struct SeqIndexDB {
     /// Rust internal: store the specification of the shmmr specifcation
     pub shmmr_spec: Option<ShmmrSpec>,
@@ -63,12 +72,15 @@ struct SeqIndexDB {
     pub seq_db: Option<seq_db::CompactSeqDB>,
     /// Rust internal: store the agc file and the index
     pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
+    pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[pyo3(get)]
     pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>,
     /// a dictionary maps id -> (ctg_name, source, len)
     #[pyo3(get)]
     pub seq_info: Option<HashMap<u32, (String, Option<String>, u32)>>,
+
+    pub backend: Backend,
 }
 
 #[pymethods]
@@ -78,10 +90,12 @@ impl SeqIndexDB {
     pub fn new() -> Self {
         SeqIndexDB {
             seq_db: None,
+            frg_db: None,
             agc_db: None,
             shmmr_spec: None,
             seq_index: None,
             seq_info: None,
+            backend: Backend::UNKNOWN,
         }
     }
 
@@ -100,12 +114,11 @@ impl SeqIndexDB {
     ///
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
-        // let (shmmr_spec, new_map) = seq_db::read_mdb_file(prefix.to_string() + ".mdb").unwrap();
         let (shmmr_spec, new_map) =
             seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
         self.agc_db = Some((agc_file, new_map));
-        self.seq_db = None;
+        self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
@@ -131,6 +144,29 @@ impl SeqIndexDB {
         self.seq_info = Some(seq_info);
         Ok(())
     }
+
+    #[pyo3(text_signature = "($self, prefix)")]
+    pub fn load_from_frg_index(&mut self, prefix: String) -> PyResult<()> {
+        let mut frag_db = pgr_db::frag_file_io::CompactSeqDBStorage::new(prefix);
+
+        let seq_index = frag_db.seq_index.into_iter().map(|(k, v)| (k, v)).collect();
+
+        let seq_info = frag_db.seq_info.into_iter().map(|(k, v)| (k, v)).collect();
+
+        frag_db.seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
+        frag_db.seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
+
+        let shmmr_spec = frag_db.shmmr_spec.clone();
+
+        self.frg_db = Some(frag_db);
+        self.backend = Backend::FRG;
+        self.shmmr_spec = Some(shmmr_spec);
+
+        self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
+        Ok(())
+    }
+
     /// load and create the index created from a fasta / fastq file
     ///
     /// Parameters
@@ -186,16 +222,16 @@ impl SeqIndexDB {
         self.seq_index = Some(seq_index);
         self.seq_info = Some(seq_info);
         self.seq_db = Some(sdb);
-        self.agc_db = None;
+        self.backend = Backend::FASTX;
         Ok(())
     }
 
-
     #[pyo3(text_signature = "($self)")]
-    pub fn append_from_fastx(
-        &mut self,
-        filepath: String,
-    ) -> PyResult<()> {
+    pub fn append_from_fastx(&mut self, filepath: String) -> PyResult<()> {
+        assert!(
+            self.backend == Backend::FASTX,
+            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+        );
         let sdb = self.seq_db.as_mut().unwrap();
         sdb.load_seqs_from_fastx(filepath)?;
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
@@ -256,6 +292,7 @@ impl SeqIndexDB {
             min_span,
             sketch: false,
         };
+        self.backend = Backend::MEMORY;
         let source = Some(source.unwrap().to_string());
         let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
         let seq_vec = seq_list
@@ -275,7 +312,6 @@ impl SeqIndexDB {
         self.seq_index = Some(seq_index);
         self.seq_info = Some(seq_info);
         self.seq_db = Some(sdb);
-        self.agc_db = None;
         Ok(())
     }
 
@@ -306,7 +342,7 @@ impl SeqIndexDB {
         seq: Vec<u8>,
     ) -> PyResult<Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
             seq_db::query_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
@@ -333,7 +369,7 @@ impl SeqIndexDB {
         seq: Vec<u8>,
     ) -> PyResult<FxHashMap<u32, Vec<(u32, u32, u8)>>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal();
+        let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
         let res = seq_db::get_match_positions_with_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
     }
@@ -387,18 +423,21 @@ impl SeqIndexDB {
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal();
-        let res = aln::query_fragment_to_hps(
-            shmmr_to_frags,
-            &seq,
-            shmmr_spec,
-            penality,
-            max_count,
-            max_count_query,
-            max_count_target,
-            max_aln_span,
-        );
-        Ok(res)
+        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+            let res = aln::query_fragment_to_hps(
+                shmmr_to_frags,
+                &seq,
+                shmmr_spec,
+                penality,
+                max_count,
+                max_count_query,
+                max_count_target,
+                max_aln_span,
+            );
+            Ok(res)
+        } else {
+            Err(PyValueError::new_err("fail to find an index"))
+        }
     }
 
     /// Given a sequence context, this function maps the specific positions in the context
@@ -461,17 +500,21 @@ impl SeqIndexDB {
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, (u32, u32, u8), (u32, u32), (u32, u32))>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal();
-        let mut all_alns = aln::query_fragment_to_hps(
-            shmmr_to_frags,
-            &seq,
-            shmmr_spec,
-            penality,
-            max_count,
-            max_count_query,
-            max_count_target,
-            max_aln_span,
-        );
+
+        let mut all_alns = if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+            aln::query_fragment_to_hps(
+                shmmr_to_frags,
+                &seq,
+                shmmr_spec,
+                penality,
+                max_count,
+                max_count_query,
+                max_count_target,
+                max_aln_span,
+            )
+        } else {
+            return Err(PyValueError::new_err("fail to find an index"));
+        };
 
         // for reach position, we find the left_match and right_match shimmer pair that sandwiched the
         // positions. the algorithm is based on brute force search and should be optimized in the future
@@ -606,9 +649,12 @@ impl SeqIndexDB {
     ///     number of hits
     #[pyo3(text_signature = "($self, shmmr_pair)")]
     pub fn get_shmmr_pair_count(&self, shmmr_pair: (u64, u64)) -> usize {
-        let shmmr_to_frags = self.get_shmmr_map_internal();
-        if shmmr_to_frags.contains_key(&shmmr_pair) {
-            shmmr_to_frags.get(&shmmr_pair).unwrap().len()
+        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+            if shmmr_to_frags.contains_key(&shmmr_pair) {
+                shmmr_to_frags.get(&shmmr_pair).unwrap().len()
+            } else {
+                0
+            }
         } else {
             0
         }
@@ -639,8 +685,13 @@ impl SeqIndexDB {
         shmmr_pair: (u64, u64),
         max_unique_count: Option<usize>,
     ) -> Vec<(String, usize)> {
-        let shmmr_to_frags = self.get_shmmr_map_internal();
         let mut count = FxHashMap::<String, usize>::default();
+        let shmmr_to_frags = self.get_shmmr_map_internal();
+        if shmmr_to_frags.is_none() {
+            return vec![];
+        };
+        let shmmr_to_frags = shmmr_to_frags.unwrap();
+
         if shmmr_to_frags.contains_key(&shmmr_pair) {
             shmmr_to_frags
                 .get(&shmmr_pair)
@@ -729,16 +780,19 @@ impl SeqIndexDB {
     ///     list of the tuple (shmmr0, shmmr1, seq_id, position0, position1, orientation)
     ///   
     pub fn get_shmmr_pair_list(&mut self) -> PyResult<Vec<(u64, u64, u32, u32, u32, u8)>> {
-        let shmmr_to_frags = self.get_shmmr_map_internal();
-        let py_out = shmmr_to_frags
-            .par_iter()
-            .flat_map(|v| {
-                v.1.iter()
-                    .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
-                    .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>()
-            })
-            .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
-        Ok(py_out)
+        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+            let py_out = shmmr_to_frags
+                .par_iter()
+                .flat_map(|v| {
+                    v.1.iter()
+                        .map(|vv| (v.0 .0, v.0 .1, vv.1, vv.2, vv.3, vv.4))
+                        .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>()
+                })
+                .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
+            Ok(py_out)
+        } else {
+            Err(PyValueError::new_err("index not found"))
+        }
     }
 
     /// fetch a contiguous sub-sequence
@@ -898,7 +952,12 @@ impl SeqIndexDB {
     ///
     pub fn get_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         let frag_map = self.get_shmmr_map_internal();
-        seq_db::frag_map_to_adj_list(frag_map, min_count)
+        if frag_map.is_none() {
+            vec![]
+        } else {
+            let frag_map = frag_map.unwrap();
+            seq_db::frag_map_to_adj_list(frag_map, min_count)
+        }
     }
 
     /// Sort the adjecent list of the shimmer graph
@@ -931,8 +990,11 @@ impl SeqIndexDB {
         u32,
         u32,
     )> {
-        let frag_map = self.get_shmmr_map_internal();
-        seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+        if let Some(frag_map) = self.get_shmmr_map_internal() {
+            seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+        } else {
+            vec![]
+        }
     }
 
     /// Get the principal bundles in MAPG
@@ -958,14 +1020,17 @@ impl SeqIndexDB {
         min_count: usize,
         path_len_cutoff: usize,
     ) -> Vec<Vec<(u64, u64, u8)>> {
-        let frag_map = self.get_shmmr_map_internal();
-        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
+        if let Some(frag_map) = self.get_shmmr_map_internal() {
+            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
 
-        seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
-            .0
-            .into_iter()
-            .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
-            .collect::<Vec<Vec<(u64, u64, u8)>>>()
+            seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
+                .0
+                .into_iter()
+                .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
+                .collect::<Vec<Vec<(u64, u64, u8)>>>()
+        } else {
+            vec![]
+        }
     }
 
     fn get_vertex_map_from_priciple_bundles(
@@ -1186,6 +1251,10 @@ impl SeqIndexDB {
     ///
     pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
+        if frag_map.is_none() {
+            return Err(PyValueError::new_err("no index found"));
+        }
+        let frag_map = frag_map.unwrap();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
@@ -1283,7 +1352,7 @@ impl SeqIndexDB {
                 .as_bytes(),
             )?;
         }
-        
+
         self.seq_info.as_ref().unwrap().iter().try_for_each(
             |(k, v)| -> Result<(), std::io::Error> {
                 let line = format!(
@@ -1299,6 +1368,13 @@ impl SeqIndexDB {
         )?;
 
         let frag_map = self.get_shmmr_map_internal();
+        if frag_map.is_none() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "fail to load index",
+            ));
+        };
+        let frag_map = frag_map.unwrap();
         frag_map
             .iter()
             .try_for_each(|v| -> Result<(), std::io::Error> {
@@ -1346,6 +1422,10 @@ impl SeqIndexDB {
         filepath: &str,
     ) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
+        if frag_map.is_none() {
+            return Err(PyValueError::new_err("can't load index"));
+        };
+        let frag_map = frag_map.unwrap();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
@@ -1450,15 +1530,15 @@ impl SeqIndexDB {
 }
 
 impl SeqIndexDB {
-    // depending on the storage type, return the corresponding index
-    fn get_shmmr_map_internal(&self) -> &seq_db::ShmmrToFrags {
-        let shmmr_to_frags;
-        if self.agc_db.is_some() {
-            shmmr_to_frags = &self.agc_db.as_ref().unwrap().1;
-        } else {
-            shmmr_to_frags = &self.seq_db.as_ref().unwrap().frag_map;
+    // depending on the storage type, return the corresponded index
+    fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
+        match self.backend {
+            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().1),
+            Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
+            Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
+            Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),
+            Backend::UNKNOWN => None,
         }
-        shmmr_to_frags
     }
 }
 
