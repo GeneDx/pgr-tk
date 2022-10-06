@@ -8,15 +8,15 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use rayon::ThreadPool;
 use rayon::ThreadPoolBuilder;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::io;
 use std::mem;
 //use std::sync::Arc;
 
 #[derive(Debug, Clone)]
-struct AGCHandle(*mut agc_t);
+pub struct AGCHandle(*mut agc_t);
 
 unsafe impl Send for AGCHandle {}
 unsafe impl Sync for AGCHandle {}
@@ -32,13 +32,16 @@ pub struct AGCFile {
     pub filepath: String,
     agc_handle: AGCHandle,
     pub samples: Vec<AGCSample>,
-    pub ctg_lens: HashMap<(String, String), usize>,
+    pub ctg_lens: FxHashMap<(String, String), usize>,
     sample_ctg: Vec<(String, String)>,
+    pub prefetching: bool,
+    pub number_iter_thread: usize
 }
 
 pub struct AGCFileIter<'a> {
     agc_file: &'a AGCFile,
     agc_thread_pool: ThreadPool,
+    prefetching: bool,
     current_ctg: usize,
     seq_buf: RefCell<Option<(usize, usize, Vec<SeqRec>)>>,
 }
@@ -53,15 +56,16 @@ impl AGCFile {
             return Err(std::io::Error::new(std::io::ErrorKind::NotFound, filepath));
         }
 
-        let agc_handle;
         let mut samples = vec![];
-        let mut ctg_lens = HashMap::new();
+        let mut ctg_lens = vec![];
+        //let mut ctg_lens = HashMap::new();
         let mut sample_ctg = vec![];
 
         unsafe {
+            let agc_handle;
             agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
-                0_i32,
+                1_i32,
             ));
             let mut n_samples = agc_n_sample(agc_handle.0);
             let samples_ptr: *mut *mut ::std::os::raw::c_char =
@@ -70,16 +74,16 @@ impl AGCFile {
             for i in 0..n_samples as usize {
                 let s_ptr = *(samples_ptr.add(i));
                 let sample_name = cstr_to_string(s_ptr);
-                //println!("sample: {}", sample_name);
+                //log::info!("sample: {}", sample_name);
                 let mut n_contig = agc_n_ctg(agc_handle.0, s_ptr);
                 let ctg_ptr = agc_list_ctg(agc_handle.0, s_ptr, &mut n_contig);
                 let mut ctgs: Vec<(String, usize)> = Vec::new();
                 for j in 0..n_contig as usize {
                     let c_ptr = *(ctg_ptr.add(j));
                     let ctg_name = cstr_to_string(c_ptr);
-                    //println!("ctg: {}", ctg_name);
+                    //println!("ctg: {} {}", j, ctg_name);
                     let ctg_len = agc_get_ctg_len(agc_handle.0, s_ptr, c_ptr);
-                    ctg_lens.insert((sample_name.clone(), ctg_name.clone()), ctg_len as usize);
+                    ctg_lens.push(((sample_name.clone(), ctg_name.clone()), ctg_len as usize));
                     sample_ctg.push((sample_name.clone(), ctg_name.clone()));
                     ctgs.push((ctg_name, ctg_len as usize));
                 }
@@ -90,14 +94,35 @@ impl AGCFile {
                 });
             }
             agc_list_destroy(samples_ptr);
+            agc_close(agc_handle.0);
         }
+        let agc_handle;
+        unsafe {
+            agc_handle = AGCHandle(agc_open(
+                CString::new(filepath.clone()).unwrap().into_raw(),
+                0_i32,
+            ))
+        };
+        let ctg_lens: FxHashMap<(String, String), usize> = ctg_lens.into_iter().collect();
+        let number_iter_thread = 8_usize;
+        let prefetching = true;
         Ok(Self {
             filepath,
             agc_handle,
             samples,
             ctg_lens,
             sample_ctg,
+            prefetching,
+            number_iter_thread 
         })
+    }
+
+    pub fn set_iter_thread(&mut self, number_iter_thread: usize) {
+        self.number_iter_thread = number_iter_thread;
+    }
+
+    pub fn set_prefetching(&mut self, perfetching: bool) {
+        self.prefetching = perfetching;
     }
 
     pub fn get_sub_seq(
@@ -164,10 +189,13 @@ impl<'a> IntoIterator for &'a AGCFile {
 
 impl<'a> AGCFileIter<'a> {
     pub fn new(agc_file: &'a AGCFile) -> Self {
-        let agc_thread_pool = ThreadPoolBuilder::new().num_threads(36).build().unwrap();
+        let agc_thread_pool = ThreadPoolBuilder::new().num_threads(agc_file.number_iter_thread).build().unwrap();
+        //let number_of_reader_threads = agc_file.number_iter_thread;
+        let prefetching = agc_file.prefetching;
         AGCFileIter {
             agc_file,
             agc_thread_pool,
+            prefetching,
             current_ctg: 0,
             seq_buf: RefCell::new(None),
         }
@@ -175,15 +203,14 @@ impl<'a> AGCFileIter<'a> {
 }
 
 thread_local! {
-    pub static TL_AGCHANDLE: RefCell<Option<AGCFile>> = RefCell::new(None);
+    pub static TL_AGCHANDLE: RefCell<Option<AGCHandle>> = RefCell::new(None);
 }
 
 impl<'a> Iterator for AGCFileIter<'a> {
     // can we parallelized this?
     type Item = io::Result<SeqRec>;
-
     fn next(&mut self) -> Option<Self::Item> {
-        let number_decoder = 128_usize;
+        let number_decoder = 1024_usize;
 
         if self.current_ctg == self.agc_file.sample_ctg.len() {
             return None;
@@ -199,6 +226,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
         self.seq_buf.replace(Some(seq_buf));
 
         if self.current_ctg == buf_e {
+            //log::info!("New chunk {}", self.current_ctg);
             // buffer exhausted
             let mut next_batch = <Vec<(String, String, String, usize, usize)>>::new();
             for i in self.current_ctg..self.current_ctg + number_decoder {
@@ -223,18 +251,41 @@ impl<'a> Iterator for AGCFileIter<'a> {
 
             let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
 
+
             let v_seq_rec = self.agc_thread_pool.install(|| {
                 let seq_buf = next_batch
                     .par_iter()
-                    .map(|(filepath, s, c, _bgn, _end)| {
+                    .map(|(filepath, s, c, bgn, end)| {
                         TL_AGCHANDLE.with(|tl_agc_handle| {
                             if (*tl_agc_handle.borrow_mut()).is_none() {
-                                *tl_agc_handle.borrow_mut() =
-                                    Some(AGCFile::new(filepath.clone()).unwrap());
+                                *tl_agc_handle.borrow_mut() = Some(unsafe {
+                                    AGCHandle(agc_open(
+                                        CString::new(filepath.clone()).unwrap().into_raw(),
+                                        if self.prefetching {1_i32} else {0_i32},
+                                    ))
+                                });
                             }
                             let t = tl_agc_handle.borrow_mut();
                             let agc_handle = (t.as_ref()).unwrap();
-                            let seq = agc_handle.get_seq(s.clone(), c.clone());
+
+                            let c_sample_name: *mut i8 = CString::new(s.clone()).unwrap().into_raw();
+                            let c_ctg_name: *mut i8 = CString::new(c.clone()).unwrap().into_raw();
+                            let seq;
+                            let ctg_len = *end - *bgn + 1;
+                            unsafe {
+                                let seq_buf: *mut i8 = libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
+                                agc_get_ctg_seq(
+                                    agc_handle.0,
+                                    c_sample_name,
+                                    c_ctg_name,
+                                    *bgn as i32,
+                                    *end as i32, 
+                                    seq_buf,
+                                );
+                                seq = <Vec<u8>>::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
+                                //check this, it takes over the pointer? we don't need to free the point manually?
+                            }
+
                             SeqRec {
                                 source: Some(s.clone()),
                                 id: c.as_bytes().to_vec(),

@@ -2,6 +2,7 @@
 
 use rustc_hash::FxHashMap;
 use std::fmt;
+use bincode::{Decode, Encode};
 
 #[derive(Clone, Debug)]
 pub struct OvlpMatch {
@@ -16,7 +17,7 @@ pub struct OvlpMatch {
     pub deltas: Option<Vec<DeltaPoint>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Decode, Encode)]
 pub struct ShmmrSpec {
     pub w: u32,
     pub k: u32,

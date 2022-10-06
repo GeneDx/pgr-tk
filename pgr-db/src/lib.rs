@@ -11,6 +11,16 @@ pub mod kmer_filter;
 pub mod seq_db;
 pub mod seqs2variants;
 pub mod shmmrutils;
+pub mod frag_file_io;
+
+/// Include the generated bindings into a separate module.
+#[allow(non_upper_case_globals)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
+#[allow(unused)]
+pub mod wfa {
+    include!(concat!(env!("OUT_DIR"), "/bindings_wfa.rs"));
+}
 
 #[cfg(test)]
 mod tests {
@@ -70,7 +80,7 @@ mod tests {
     pub fn gz_file_read_test() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs2.fa.gz".to_string());
-        println!("{:?}", sdb.seqs[0].seq_frags);
+        println!("{:?}", sdb.seqs[0].seq_frag_range);
     }
 
     #[test]
@@ -349,5 +359,16 @@ mod tests {
         println!("out2: {} {:?}", out2.len(), out2);
         assert!(out1.len() == 2);
         assert!(out2.len() == 2);
+    }
+
+
+    #[test]
+    fn test_open_compact_seq_db_storage() {
+        use crate::frag_file_io::CompactSeqDBStorage;
+        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string()); 
+        let seq = seq_storage.get_seq_by_id(0);
+        println!("{}", String::from_utf8_lossy(&seq[..]));
+        let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
+        println!("{}", String::from_utf8_lossy(&seq[..]));
     }
 }

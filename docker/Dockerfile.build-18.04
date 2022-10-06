@@ -5,7 +5,7 @@ RUN apt-get update &&  apt-get install -y --no-install-recommends git curl softw
     build-essential=12.4ubuntu1  \
     clang-3.9=1:3.9.1-19ubuntu1 \
     libclang-3.9 openssh-client \
-    gpg wget
+    gpg wget libomp5 libomp-dev
 RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
     gpg --dearmor - | tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
 RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ bionic main' | \

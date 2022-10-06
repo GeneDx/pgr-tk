@@ -18,7 +18,7 @@ jobs:
       with:
         submodules: recursive
     - name: setup
-      run: rustup default stable && cd rs-wfa/ && git clone https://github.com/cschin/WFA.git --depth=1 && cd .. 
+      run: rustup default stable && cd WFA2-lib && make all
     - name: Run tests
       run: cargo test --verbose --workspace --exclude pgrtk
     - name: Build
