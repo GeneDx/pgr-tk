@@ -7,7 +7,7 @@ build = "build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [build-dependencies]
-bindgen = "0.58.1"
+bindgen = "0.60.1"
 
 [dependencies]
 rustc-hash = "1.1.0"
@@ -23,7 +23,6 @@ cuckoofilter = "0.5"
 bgzip = "0.2.1"
 serde = { version = "1.0.137", features = ["derive", "rc"] } 
 serde_json = "1.0.81"
-libwfa = { path="../rs-wfa/" }
 regex = "1"
 bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
 memmap = "0.7.0"

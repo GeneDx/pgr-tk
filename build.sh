@@ -1,10 +1,8 @@
-pushd rs-wfa/
-rm -rf WFA
-git clone https://github.com/cschin/WFA.git --depth=1
+pushd WFA2-lib
+make all
 popd
 
 rustup default stable
-cargo build -p libwfa --release
 cargo build -p pgr-db --release
 cargo build -p pgr-bin --release
 

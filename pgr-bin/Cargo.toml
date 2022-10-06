@@ -13,5 +13,4 @@ log = { version = "^0.4.5", features = ["std"] }
 clap = { version = "3.1.12", features = ["derive"] }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
-libwfa = { path="../rs-wfa/" }
 regex = "1"

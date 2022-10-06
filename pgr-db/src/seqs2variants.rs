@@ -1,5 +1,4 @@
-use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
-use regex::Regex;
+use crate::wfa;
 use std::result::Result;
 
 #[derive(Debug, Clone)]
@@ -35,32 +34,48 @@ pub struct AlnMap {
 
 pub type AlnSegments = Vec<AlnSegment>;
 
-pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(isize, String, Vec<u8>), &'static str> {
-    let alloc = MMAllocator::new(BUFFER_SIZE_8M as u64);
-    let pattern = seq0.to_string();
-    let text = seq1.to_string();
-    let mut penalties = AffinePenalties {
-        match_: 0,
-        mismatch: 4,
-        gap_opening: 6,
-        gap_extension: 1,
-    };
-    let pat_len = pattern.as_bytes().len();
-    let text_len = text.as_bytes().len();
+pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(i32, Vec<u8>), &'static str> {
+    let a = seq0;
+    let b = seq1;
+    unsafe {
+        let mut attributes = wfa::wavefront_aligner_attr_default;
+        // Do not use a heuristic (enabled by default).
+        //attributes.heuristic.strategy = wfa::wf_heuristic_strategy_wf_heuristic_none;
+        // Only compute the score (not a path).
+        //attributes.alignment_scope = wfa::alignment_scope_t_compute_score;
 
-    let mut wavefronts =
-        AffineWavefronts::new_reduced(pat_len, text_len, &mut penalties, 100, 100, &alloc);
-    let m = wavefronts.align(pattern.as_bytes(), text.as_bytes());
-    match m {
-        Ok(()) => {
-            let score = wavefronts.edit_cigar_score(&mut penalties);
-            //let cigar = wavefronts.cigar_bytes_raw();
-            let cigar = wavefronts.cigar_bytes();
-            let cg_str = std::str::from_utf8(&cigar).unwrap();
+        // Set the cost model and parameters.
+        attributes.distance_metric = wfa::distance_metric_t_gap_affine;
+        attributes.affine_penalties.mismatch = 4 as i32;
+        attributes.affine_penalties.gap_opening = 4 as i32;
+        attributes.affine_penalties.gap_extension = 1 as i32;
 
-            Ok((score, cg_str.to_string(), wavefronts.cigar_bytes_raw()))
-        }
-        Err(_) => Err("align failed"),
+        // Initialize the aligner object.
+        // This should be reused for multiple queries.
+        let wf_aligner = wfa::wavefront_aligner_new(&mut attributes);
+
+        // Do the alignment.
+        let status = wfa::wavefront_align(
+            wf_aligner,
+            a.as_ptr() as *const i8,
+            a.len() as i32,
+            b.as_ptr() as *const i8,
+            b.len() as i32,
+        );
+        assert_eq!(status, 0);
+        if status != 0 {
+            return Err("wfa align failed")
+        };
+
+        let cigar = *(*wf_aligner).cigar;
+        //println!("{:?}", cigar);
+        let cigar_vec = (cigar.begin_offset.. cigar.end_offset).into_iter().map(|offset| {
+            *cigar.operations.add(offset as usize) as u8
+        }).collect::<Vec<u8>>();
+        let score = cigar.score;
+        // Clean up memory.
+        wfa::wavefront_aligner_delete(wf_aligner);
+        Ok((score, cigar_vec))
     }
 }
 
@@ -78,18 +93,33 @@ pub fn get_aln_segements(
     let mut v = AlnSegments::new();
     let mut p0: u32 = 0;
     let mut p1: u32 = 0;
-    let unit = Regex::new(r"([0-9]+[MIDX])").unwrap();
-    unit.captures_iter(cigar.1.as_str())
-        .map(|m| {
-            let u = &m[0];
-            let tag = u.as_bytes().get(u.len() - 1);
-            let adv = u[0..u.len() - 1].parse::<u32>().unwrap();
+    
+    let mut cigar_seg: Vec<Vec<u8>> = vec![];
+
+    cigar.1.iter().for_each( |&c| { 
+        if cigar_seg.len() == 0 {
+            cigar_seg.push( vec![c] )
+        } else {
+            let l = cigar_seg.len();
+            let last = &mut cigar_seg[l-1];
+            if last[last.len()-1] == c {
+                last.push(c)
+            } else {
+                cigar_seg.push( vec![c] );
+            }
+        }
+    });
+    
+    cigar_seg.iter().map(|v|    
+        {
+            let tag = v[0];
+            let adv = v.len() as u32;
             let advs = match tag {
-                Some(b'M') => Some((AlnSegType::Match, adv, adv)),
-                Some(b'X') => Some((AlnSegType::Mismatch, adv, adv)),
-                Some(b'I') => Some((AlnSegType::Insertion, 0, adv)),
-                Some(b'D') => Some((AlnSegType::Deletion, adv, 0)),
-                _ => None,
+                b'M' => Some((AlnSegType::Match, adv, adv)),
+                b'X' => Some((AlnSegType::Mismatch, adv, adv)),
+                b'I' => Some((AlnSegType::Insertion, 0, adv)),
+                b'D' => Some((AlnSegType::Deletion, adv, 0)),
+                _ => None
             }
             .unwrap();
             advs
@@ -234,10 +264,22 @@ pub fn get_aln_fragment(
     )
 }
 
+
 #[cfg(test)]
 mod test {
     use super::*;
-
+    #[test]
+    fn test_get_cigar2() {
+        let seq0 = include_str!("../test/test_data/seq0")
+            .trim_end()
+            .to_string();
+        let seq1 = include_str!("../test/test_data/seq1")
+            .trim_end()
+            .to_string();
+        let cigar = get_cigar(&seq0, &seq1);
+        println!("{:?}", cigar);
+    }
+    
     #[test]
     fn test_get_aln_map() {
         let seq0 = include_str!("../test/test_data/seq0")
@@ -301,4 +343,5 @@ mod test {
         assert!(String::from_utf8_lossy(&out.1) == "|||||||||||".to_string());
         assert!(String::from_utf8_lossy(&out.2) == "CTTTCAAGTAA".to_string());
     }
+    
 }

@@ -5,12 +5,8 @@ use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
 use pgr_db::{agc_io, fasta_io, frag_file_io};
 use pyo3::exceptions;
-// use pgr_utils::fasta_io;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
-// use pyo3::exceptions;
 use pyo3::prelude::*;
-// use pyo3::types::PyString;
-use libwfa::{affine_wavefront::*, bindings::*, mm_allocator::*, penalties::*};
 use pgr_db::seqs2variants;
 use pyo3::exceptions::PyValueError;
 use pyo3::types::PyString;
@@ -1902,35 +1898,16 @@ pub struct AlnMap {
 /// Returns
 /// -------
 /// tuple
-///     tuple of (alignment_score, CIGAR_string, CIGAR_list)
+///     tuple of (alignment_score, CIGAR_list)
 ///
 #[pyfunction(seq0, seq1)]
 #[pyo3(text_signature = "($self, seq0, seq1)")]
-fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(isize, String, Vec<u8>)> {
-    let alloc = MMAllocator::new(BUFFER_SIZE_8M as u64);
-    let pattern = seq0.to_string();
-    let text = seq1.to_string();
-    let mut penalties = AffinePenalties {
-        match_: 0,
-        mismatch: 4,
-        gap_opening: 6,
-        gap_extension: 2,
-    };
-    let pat_len = pattern.as_bytes().len();
-    let text_len = text.as_bytes().len();
-
-    let mut wavefronts =
-        AffineWavefronts::new_reduced(pat_len, text_len, &mut penalties, 100, 100, &alloc);
-    wavefronts
-        .align(pattern.as_bytes(), text.as_bytes())
-        .unwrap();
-
-    let score = wavefronts.edit_cigar_score(&mut penalties);
-    //let cigar = wavefronts.cigar_bytes_raw();
-    let cigar = wavefronts.cigar_bytes();
-    let cg_str = std::str::from_utf8(&cigar).unwrap();
-
-    Ok((score, cg_str.to_string(), wavefronts.cigar_bytes_raw()))
+fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
+    if let Ok((score, cigar)) = seqs2variants::get_cigar(&seq0.to_string(), &seq1.to_string()) {
+        Ok((score, cigar))
+    } else {
+        Err(PyValueError::new_err("fail to align"))
+    }
 }
 
 /// Get alignement segments from two sequences

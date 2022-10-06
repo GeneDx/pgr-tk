@@ -2,7 +2,7 @@ from ubuntu:20.04
 RUN apt-get update
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
-RUN apt-get install -y build-essential git ssh curl clang-10 cmake
+RUN apt-get install -y build-essential git ssh curl clang-10 cmake libomp5 libomp-dev
 RUN mkdir -p /opt
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 RUN . /root/.cargo/env && cargo install maturin
