@@ -3,12 +3,12 @@ pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 use pgr_db::aln::{self, HitPair};
 use pgr_db::seq_db;
+use pgr_db::seqs2variants;
+use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
 use pgr_db::{agc_io, fasta_io, frag_file_io};
 use pyo3::exceptions;
-use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
-use pyo3::prelude::*;
-use pgr_db::seqs2variants;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 use pyo3::types::PyString;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
@@ -832,7 +832,11 @@ impl SeqIndexDB {
                     .unwrap()
                     .get(&(ctg_name, Some(sample_name)))
                     .unwrap();
-                Ok(self.seq_db.as_ref().unwrap().get_sub_seq_by_id(sid, bgn as u32, end as u32))
+                Ok(self
+                    .seq_db
+                    .as_ref()
+                    .unwrap()
+                    .get_sub_seq_by_id(sid, bgn as u32, end as u32))
             }
             Backend::FRG => {
                 let &(sid, _) = self
@@ -841,7 +845,11 @@ impl SeqIndexDB {
                     .unwrap()
                     .get(&(ctg_name, Some(sample_name)))
                     .unwrap();
-                Ok(self.frg_db.as_ref().unwrap().get_sub_seq_by_id(sid, bgn as u32, end as u32))
+                Ok(self
+                    .frg_db
+                    .as_ref()
+                    .unwrap()
+                    .get_sub_seq_by_id(sid, bgn as u32, end as u32))
             }
             Backend::UNKNOWN => Err(PyValueError::new_err("no seq db found")),
         }
@@ -877,9 +885,11 @@ impl SeqIndexDB {
                     .0
                     .get_sub_seq(sample_name, ctg_name, bgn, end))
             }
-            Backend::MEMORY | Backend::FASTX => {
-                Ok(self.seq_db.as_ref().unwrap().get_sub_seq_by_id(sid, bgn as u32, end as u32))
-            }
+            Backend::MEMORY | Backend::FASTX => Ok(self
+                .seq_db
+                .as_ref()
+                .unwrap()
+                .get_sub_seq_by_id(sid, bgn as u32, end as u32)),
             Backend::FRG => Ok(self
                 .frg_db
                 .as_ref()
@@ -1069,19 +1079,19 @@ impl SeqIndexDB {
         pb: Vec<Vec<(u64, u64, u8)>>,
     ) -> FxHashMap<(u64, u64), (usize, u8, usize)> {
         // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
-        let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
-        pb.iter().for_each(|bundle| {
-            bundle.iter().for_each(|v| {
-                *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
-            })
-        });
+        // let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
+        // pb.iter().for_each(|bundle| {
+        //    bundle.iter().for_each(|v| {
+        //        *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
+        //    })
+        //});
 
         pb.iter()
             .enumerate()
             .flat_map(|(bundle_id, path)| {
                 path.iter()
                     .enumerate()
-                    .filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
+                    //.filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
                     .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
                     .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
             })

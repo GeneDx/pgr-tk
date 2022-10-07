@@ -986,14 +986,12 @@ pub fn get_principal_bundles_from_adj_list(
 
     let mut g1 = g0.clone();
     let mut terminal_vertices = FxHashSet::<ShmmrGraphNode>::default();
-    
+
     for (v, w, _) in g0.all_edges() {
-        if g0.neighbors_directed(v, Outgoing).count() > 1
-        {
+        if g0.neighbors_directed(v, Outgoing).count() > 1 {
             terminal_vertices.insert(v);
         };
-        if g0.neighbors_directed(w, Incoming).count() > 1
-        {
+        if g0.neighbors_directed(w, Incoming).count() > 1 {
             terminal_vertices.insert(v);
         };
     }
@@ -1015,15 +1013,12 @@ pub fn get_principal_bundles_from_adj_list(
         let s = starts.pop().unwrap();
         let mut dfs = Dfs::new(&g1, s);
         let mut path = Vec::<ShmmrGraphNode>::new();
-        path.push(s);
-        if !terminal_vertices.contains(&s) {
-            while let Some(v) = dfs.next(&g1) {
-                if terminal_vertices.contains(&v) {
-                    path.push(v);
-                    break;
-                } else {
-                    path.push(v);
-                }
+        while let Some(v) = dfs.next(&g1) {
+            if terminal_vertices.contains(&v) {
+                path.push(v);
+                break;
+            } else {
+                path.push(v);
             }
         }
         if path.len() > 0 {
