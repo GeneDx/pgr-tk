@@ -984,29 +984,18 @@ pub fn get_principal_bundles_from_adj_list(
         }
     });
 
-    let mut g1 = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    let mut g1 = g0.clone();
     let mut terminal_vertices = FxHashSet::<ShmmrGraphNode>::default();
+    
     for (v, w, _) in g0.all_edges() {
-        let mut remove_edge = false;
         if g0.neighbors_directed(v, Outgoing).count() > 1
-            || g0.neighbors_directed(v, Incoming).count() > 1
         {
             terminal_vertices.insert(v);
-            remove_edge = true;
         };
-        if g0.neighbors_directed(w, Outgoing).count() > 1
-            || g0.neighbors_directed(w, Incoming).count() > 1
+        if g0.neighbors_directed(w, Incoming).count() > 1
         {
-            terminal_vertices.insert(w);
-            remove_edge = true;
+            terminal_vertices.insert(v);
         };
-        if !remove_edge {
-            g1.add_edge(
-                ShmmrGraphNode(v.0, v.1, v.2),
-                ShmmrGraphNode(w.0, w.1, w.2),
-                (),
-            );
-        }
     }
 
     let mut starts = Vec::<ShmmrGraphNode>::default();
@@ -1015,22 +1004,50 @@ pub fn get_principal_bundles_from_adj_list(
             starts.push(v);
         }
     }
+    // if the whole graph is a loop
+    if starts.len() == 0 {
+        let v = g1.nodes().next().unwrap();
+        starts.push(v);
+    };
 
     let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
-
     while starts.len() != 0 {
         let s = starts.pop().unwrap();
         let mut dfs = Dfs::new(&g1, s);
         let mut path = Vec::<ShmmrGraphNode>::new();
-        while let Some(v) = dfs.next(&g1) {
-            path.push(v);
+        path.push(s);
+        if !terminal_vertices.contains(&s) {
+            while let Some(v) = dfs.next(&g1) {
+                if terminal_vertices.contains(&v) {
+                    path.push(v);
+                    break;
+                } else {
+                    path.push(v);
+                }
+            }
         }
         if path.len() > 0 {
             path.iter().for_each(|&v| {
                 g1.remove_node(v);
                 g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
             });
+
             principal_bundles.push(path);
+
+            starts.clear();
+            for v in g1.nodes() {
+                if g1.neighbors_directed(v, Incoming).count() == 0 {
+                    starts.push(v);
+                }
+            }
+            // if the whole graph is a loop
+            if starts.len() == 0 {
+                if let Some(v) = g1.nodes().next() {
+                    starts.push(v);
+                } else {
+                    break;
+                }
+            };
         }
     }
     principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
