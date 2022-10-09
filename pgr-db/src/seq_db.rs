@@ -1026,27 +1026,32 @@ pub fn get_principal_bundles_from_adj_list(
                 g1.remove_node(v);
                 g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
             });
-            let v = path[path.len()-1];            
 
-            starts.clear();
+            /*
+            let v = path[path.len()-1];            
 
             for w in g1.neighbors_directed(v, Outgoing) {
                 if g1.neighbors_directed(w, Incoming).count() == 0 {
                     starts.push(w);
                 }
             }
-            
-            // if the whole graph is a loop
-            if starts.len() == 0 {
-                if let Some(v) = g1.nodes().next() {
+            */
+            starts.clear();
+            for v in g1.nodes() {
+                if g1.neighbors_directed(v, Incoming).count() == 0 {
                     starts.push(v);
-                } else {
-                    break;
                 }
-            };
+            }
 
             principal_bundles.push(path);
         }
+        
+        // if the whole graph is a loop
+        if starts.len() == 0 {
+            if let Some(v) = g1.nodes().next() {
+                starts.push(v);
+            }
+        };
     }
     principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
     (principal_bundles, filtered_adj_list)
