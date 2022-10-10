@@ -577,7 +577,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         let mut count = FxHashSet::<u32>::default();
         m.iter().for_each(|(sid, _)| {count.insert(*sid);});
 
-        //println!("{:?} {:?}",k ,m.len());
+        //println!("DBG X {:?} {:?}",k ,m.len());
         if count.len() >= min_cov as usize {
             reliable_regions.push((k, m.len() as u32));
         };
@@ -590,19 +590,19 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
     reliable_regions.into_iter().for_each(|(r, c)| {
         if p_region.is_none() {
             p_region = Some((r, c));
-            seq.extend(seq0[0..r.1 as usize].to_vec());
+            seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
             (0..r.1).into_iter().for_each(|_| {
                 cov.push(c);
             });
         } else {
-            // println!("R : {:?} {:?}", r, p_region);
+            // println!("DBG R PR : {:?} {:?}", r, p_region);
             if r.0 == p_region.unwrap().0 .1 {
                 seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                 (r.0..r.1).into_iter().for_each(|_| {
                     cov.push(c);
                 });
             } else {
-                // println!("X : {:?} {}", r, seq.len());
+                // println!("DBG R SL : {:?} {}", r, seq.len());
                 let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
                 let c_hit = hit_map.get(&r).unwrap();
                 let p_hit = p_hit
@@ -614,21 +614,17 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                     .map(|v| *v)
                     .collect::<FxHashMap<u32, (u32, u32, u8)>>();
 
-                //let mut s0 = vec![];
                 let k = shmmr_spec.k as usize;
-                //let mut count = FxHashSet::<u32>::default();
                 let mut seq_count = FxHashMap::<Vec<u8>, u32>::default();
                 for (sid, v) in p_hit {
                     if sid == sid0 {
-                        //let w = *c_hit.get(&sid).unwrap();
-                        //s0 = seqs[sid as usize].3[v.1 as usize..w.0 as usize].to_vec();
                         continue;
                     }
 
                     if c_hit.contains_key(&sid) {
                         let w = *c_hit.get(&sid).unwrap();
-                        //println!("R: {} {:?} {:?}", sid, p_region, r);
-                        //println!("S: {} {:?} {:?}", sid, v, w);
+                        //println!("DBG R: {} {:?} {:?}", sid, p_region, r);
+                        //println!("DBG S: {} {:?} {:?}", sid, v, w);
                         
                         if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
                             let s0 = sdb.get_seq_by_id(sid);
