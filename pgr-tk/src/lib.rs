@@ -1084,7 +1084,7 @@ impl SeqIndexDB {
         //    bundle.iter().for_each(|v| {
         //        *seg_count.entry((v.0, v.1)).or_insert(0) += 1;
         //    })
-        //});
+        // });
 
         pb.iter()
             .enumerate()
@@ -1568,6 +1568,28 @@ impl SeqIndexDB {
                 .expect("write mdb file fail");
         };
     }
+
+    /// generate consensus sequence for one sequence in the database
+    #[args(sid, min_cov)]
+    #[pyo3(text_signature = "($self, sid, min_cov)")]
+    pub fn shmmr_sparse_aln_consensus(
+        &self,
+        sid: u32,
+        min_cov: u32,
+    ) -> PyResult<Vec<(Vec<u8>, Vec<u32>)>> {
+        assert!(
+            self.backend == Backend::FASTX || self.backend == Backend::MEMORY,
+            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+        );
+        let sdb = &self.seq_db.as_ref().unwrap();
+        let consensus = pgr_db::ec::shmmr_sparse_aln_consensus_with_sdb(sid, sdb, min_cov);
+        match consensus {
+            Ok(seq) => Ok(seq),
+            Err(_) => Err(exceptions::PyException::new_err(
+                "consensus failed",
+            )),
+        }
+    }
 }
 
 impl SeqIndexDB {
@@ -1671,6 +1693,7 @@ impl AGCFile {
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
         Ok(self.agc_file.get_seq(sample_name, ctg_name))
     }
+
 }
 
 /// Perform sparse dynamic programming to identify alignment between sequence

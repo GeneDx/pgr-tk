@@ -4,7 +4,7 @@
 use crate::aln::query_fragment_to_hps;
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
-use crate::seq_db;
+use crate::seq_db::{self, CompactSeqDB};
 use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
 use petgraph::EdgeDirection::Outgoing;
@@ -527,10 +527,30 @@ pub fn shmmr_sparse_aln_consensus(
             )
         })
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
-    sdb.load_index_from_seq_vec(&seqs);
+    sdb.load_seqs_from_seq_vec(&seqs);  
+    shmmr_sparse_aln_consensus_with_sdb(0, &sdb, min_cov)
+}
+
+
+/// perform error correction using shimmer alignment
+///
+/// this methods try to perseve SNP specific to a guide read (the first one in the list)
+/// if there is more or equal to the "min_cov"
+///
+/// 
+pub fn shmmr_sparse_aln_consensus_with_sdb(
+    sid0: u32,
+    sdb: &CompactSeqDB,
+    min_cov: u32,
+) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
+    let shmmr_spec = &sdb.shmmr_spec; 
+    assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
+    assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
+   
+    let seq0 = sdb.get_seq_by_id(sid0);
     let hit_pairs = query_fragment_to_hps(
         &sdb.frag_map,
-        &seqs[0].3,
+        &seq0,
         &shmmr_spec,
         0.1,
         Some(32),
@@ -556,7 +576,7 @@ pub fn shmmr_sparse_aln_consensus(
     keys.into_iter().for_each(|k| {
         let m = hit_map.get(&k).unwrap();
         //println!("{:?} {:?}",k ,m.len());
-        if m.len() >= min_cov as usize {
+        if m.len() > min_cov as usize {
             reliable_regions.push((k, m.len() as u32));
         };
         // m.into_iter().for_each(|v| {
@@ -571,14 +591,14 @@ pub fn shmmr_sparse_aln_consensus(
     reliable_regions.into_iter().for_each(|(r, c)| {
         if p_region.is_none() {
             p_region = Some((r, c));
-            seq.extend(seqs[0].3[0..r.1 as usize].to_vec());
+            seq.extend(seq0[0..r.1 as usize].to_vec());
             (0..r.1).into_iter().for_each(|_| {
                 cov.push(c);
             });
         } else {
             // println!("R : {:?} {:?}", r, p_region);
             if r.0 == p_region.unwrap().0 .1 {
-                seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                 (r.0..r.1).into_iter().for_each(|_| {
                     cov.push(c);
                 });
@@ -600,7 +620,7 @@ pub fn shmmr_sparse_aln_consensus(
                 let mut c2 = 0_u32;
                 let k = shmmr_spec.k as usize;
                 for (sid, v) in p_hit {
-                    if sid == 0 {
+                    if sid == sid0 {
                         //let w = *c_hit.get(&sid).unwrap();
                         //s0 = seqs[sid as usize].3[v.1 as usize..w.0 as usize].to_vec();
                         continue;
@@ -611,9 +631,11 @@ pub fn shmmr_sparse_aln_consensus(
                         if s.len() == 0 {
                             // patch in, TODO: we will need to do some sub-consensus
                             if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
-                                s = seqs[sid as usize].3[v.1 as usize..w.0 as usize].to_vec();
+                                let s0 = sdb.get_seq_by_id(sid);
+                                s = s0[v.1 as usize..w.0 as usize].to_vec();
                             } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
-                                s = seqs[sid as usize].3[w.1 as usize - k..v.0 as usize - k]
+                                let s0 = sdb.get_seq_by_id(sid);
+                                s = s0[w.1 as usize - k..v.0 as usize - k]
                                     .to_vec();
                                 s = reverse_complement(&s);
                             } else {
@@ -628,7 +650,7 @@ pub fn shmmr_sparse_aln_consensus(
                 if c2 >= min_cov {
                     (0..s.len()).into_iter().for_each(|_| cov.push(c2));
                     seq.extend(s);
-                    seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                    seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                     (r.0..r.1).into_iter().for_each(|_| {
                         cov.push(c);
                     });
@@ -637,7 +659,7 @@ pub fn shmmr_sparse_aln_consensus(
                     seq.clear();
                     cov.clear();
                     // seq.extend(s0);
-                    seq.extend(seqs[0].3[r.0 as usize..r.1 as usize].to_vec());
+                    seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                     (r.0..r.1).into_iter().for_each(|_| {
                         cov.push(c);
                     });
@@ -652,12 +674,14 @@ pub fn shmmr_sparse_aln_consensus(
     Ok(out_seqs)
 }
 
+
 #[cfg(test)]
 mod test {
     use crate::ec::guided_shmmr_dbg_consensus;
     use crate::ec::naive_dbg_consensus;
     use crate::ec::shmmr_dbg_consensus;
     use crate::ec::shmmr_sparse_aln_consensus;
+    use crate::ec::shmmr_sparse_aln_consensus_with_sdb;
     use crate::seq_db::CompactSeqDB;
     use crate::shmmrutils::ShmmrSpec;
     #[test]
@@ -741,6 +765,26 @@ mod test {
             .collect::<Vec<Vec<u8>>>();
 
         let r = shmmr_sparse_aln_consensus(seqs, &None, 2).unwrap();
+        for (s, c) in r {
+            println!("{}", String::from_utf8_lossy(&s[..]));
+            println!("{:?}", c);
+        }
+    }
+
+
+    #[test]
+    fn test_shmmr_sparse_aln_consensus_with_sdb() {
+        let spec = ShmmrSpec {
+            w: 31,
+            k: 31,
+            r: 1,
+            min_span: 0,
+            sketch: false,
+        };
+        let mut sdb = CompactSeqDB::new(spec);
+        let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test5.fa".to_string());
+
+        let r = shmmr_sparse_aln_consensus_with_sdb(0, &sdb, 2).unwrap();
         for (s, c) in r {
             println!("{}", String::from_utf8_lossy(&s[..]));
             println!("{:?}", c);
