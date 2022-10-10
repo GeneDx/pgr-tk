@@ -1,18 +1,10 @@
 extern crate bindgen;
-use std::env::consts::{ARCH, OS};
-
-#[cfg(debug_assertions)]
-const BUILD_TYPE: &'static str = "debug";
-#[cfg(not(debug_assertions))]
-const BUILD_TYPE: &'static str = "release";
 
 use std::{
     env,
-    fs::{read_dir, remove_dir_all},
     path::PathBuf,
     process::Command,
 };
-
 
 fn wfa() -> Option<()> {
     // 1. Link instructions for Cargo.
