@@ -1,2 +1,2 @@
 [workspace]
-members = ["pgr-db", "pgr-bin", 'pgr-tk'] 
+members = ["pgr-db", "pgr-bin", 'pgr-tk', "rs-libwfa2"] 

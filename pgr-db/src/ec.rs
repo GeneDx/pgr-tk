@@ -9,6 +9,7 @@ use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
 use petgraph::EdgeDirection::Outgoing;
 use petgraph::{graphmap::DiGraphMap, EdgeDirection::Incoming};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// perform error correction using de Bruijn graph
@@ -528,7 +529,9 @@ pub fn shmmr_sparse_aln_consensus(
         })
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
     sdb.load_seqs_from_seq_vec(&seqs);  
-    shmmr_sparse_aln_consensus_with_sdb(0, &sdb, min_cov)
+    let out = shmmr_sparse_aln_consensus_with_sdb(vec![0], &sdb, min_cov).unwrap();
+
+    Ok(out[0].1.clone())
 }
 
 /// perform error correction using shimmer alignment
@@ -538,143 +541,161 @@ pub fn shmmr_sparse_aln_consensus(
 ///
 /// 
 pub fn shmmr_sparse_aln_consensus_with_sdb(
-    sid0: u32,
+    sids: Vec<u32>,
     sdb: &CompactSeqDB,
     min_cov: u32,
-) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
+) -> Result<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>, &'static str> {
     let shmmr_spec = &sdb.shmmr_spec; 
     assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
-   
-    let seq0 = sdb.get_seq_by_id(sid0);
-    let hit_pairs = query_fragment_to_hps(
-        &sdb.frag_map,
-        &seq0,
-        &shmmr_spec,
-        0.1,
-        Some(32),
-        Some(32),
-        Some(32),
-        Some(33),
-    );
+  
+    fn shmmr_sparse_aln_consensus_with_sdb_one(
+        sid0: u32,
+        sdb: &CompactSeqDB,
+        min_cov: u32,
+    ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
+        let shmmr_spec = &sdb.shmmr_spec; 
+        let seq0 = sdb.get_seq_by_id(sid0);
+        let hit_pairs = query_fragment_to_hps(
+            &sdb.frag_map,
+            &seq0,
+            &shmmr_spec,
+            0.1,
+            Some(32),
+            Some(32),
+            Some(32),
+            Some(33),
+        );
 
-    let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
-    hit_pairs.into_iter().for_each(|(sid, hits)| {
-        if hits.len() > 0 {
-            // only use the main chian
-            let hps = &hits[0].1;
-            hps.into_iter().for_each(|&(v, w)| {
-                hit_map.entry(v).or_insert(vec![]).push((sid, w));
-            })
-        }
-    });
+        let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
+        hit_pairs.into_iter().for_each(|(sid, hits)| {
+            if hits.len() > 0 {
+                // only use the main chian
+                let hps = &hits[0].1;
+                hps.into_iter().for_each(|&(v, w)| {
+                    hit_map.entry(v).or_insert(vec![]).push((sid, w));
+                })
+            }
+        });
 
-    let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
-    let mut reliable_regions = Vec::<((u32, u32, u8), u32)>::new();
-    keys.sort();
-    keys.into_iter().for_each(|k| {
-        let m = hit_map.get(&k).unwrap();
-        let mut count = FxHashSet::<u32>::default();
-        m.iter().for_each(|(sid, _)| {count.insert(*sid);});
+        let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
+        let mut reliable_regions = Vec::<((u32, u32, u8), u32)>::new();
+        keys.sort();
+        keys.into_iter().for_each(|k| {
+            let m = hit_map.get(&k).unwrap();
+            let mut count = FxHashSet::<u32>::default();
+            m.iter().for_each(|(sid, _)| {count.insert(*sid);});
 
-        //println!("DBG X {:?} {:?}",k ,m.len());
-        if count.len() >= min_cov as usize {
-            reliable_regions.push((k, m.len() as u32));
-        };
-    });
+            //println!("DBG X {:?} {:?}",k ,m.len());
+            if count.len() >= min_cov as usize {
+                reliable_regions.push((k, m.len() as u32));
+            };
+        });
 
-    let mut out_seqs = vec![];
-    let mut seq = vec![];
-    let mut cov = vec![];
-    let mut p_region: Option<((u32, u32, u8), u32)> = None;
-    reliable_regions.into_iter().for_each(|(r, c)| {
-        if p_region.is_none() {
-            p_region = Some((r, c));
-            seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-            (0..r.1).into_iter().for_each(|_| {
-                cov.push(c);
-            });
-        } else {
-            // println!("DBG R PR : {:?} {:?}", r, p_region);
-            if r.0 == p_region.unwrap().0 .1 {
+        let mut out_seqs = vec![];
+        let mut seq = vec![];
+        let mut cov = vec![];
+        let mut p_region: Option<((u32, u32, u8), u32)> = None;
+        reliable_regions.into_iter().for_each(|(r, c)| {
+            if p_region.is_none() {
+                p_region = Some((r, c));
                 seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                (r.0..r.1).into_iter().for_each(|_| {
+                (0..r.1).into_iter().for_each(|_| {
                     cov.push(c);
                 });
             } else {
-                // println!("DBG R SL : {:?} {}", r, seq.len());
-                let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
-                let c_hit = hit_map.get(&r).unwrap();
-                let p_hit = p_hit
-                    .into_iter()
-                    .map(|v| *v)
-                    .collect::<FxHashMap<u32, (u32, u32, u8)>>();
-                let c_hit = c_hit
-                    .into_iter()
-                    .map(|v| *v)
-                    .collect::<FxHashMap<u32, (u32, u32, u8)>>();
-
-                let k = shmmr_spec.k as usize;
-                let mut seq_count = FxHashMap::<Vec<u8>, u32>::default();
-                for (sid, v) in p_hit {
-                    if sid == sid0 {
-                        continue;
-                    }
-
-                    if c_hit.contains_key(&sid) {
-                        let w = *c_hit.get(&sid).unwrap();
-                        //println!("DBG R: {} {:?} {:?}", sid, p_region, r);
-                        //println!("DBG S: {} {:?} {:?}", sid, v, w);
-                        
-                        if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
-                            let s0 = sdb.get_seq_by_id(sid);
-                            let s = s0[v.1 as usize..w.0 as usize].to_vec();
-                            *seq_count.entry(s).or_insert(0) += 1
-                        } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
-                            let s0 = sdb.get_seq_by_id(sid);
-                            let s = s0[w.1 as usize - k..v.0 as usize - k]
-                                .to_vec();
-                            let s = reverse_complement(&s);
-                            *seq_count.entry(s).or_insert(0) += 1
-                        } else {
-                            continue;
-                        }
-                    }
-                }
-
-                let mut seq_count = seq_count.into_iter().map(|(k, v)| {(v, k)}).collect::<Vec<(u32, Vec<u8>)>>();
-                let mut patch_cov = 0_u32;
-                let mut patch_seq = vec![];
-                if seq_count.len() > 0 {
-                    seq_count.sort();
-                    (patch_cov, patch_seq) = seq_count[seq_count.len()-1].clone(); 
-                }
-
-                if patch_cov >= min_cov {
-                    (0..patch_seq.len()).into_iter().for_each(|_| cov.push(patch_cov));
-                    seq.extend(patch_seq);
+                // println!("DBG R PR : {:?} {:?}", r, p_region);
+                if r.0 == p_region.unwrap().0 .1 {
                     seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                     (r.0..r.1).into_iter().for_each(|_| {
                         cov.push(c);
                     });
                 } else {
-                    out_seqs.push((seq.clone(), cov.clone()));
-                    seq.clear();
-                    cov.clear();
-                    // seq.extend(s0);
-                    seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                    (r.0..r.1).into_iter().for_each(|_| {
-                        cov.push(c);
-                    });
+                    // println!("DBG R SL : {:?} {}", r, seq.len());
+                    // find the next hit in the seq and patch in other support sequence for the un-reliable gaps
+                    let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
+                    let c_hit = hit_map.get(&r).unwrap();
+                    let p_hit = p_hit
+                        .into_iter()
+                        .map(|v| *v)
+                        .collect::<FxHashMap<u32, (u32, u32, u8)>>();
+                    let c_hit = c_hit
+                        .into_iter()
+                        .map(|v| *v)
+                        .collect::<FxHashMap<u32, (u32, u32, u8)>>();
+
+                    let k = shmmr_spec.k as usize;
+                    let mut seq_count = FxHashMap::<Vec<u8>, u32>::default();
+                    for (sid, v) in p_hit {
+                        if sid == sid0 {
+                            continue;
+                        }
+
+                        if c_hit.contains_key(&sid) {
+                            let w = *c_hit.get(&sid).unwrap();
+                            //println!("DBG R: {} {:?} {:?}", sid, p_region, r);
+                            //println!("DBG S: {} {:?} {:?}", sid, v, w);
+                            
+                            if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
+                                let s0 = sdb.get_seq_by_id(sid);
+                                let s = s0[v.1 as usize..w.0 as usize].to_vec();
+                                *seq_count.entry(s).or_insert(0) += 1
+                            } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
+                                let s0 = sdb.get_seq_by_id(sid);
+                                let s = s0[w.1 as usize - k..v.0 as usize - k]
+                                    .to_vec();
+                                let s = reverse_complement(&s);
+                                *seq_count.entry(s).or_insert(0) += 1
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+
+                    let mut seq_count = seq_count.into_iter().map(|(k, v)| {(v, k)}).collect::<Vec<(u32, Vec<u8>)>>();
+                    let mut patch_cov = 0_u32;
+                    let mut patch_seq = vec![];
+                    if seq_count.len() > 0 {
+                        seq_count.sort();
+                        (patch_cov, patch_seq) = seq_count[seq_count.len()-1].clone(); 
+                    }
+
+                    if patch_cov >= min_cov {
+                        (0..patch_seq.len()).into_iter().for_each(|_| cov.push(patch_cov));
+                        seq.extend(patch_seq);
+                        seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
+                        (r.0..r.1).into_iter().for_each(|_| {
+                            cov.push(c);
+                        });
+                    } else {
+                        out_seqs.push((seq.clone(), cov.clone()));
+                        seq.clear();
+                        cov.clear();
+                        // seq.extend(s0);
+                        seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
+                        (r.0..r.1).into_iter().for_each(|_| {
+                            cov.push(c);
+                        });
+                    }
                 }
+                p_region = Some((r, c));
             }
-            p_region = Some((r, c));
+        });
+
+        out_seqs.push((seq.clone(), cov.clone()));
+
+        Ok(out_seqs)
+    }
+
+    let out = sids.par_iter().map(|&sid| {
+        if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, &sdb, min_cov) { 
+            (sid, out)
+        } else {
+            (sid, vec![])
         }
-    });
+    }).collect::<Vec<(u32,Vec<(Vec<u8>, Vec<u32>)>)>>();
+    Ok(out)
 
-    out_seqs.push((seq.clone(), cov.clone()));
-
-    Ok(out_seqs)
 }
 
 #[cfg(test)]
@@ -786,8 +807,8 @@ mod test {
         let mut sdb = CompactSeqDB::new(spec);
         let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test5.fa".to_string());
 
-        let r = shmmr_sparse_aln_consensus_with_sdb(0, &sdb, 2).unwrap();
-        for (s, c) in r {
+        let r = shmmr_sparse_aln_consensus_with_sdb(vec![0], &sdb, 2).unwrap();
+        for (s, c) in r[0].clone().1 {
             println!("{}", String::from_utf8_lossy(&s[..]));
             println!("{:?}", c);
         }
