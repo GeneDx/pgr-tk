@@ -531,7 +531,6 @@ pub fn shmmr_sparse_aln_consensus(
     shmmr_sparse_aln_consensus_with_sdb(0, &sdb, min_cov)
 }
 
-
 /// perform error correction using shimmer alignment
 ///
 /// this methods try to perseve SNP specific to a guide read (the first one in the list)
@@ -575,13 +574,13 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
     keys.sort();
     keys.into_iter().for_each(|k| {
         let m = hit_map.get(&k).unwrap();
+        let mut count = FxHashSet::<u32>::default();
+        m.iter().for_each(|(sid, _)| {count.insert(*sid);});
+
         //println!("{:?} {:?}",k ,m.len());
-        if m.len() > min_cov as usize {
+        if count.len() >= min_cov as usize {
             reliable_regions.push((k, m.len() as u32));
         };
-        // m.into_iter().for_each(|v| {
-        //     println!("M : {:?} {:?}", k, v);
-        // })
     });
 
     let mut out_seqs = vec![];
@@ -615,41 +614,49 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                     .map(|v| *v)
                     .collect::<FxHashMap<u32, (u32, u32, u8)>>();
 
-                let mut s = vec![];
                 //let mut s0 = vec![];
-                let mut c2 = 0_u32;
                 let k = shmmr_spec.k as usize;
+                //let mut count = FxHashSet::<u32>::default();
+                let mut seq_count = FxHashMap::<Vec<u8>, u32>::default();
                 for (sid, v) in p_hit {
                     if sid == sid0 {
                         //let w = *c_hit.get(&sid).unwrap();
                         //s0 = seqs[sid as usize].3[v.1 as usize..w.0 as usize].to_vec();
                         continue;
                     }
+
                     if c_hit.contains_key(&sid) {
                         let w = *c_hit.get(&sid).unwrap();
-                        // println!("S: {} {:?} {:?}", sid, v, w);
-                        if s.len() == 0 {
-                            // patch in, TODO: we will need to do some sub-consensus
-                            if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
-                                let s0 = sdb.get_seq_by_id(sid);
-                                s = s0[v.1 as usize..w.0 as usize].to_vec();
-                            } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
-                                let s0 = sdb.get_seq_by_id(sid);
-                                s = s0[w.1 as usize - k..v.0 as usize - k]
-                                    .to_vec();
-                                s = reverse_complement(&s);
-                            } else {
-                                continue;
-                            }
+                        //println!("R: {} {:?} {:?}", sid, p_region, r);
+                        //println!("S: {} {:?} {:?}", sid, v, w);
+                        
+                        if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
+                            let s0 = sdb.get_seq_by_id(sid);
+                            let s = s0[v.1 as usize..w.0 as usize].to_vec();
+                            *seq_count.entry(s).or_insert(0) += 1
+                        } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
+                            let s0 = sdb.get_seq_by_id(sid);
+                            let s = s0[w.1 as usize - k..v.0 as usize - k]
+                                .to_vec();
+                            let s = reverse_complement(&s);
+                            *seq_count.entry(s).or_insert(0) += 1
+                        } else {
+                            continue;
                         }
-                        //println!("S2: {}", String::from_utf8_lossy(&s[..]));
-                        c2 += 1;
                     }
                 }
 
-                if c2 >= min_cov {
-                    (0..s.len()).into_iter().for_each(|_| cov.push(c2));
-                    seq.extend(s);
+                let mut seq_count = seq_count.into_iter().map(|(k, v)| {(v, k)}).collect::<Vec<(u32, Vec<u8>)>>();
+                let mut patch_cov = 0_u32;
+                let mut patch_seq = vec![];
+                if seq_count.len() > 0 {
+                    seq_count.sort();
+                    (patch_cov, patch_seq) = seq_count[seq_count.len()-1].clone(); 
+                }
+
+                if patch_cov >= min_cov {
+                    (0..patch_seq.len()).into_iter().for_each(|_| cov.push(patch_cov));
+                    seq.extend(patch_seq);
                     seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                     (r.0..r.1).into_iter().for_each(|_| {
                         cov.push(c);
@@ -673,7 +680,6 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
 
     Ok(out_seqs)
 }
-
 
 #[cfg(test)]
 mod test {
