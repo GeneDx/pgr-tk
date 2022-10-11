@@ -991,7 +991,12 @@ impl SeqIndexDB {
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
     ///
-    pub fn get_smp_adj_list(&self, min_count: usize, keeps: Option<Vec<u32>>) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    #[args(keeps="None")]
+    pub fn get_smp_adj_list(
+        &self,
+        min_count: usize,
+        keeps: Option<Vec<u32>>,
+    ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             vec![]
@@ -1055,12 +1060,12 @@ impl SeqIndexDB {
     /// list
     ///     list of paths, each path is a list of nodes
     ///
-    ///
+    #[args(keeps="None")]
     pub fn get_principal_bundles(
         &self,
         min_count: usize,
         path_len_cutoff: usize,
-        keeps: Option<Vec<u32>>
+        keeps: Option<Vec<u32>>,
     ) -> Vec<Vec<(u64, u64, u8)>> {
         if let Some(frag_map) = self.get_shmmr_map_internal() {
             let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize, keeps);
@@ -1125,12 +1130,12 @@ impl SeqIndexDB {
     ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
     ///                                   (principal_bundle_is, direction, order_in_the_bundle))
     ///
-    ///
+    #[args(keeps="None")]
     pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
         path_len_cutoff: usize,
-        keeps: Option<Vec<u32>>
+        keeps: Option<Vec<u32>>,
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
         Vec<(
@@ -1292,7 +1297,13 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///
-    pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str, keeps: Option<Vec<u32>>) -> PyResult<()> {
+    #[args(keeps="None")]
+    pub fn generate_mapg_gfa(
+        &self,
+        min_count: usize,
+        filepath: &str,
+        keeps: Option<Vec<u32>>,
+    ) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             return Err(PyValueError::new_err("no index found"));
@@ -1457,13 +1468,14 @@ impl SeqIndexDB {
     ///
     /// None
     ///     The data is written into the file at filepath
-    ///
+    ///     
+    #[args(keeps="None")]
     pub fn generate_principal_mapg_gfa(
         &self,
         min_count: usize,
         path_len_cutoff: usize,
         filepath: &str,
-        keeps: Option<Vec<u32>>
+        keeps: Option<Vec<u32>>,
     ) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
@@ -1579,7 +1591,7 @@ impl SeqIndexDB {
         &self,
         sids: Vec<u32>,
         min_cov: u32,
-    ) -> PyResult<Vec<(u32,Vec<(Vec<u8>, Vec<u32>)>)>> {
+    ) -> PyResult<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>> {
         assert!(
             self.backend == Backend::FASTX || self.backend == Backend::MEMORY,
             "Only DB created with load_from_fastx() can add data from anothe fastx file"
@@ -1588,9 +1600,7 @@ impl SeqIndexDB {
         let consensus = pgr_db::ec::shmmr_sparse_aln_consensus_with_sdb(sids, sdb, min_cov);
         match consensus {
             Ok(seq) => Ok(seq),
-            Err(_) => Err(exceptions::PyException::new_err(
-                "consensus failed",
-            )),
+            Err(_) => Err(exceptions::PyException::new_err("consensus failed")),
         }
     }
 }
@@ -1696,7 +1706,6 @@ impl AGCFile {
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
         Ok(self.agc_file.get_seq(sample_name, ctg_name))
     }
-
 }
 
 /// Perform sparse dynamic programming to identify alignment between sequence
