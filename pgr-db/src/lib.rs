@@ -366,21 +366,42 @@ mod tests {
     fn test_seq_db_storage_get_sub_read() {
         use crate::frag_file_io::CompactSeqDBStorage;
         let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
-        let seq = seq_storage.get_seq_by_id(0);
+        let sid = 0;
 
-        let sub_seq = seq_storage.get_sub_seq_by_id(0, 0, 105);
+        let seq = seq_storage.get_seq_by_id(sid);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 0, 105);
         assert_eq!(seq[0..105], sub_seq[..]);
 
-        let sub_seq = seq_storage.get_sub_seq_by_id(0, 105, 286);
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 105, 286);
         assert_eq!(seq[105..286], sub_seq[..]);
 
-        let sub_seq = seq_storage.get_sub_seq_by_id(0, 104, 286);
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 104, 286);
         assert_eq!(seq[104..286], sub_seq[..]);
 
-        let sub_seq = seq_storage.get_sub_seq_by_id(0, 105, 287);
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 105, 287);
         assert_eq!(seq[105..287], sub_seq[..]);
 
-        let sub_seq = seq_storage.get_sub_seq_by_id(0, 250, 1423);
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 250, 1423);
+        assert_eq!(seq[250..1423], sub_seq[..]);
+
+        let sid = 5;
+
+        let seq = seq_storage.get_seq_by_id(sid);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 0, 105);
+        assert_eq!(seq[0..105], sub_seq[..]);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 105, 286);
+        assert_eq!(seq[105..286], sub_seq[..]);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 104, 286);
+        assert_eq!(seq[104..286], sub_seq[..]);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 105, 287);
+        assert_eq!(seq[105..287], sub_seq[..]);
+
+        let sub_seq = seq_storage.get_sub_seq_by_id(sid, 250, 1423);
         assert_eq!(seq[250..1423], sub_seq[..]);
     }
 
@@ -388,22 +409,40 @@ mod tests {
     fn test_seq_db_get_sub_read() {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs.fa".to_string());
+        let sid = 0;
+        let seq = sdb.get_seq_by_id(sid);
 
-        let seq = sdb.get_seq_by_id(0);
-
-        let sub_seq = sdb.get_sub_seq_by_id(0, 0, 105);
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 0, 105);
         assert_eq!(seq[0..105], sub_seq[..]);
 
-        let sub_seq = sdb.get_sub_seq_by_id(0, 105, 286);
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 105, 286);
         assert_eq!(seq[105..286], sub_seq[..]);
 
-        let sub_seq = sdb.get_sub_seq_by_id(0, 104, 286);
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 104, 286);
         assert_eq!(seq[104..286], sub_seq[..]);
 
-        let sub_seq = sdb.get_sub_seq_by_id(0, 105, 287);
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 105, 287);
         assert_eq!(seq[105..287], sub_seq[..]);
 
-        let sub_seq = sdb.get_sub_seq_by_id(0, 250, 1423);
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 250, 1423);
+        assert_eq!(seq[250..1423], sub_seq[..]);
+
+        let sid = 5;
+        let seq = sdb.get_seq_by_id(sid);
+
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 0, 105);
+        assert_eq!(seq[0..105], sub_seq[..]);
+
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 105, 286);
+        assert_eq!(seq[105..286], sub_seq[..]);
+
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 104, 286);
+        assert_eq!(seq[104..286], sub_seq[..]);
+
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 105, 287);
+        assert_eq!(seq[105..287], sub_seq[..]);
+
+        let sub_seq = sdb.get_sub_seq_by_id(sid, 250, 1423);
         assert_eq!(seq[250..1423], sub_seq[..]);
     }
 }
