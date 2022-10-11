@@ -716,15 +716,19 @@ impl CompactSeqDB {
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let f = &frags[frag_id as usize];
             let frag_len = match f {
-                Fragment::AlnSegments(d) => d.2,
+                Fragment::AlnSegments(d) => d.2 - self.shmmr_spec.k,
                 Fragment::Prefix(b) => b.len() as u32,
-                Fragment::Internal(b) => b.len() as u32,
+                Fragment::Internal(b) => b.len() as u32 - self.shmmr_spec.k,
                 Fragment::Suffix(b) => b.len() as u32,
             };
-            if base_offset <= end && base_offset + frag_len >= bgn {
+            if (base_offset <= bgn && bgn < base_offset + frag_len)
+                || (base_offset <= end && end < base_offset + frag_len)
+                || (bgn <= base_offset && base_offset + frag_len <= end)
+            {
                 sub_seq_frag.push((frag_id, base_offset));
             }
-            base_offset += frag_len - self.shmmr_spec.k;
+
+            base_offset += frag_len;
         }
 
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
@@ -1028,7 +1032,7 @@ pub fn get_principal_bundles_from_adj_list(
             });
 
             /*
-            let v = path[path.len()-1];            
+            let v = path[path.len()-1];
 
             for w in g1.neighbors_directed(v, Outgoing) {
                 if g1.neighbors_directed(w, Incoming).count() == 0 {
@@ -1045,7 +1049,7 @@ pub fn get_principal_bundles_from_adj_list(
 
             principal_bundles.push(path);
         }
-        
+
         // if the whole graph is a loop
         if starts.len() == 0 {
             if let Some(v) = g1.nodes().next() {
