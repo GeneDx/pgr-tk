@@ -991,13 +991,13 @@ impl SeqIndexDB {
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
     ///
-    pub fn get_smp_adj_list(&self, min_count: usize) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    pub fn get_smp_adj_list(&self, min_count: usize, keeps: Option<Vec<u32>>) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             vec![]
         } else {
             let frag_map = frag_map.unwrap();
-            seq_db::frag_map_to_adj_list(frag_map, min_count)
+            seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
         }
     }
 
@@ -1060,9 +1060,10 @@ impl SeqIndexDB {
         &self,
         min_count: usize,
         path_len_cutoff: usize,
+        keeps: Option<Vec<u32>>
     ) -> Vec<Vec<(u64, u64, u8)>> {
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize);
+            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize, keeps);
 
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
                 .0
@@ -1129,6 +1130,7 @@ impl SeqIndexDB {
         &self,
         min_count: usize,
         path_len_cutoff: usize,
+        keeps: Option<Vec<u32>>
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
         Vec<(
@@ -1154,7 +1156,7 @@ impl SeqIndexDB {
                 .collect::<Vec<(u64, u64, u32, u32, u8)>>()
         }
 
-        let pb = self.get_principal_bundles(min_count, path_len_cutoff);
+        let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
         //println!("DBG: # bundles {}", pb.len());
 
         let mut vertex_to_bundle_id_direction_pos =
@@ -1290,13 +1292,13 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///
-    pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str) -> PyResult<()> {
+    pub fn generate_mapg_gfa(&self, min_count: usize, filepath: &str, keeps: Option<Vec<u32>>) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             return Err(PyValueError::new_err("no index found"));
         }
         let frag_map = frag_map.unwrap();
-        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
+        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
@@ -1461,13 +1463,14 @@ impl SeqIndexDB {
         min_count: usize,
         path_len_cutoff: usize,
         filepath: &str,
+        keeps: Option<Vec<u32>>
     ) -> PyResult<()> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             return Err(PyValueError::new_err("can't load index"));
         };
         let frag_map = frag_map.unwrap();
-        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count);
+        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();

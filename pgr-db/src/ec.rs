@@ -207,7 +207,7 @@ pub fn shmmr_dbg_consensus(
         };
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0);
+    let adj_list = sdb.generate_smp_adj_list(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -337,7 +337,7 @@ pub fn guided_shmmr_dbg_consensus(
         };
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0);
+    let adj_list = sdb.generate_smp_adj_list(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);

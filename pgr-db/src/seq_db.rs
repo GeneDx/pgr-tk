@@ -12,6 +12,7 @@ use petgraph::visit::Dfs;
 use petgraph::EdgeDirection::{Incoming, Outgoing};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -820,29 +821,45 @@ impl CompactSeqDB {
 pub fn frag_map_to_adj_list(
     frag_map: &ShmmrToFrags,
     min_count: usize,
+    keeps: Option<Vec<u32>>, // a list of sequence id that we like to keep the sequence in the adj list regardless the coverage
 ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
     let mut out = frag_map
         .par_iter()
         .flat_map(|v| {
             v.1.iter()
                 .map(|vv| (vv.1, vv.2, vv.3, (v.0 .0, v.0 .1, vv.4)))
-                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>()
+                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>() //(seq_id, bgn, end, (hash0, hash1, orientation))
         })
         .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
     if out.len() < 2 {
         return vec![];
     }
     out.par_sort();
-    let out = out
-        .into_par_iter()
-        .map(|v| {
-            if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count {
-                Some(v)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>();
+
+    let out = if let Some(keeps) = keeps {
+        let keeps = FxHashSet::<u32>::from_iter(keeps.into_iter());
+        
+        // more or less duplicate code, but this takes the hashset check out of the loop if keeps is None.
+        out.into_par_iter()
+            .map(|v| {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count || keeps.contains(&v.1) {
+                    Some(v)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+    } else {
+        out.into_par_iter()
+            .map(|v| {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count {
+                    Some(v)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+    };
 
     (0..out.len() - 1)
         .into_par_iter()
@@ -1065,8 +1082,9 @@ impl CompactSeqDB {
     pub fn generate_smp_adj_list(
         &self,
         min_count: usize,
+        keeps: Option<Vec<u32>>,
     ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
-        frag_map_to_adj_list(&self.frag_map, min_count)
+        frag_map_to_adj_list(&self.frag_map, min_count, keeps)
     }
 }
 

@@ -321,7 +321,7 @@ mod tests {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
 
-        let out = sdb.generate_smp_adj_list(2);
+        let out = sdb.generate_smp_adj_list(2, None);
         println!("out: {:?}", out);
         out.into_iter().for_each(|v| {
             println!("{:?}", v);
