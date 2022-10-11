@@ -842,7 +842,7 @@ pub fn frag_map_to_adj_list(
         // more or less duplicate code, but this takes the hashset check out of the loop if keeps is None.
         out.into_par_iter()
             .map(|v| {
-                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count || keeps.contains(&v.1) {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count || keeps.contains(&v.0) {
                     Some(v)
                 } else {
                     None
