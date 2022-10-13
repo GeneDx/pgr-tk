@@ -838,11 +838,13 @@ pub fn frag_map_to_adj_list(
 
     let out = if let Some(keeps) = keeps {
         let keeps = FxHashSet::<u32>::from_iter(keeps.into_iter());
-        
+
         // more or less duplicate code, but this takes the hashset check out of the loop if keeps is None.
         out.into_par_iter()
             .map(|v| {
-                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count || keeps.contains(&v.0) {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count
+                    || keeps.contains(&v.0)
+                {
                     Some(v)
                 } else {
                     None
@@ -1030,6 +1032,7 @@ pub fn get_principal_bundles_from_adj_list(
     };
 
     let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
+
     while starts.len() != 0 {
         let s = starts.pop().unwrap();
         let mut dfs = Dfs::new(&g1, s);

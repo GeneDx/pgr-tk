@@ -1128,7 +1128,7 @@ impl SeqIndexDB {
     ///     seqid_smps_with_bundle_id_seg_direction = list of shimmer pairs in the database annotated with principal bundle id and direction
     ///     
     ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
-    ///                                   (principal_bundle_is, direction, order_in_the_bundle))
+    ///                                   (principal_bundle_id, direction, order_in_the_bundle))
     ///
     #[args(keeps="None")]
     pub fn get_principal_bundle_decomposition(

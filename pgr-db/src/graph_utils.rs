@@ -53,7 +53,7 @@ impl BiDiNode for ShmmrGraphNode {
     }
 }
 
-/// Code adapte from Petgraph's DFS
+/// Code adapted from Petgraph's DFS
 ///
 #[derive(Clone, Debug)]
 pub struct BiDiGraphWeightedDfs<'a, N, VM>
