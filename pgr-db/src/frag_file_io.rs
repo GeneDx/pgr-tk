@@ -1,7 +1,4 @@
-use crate::seq_db::{
-    self, read_mdb_file_parallel, CompactSeq, 
-    Fragment, ShmmrToFrags 
-};
+use crate::seq_db::{self, read_mdb_file_parallel, CompactSeq, Fragment, ShmmrToFrags};
 use crate::shmmrutils::ShmmrSpec;
 use bincode::config;
 use flate2::read::DeflateDecoder;
@@ -27,8 +24,9 @@ impl CompactSeqDBStorage {
         let frag_file_prefix = prefix;
         let (shmmr_spec, frag_map) =
             read_mdb_file_parallel(frag_file_prefix.clone() + ".mdb").unwrap();
-        let mut sdx_file =
-            BufReader::new(File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error"));
+        let mut sdx_file = BufReader::new(
+            File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error"),
+        );
         let config = config::standard();
         let (frag_addr_offsets, seqs): (Vec<(usize, usize, u32)>, Vec<CompactSeq>) =
             bincode::decode_from_std_read(&mut sdx_file, config).expect("read sdx file error");
@@ -73,19 +71,32 @@ impl CompactSeqDBStorage {
         let frag_range = &self.seqs[sid as usize].seq_frag_range;
 
         let mut _p = 0;
-        let base_offset = 0_u32;
+        let mut base_offset = 0_u32;
         let mut sub_seq_frag = vec![];
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let (_, _, mut frag_len) = self.frag_addr_offsets[frag_id as usize];
-            frag_len -= self.shmmr_spec.k;
-            if base_offset <= end && base_offset + frag_len >= bgn {
+            if frag_id != frag_range.0 && frag_id != frag_range.0 + frag_range.1 - 1 {
+                // for internal segements
+                frag_len -= self.shmmr_spec.k;
+            }
+            if (base_offset <= bgn && bgn < base_offset + frag_len)
+                || (base_offset <= end && end < base_offset + frag_len)
+                || (bgn <= base_offset && base_offset + frag_len <= end)
+            {
                 sub_seq_frag.push((frag_id, base_offset));
             }
+
+            base_offset += frag_len;
         }
 
         let reconstructed_seq = self.get_seq_from_frag_ids(sub_seq_frag.iter().map(|v| v.0));
 
-        let offset = bgn - sub_seq_frag[0].1;
+        let offset = if sub_seq_frag[0].0 == 0 {
+            bgn - sub_seq_frag[0].1
+        } else {
+            bgn - sub_seq_frag[0].1
+        };
+
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
     }
 

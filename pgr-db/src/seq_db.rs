@@ -12,6 +12,7 @@ use petgraph::visit::Dfs;
 use petgraph::EdgeDirection::{Incoming, Outgoing};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+
 use std::fmt;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -716,15 +717,19 @@ impl CompactSeqDB {
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let f = &frags[frag_id as usize];
             let frag_len = match f {
-                Fragment::AlnSegments(d) => d.2,
+                Fragment::AlnSegments(d) => d.2 - self.shmmr_spec.k,
                 Fragment::Prefix(b) => b.len() as u32,
-                Fragment::Internal(b) => b.len() as u32,
+                Fragment::Internal(b) => b.len() as u32 - self.shmmr_spec.k,
                 Fragment::Suffix(b) => b.len() as u32,
             };
-            if base_offset <= end && base_offset + frag_len >= bgn {
+            if (base_offset <= bgn && bgn < base_offset + frag_len)
+                || (base_offset <= end && end < base_offset + frag_len)
+                || (bgn <= base_offset && base_offset + frag_len <= end)
+            {
                 sub_seq_frag.push((frag_id, base_offset));
             }
-            base_offset += frag_len - self.shmmr_spec.k;
+
+            base_offset += frag_len;
         }
 
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
@@ -816,29 +821,47 @@ impl CompactSeqDB {
 pub fn frag_map_to_adj_list(
     frag_map: &ShmmrToFrags,
     min_count: usize,
+    keeps: Option<Vec<u32>>, // a list of sequence id that we like to keep the sequence in the adj list regardless the coverage
 ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
     let mut out = frag_map
         .par_iter()
         .flat_map(|v| {
             v.1.iter()
                 .map(|vv| (vv.1, vv.2, vv.3, (v.0 .0, v.0 .1, vv.4)))
-                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>()
+                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>() //(seq_id, bgn, end, (hash0, hash1, orientation))
         })
         .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
     if out.len() < 2 {
         return vec![];
     }
     out.par_sort();
-    let out = out
-        .into_par_iter()
-        .map(|v| {
-            if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count {
-                Some(v)
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>();
+
+    let out = if let Some(keeps) = keeps {
+        let keeps = FxHashSet::<u32>::from_iter(keeps.into_iter());
+
+        // more or less duplicate code, but this takes the hashset check out of the loop if keeps is None.
+        out.into_par_iter()
+            .map(|v| {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count
+                    || keeps.contains(&v.0)
+                {
+                    Some(v)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+    } else {
+        out.into_par_iter()
+            .map(|v| {
+                if frag_map.get(&(v.3 .0, v.3 .1)).unwrap().len() >= min_count {
+                    Some(v)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+    };
 
     (0..out.len() - 1)
         .into_par_iter()
@@ -984,29 +1007,16 @@ pub fn get_principal_bundles_from_adj_list(
         }
     });
 
-    let mut g1 = DiGraphMap::<ShmmrGraphNode, ()>::new();
+    let mut g1 = g0.clone();
     let mut terminal_vertices = FxHashSet::<ShmmrGraphNode>::default();
+
     for (v, w, _) in g0.all_edges() {
-        let mut remove_edge = false;
-        if g0.neighbors_directed(v, Outgoing).count() > 1
-            || g0.neighbors_directed(v, Incoming).count() > 1
-        {
+        if g0.neighbors_directed(v, Outgoing).count() > 1 {
             terminal_vertices.insert(v);
-            remove_edge = true;
         };
-        if g0.neighbors_directed(w, Outgoing).count() > 1
-            || g0.neighbors_directed(w, Incoming).count() > 1
-        {
-            terminal_vertices.insert(w);
-            remove_edge = true;
+        if g0.neighbors_directed(w, Incoming).count() > 1 {
+            terminal_vertices.insert(v);
         };
-        if !remove_edge {
-            g1.add_edge(
-                ShmmrGraphNode(v.0, v.1, v.2),
-                ShmmrGraphNode(w.0, w.1, w.2),
-                (),
-            );
-        }
     }
 
     let mut starts = Vec::<ShmmrGraphNode>::default();
@@ -1015,6 +1025,11 @@ pub fn get_principal_bundles_from_adj_list(
             starts.push(v);
         }
     }
+    // if the whole graph is a loop
+    if starts.len() == 0 {
+        let v = g1.nodes().next().unwrap();
+        starts.push(v);
+    };
 
     let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
 
@@ -1023,15 +1038,44 @@ pub fn get_principal_bundles_from_adj_list(
         let mut dfs = Dfs::new(&g1, s);
         let mut path = Vec::<ShmmrGraphNode>::new();
         while let Some(v) = dfs.next(&g1) {
-            path.push(v);
+            if terminal_vertices.contains(&v) {
+                path.push(v);
+                break;
+            } else {
+                path.push(v);
+            }
         }
         if path.len() > 0 {
             path.iter().for_each(|&v| {
                 g1.remove_node(v);
                 g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
             });
+
+            /*
+            let v = path[path.len()-1];
+
+            for w in g1.neighbors_directed(v, Outgoing) {
+                if g1.neighbors_directed(w, Incoming).count() == 0 {
+                    starts.push(w);
+                }
+            }
+            */
+            starts.clear();
+            for v in g1.nodes() {
+                if g1.neighbors_directed(v, Incoming).count() == 0 {
+                    starts.push(v);
+                }
+            }
+
             principal_bundles.push(path);
         }
+
+        // if the whole graph is a loop
+        if starts.len() == 0 {
+            if let Some(v) = g1.nodes().next() {
+                starts.push(v);
+            }
+        };
     }
     principal_bundles.sort_by(|a, b| b.len().partial_cmp(&(a.len())).unwrap());
     (principal_bundles, filtered_adj_list)
@@ -1041,8 +1085,9 @@ impl CompactSeqDB {
     pub fn generate_smp_adj_list(
         &self,
         min_count: usize,
+        keeps: Option<Vec<u32>>,
     ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
-        frag_map_to_adj_list(&self.frag_map, min_count)
+        frag_map_to_adj_list(&self.frag_map, min_count, keeps)
     }
 }
 

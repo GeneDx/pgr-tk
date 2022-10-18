@@ -1,4 +1,4 @@
-use crate::wfa;
+use rs_libwfa2::wfa;
 use std::result::Result;
 
 #[derive(Debug, Clone)]
