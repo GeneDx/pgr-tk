@@ -72,6 +72,12 @@ pub type Fragments = Vec<Fragment>;
 pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
 
+pub trait GetSeq {
+    fn get_seq_by_id(&self, sid: u32) -> Vec<u8>;
+    fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8>;
+}
+
+
 #[derive(Debug, Clone, Decode, Encode)]
 pub struct CompactSeq {
     pub source: Option<String>,
@@ -691,6 +697,12 @@ impl CompactSeqDB {
 
         reconstructed_seq
     }
+    
+    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
+        self.reconstruct_seq_from_frags(
+            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+        )
+    }
 
     /* TODO */
     /*
@@ -699,14 +711,17 @@ impl CompactSeqDB {
     }
     */
 
-    pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
+}
+
+impl GetSeq for CompactSeqDB {
+    fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
         self.reconstruct_seq_from_frags(
             (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
         )
     }
 
-    pub fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
+    fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
         assert!((sid as usize) < self.seqs.len());
         let frag_range = &self.seqs[sid as usize].seq_frag_range;
 
@@ -736,12 +751,6 @@ impl CompactSeqDB {
 
         let offset = bgn - sub_seq_frag[0].1;
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
-    }
-
-    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
-        self.reconstruct_seq_from_frags(
-            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
-        )
     }
 }
 
@@ -873,7 +882,7 @@ pub fn frag_map_to_adj_list(
             } else {
                 let v = v.unwrap();
                 let w = w.unwrap();
-                if v.0 != w.0 {
+                if v.0 != w.0 || v.2 != w.1 {
                     vec![None]
                 } else {
                     vec![
@@ -890,6 +899,61 @@ pub fn frag_map_to_adj_list(
         .filter(|v| v.is_some())
         .map(|v| v.unwrap())
         .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>() // seq_id, node0, node1
+}
+
+pub fn generate_smp_adj_list_for_seq(
+    seq: &Vec<u8>,
+    sid: u32,
+    frag_map: &ShmmrToFrags,
+    shmmr_spec: &ShmmrSpec,
+    min_count: usize,
+) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
+    let res = pair_shmmrs(&shmmrs)
+        .iter()
+        .map(|(s0, s1)| {
+            let p0 = s0.pos() + 1;
+            let p1 = s1.pos() + 1;
+            let s0 = s0.x >> 8;
+            let s1 = s1.x >> 8;
+            if s0 < s1 {
+                (s0, s1, p0, p1, 0_u8)
+            } else {
+                (s1, s0, p0, p1, 1_u8)
+            }
+        })
+        .collect::<Vec<(u64, u64, u32, u32, u8)>>();
+
+    if res.len() < 2 {
+        vec![]
+    } else {
+        let out = (0..res.len() - 1)
+            .into_iter()
+            .flat_map(|i| {
+                let v = res[i];
+                let w = res[i + 1];
+                if frag_map.get(&(v.0, v.1)).is_none() || frag_map.get(&(w.0, w.1)).is_none() {
+                    vec![None]
+                } else if frag_map.get(&(v.0, v.1)).unwrap().len() < min_count
+                    || frag_map.get(&(w.0, w.1)).unwrap().len() < min_count
+                {
+                    vec![None]
+                } else {
+                    if v.3 != w.2 {
+                        vec![None]
+                    } else {
+                        vec![
+                            Some((sid, (v.0, v.1, v.4), (w.0, w.1, w.4))),
+                            Some((sid, (w.0, w.1, 1 - w.4), (v.0, v.1, 1 - v.4))),
+                        ]
+                    }
+                }
+            })
+            .filter(|v| v.is_some())
+            .map(|v| v.unwrap())
+            .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>();
+        out
+    }
 }
 
 pub fn sort_adj_list_by_weighted_dfs(
@@ -1082,7 +1146,7 @@ pub fn get_principal_bundles_from_adj_list(
 }
 
 impl CompactSeqDB {
-    pub fn generate_smp_adj_list(
+    pub fn generate_smp_adj_list_from_frag_map(
         &self,
         min_count: usize,
         keeps: Option<Vec<u32>>,

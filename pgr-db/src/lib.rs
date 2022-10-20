@@ -161,6 +161,7 @@ mod tests {
 
     #[test]
     fn rc_match() {
+        use seq_db::GetSeq;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_rev.fa".to_string());
         let cs0 = sdb.get_seq_by_id(0);
@@ -321,7 +322,7 @@ mod tests {
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
 
-        let out = sdb.generate_smp_adj_list(2, None);
+        let out = sdb.generate_smp_adj_list_from_frag_map(2, None);
         println!("out: {:?}", out);
         out.into_iter().for_each(|v| {
             println!("{:?}", v);
@@ -354,6 +355,7 @@ mod tests {
 
     #[test]
     fn test_open_compact_seq_db_storage() {
+        use seq_db::GetSeq;
         use crate::frag_file_io::CompactSeqDBStorage;
         let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
         let seq = seq_storage.get_seq_by_id(0);
@@ -365,6 +367,7 @@ mod tests {
     #[test]
     fn test_seq_db_storage_get_sub_read() {
         use crate::frag_file_io::CompactSeqDBStorage;
+        use seq_db::GetSeq;
         let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
         let sid = 0;
 
@@ -407,6 +410,7 @@ mod tests {
 
     #[test]
     fn test_seq_db_get_sub_read() {
+        use seq_db::GetSeq;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_seqs_from_fastx("test/test_data/test_seqs.fa".to_string());
         let sid = 0;

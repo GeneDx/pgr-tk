@@ -4,7 +4,7 @@
 use crate::aln::query_fragment_to_hps;
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
-use crate::seq_db::{self, CompactSeqDB};
+use crate::seq_db::{self, CompactSeqDB, GetSeq};
 use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
 use petgraph::EdgeDirection::Outgoing;
@@ -207,7 +207,7 @@ pub fn shmmr_dbg_consensus(
         };
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0, None);
+    let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -337,7 +337,7 @@ pub fn guided_shmmr_dbg_consensus(
         };
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0, None);
+    let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -705,7 +705,7 @@ mod test {
     use crate::ec::shmmr_dbg_consensus;
     use crate::ec::shmmr_sparse_aln_consensus;
     use crate::ec::shmmr_sparse_aln_consensus_with_sdb;
-    use crate::seq_db::CompactSeqDB;
+    use crate::seq_db::{GetSeq, CompactSeqDB};
     use crate::shmmrutils::ShmmrSpec;
     #[test]
     fn test_naive_dbg_consensus() {

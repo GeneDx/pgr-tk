@@ -14,9 +14,11 @@ use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use seq_db::GetSeq;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::iter::FromIterator;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Backend {
@@ -991,7 +993,7 @@ impl SeqIndexDB {
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
     ///
-    #[args(keeps="None")]
+    #[args(keeps = "None")]
     pub fn get_smp_adj_list(
         &self,
         min_count: usize,
@@ -1060,7 +1062,7 @@ impl SeqIndexDB {
     /// list
     ///     list of paths, each path is a list of nodes
     ///
-    #[args(keeps="None")]
+    #[args(keeps = "None")]
     pub fn get_principal_bundles(
         &self,
         min_count: usize,
@@ -1130,7 +1132,7 @@ impl SeqIndexDB {
     ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
     ///                                   (principal_bundle_id, direction, order_in_the_bundle))
     ///
-    #[args(keeps="None")]
+    #[args(keeps = "None")]
     pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
@@ -1297,23 +1299,84 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///
-    #[args(keeps="None")]
+    #[args(method = "\"from_fragmap\"", keeps = "None")]
     pub fn generate_mapg_gfa(
         &self,
         min_count: usize,
         filepath: &str,
+        method: &str,
         keeps: Option<Vec<u32>>,
     ) -> PyResult<()> {
+        let get_seq_by_id = |sid| -> Vec<u8> {
+            match self.backend {
+                Backend::AGC => {
+                    let (ctg_name, sample_name, _) =
+                        self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
+                    let ctg_name = ctg_name.clone();
+                    let sample_name = sample_name.as_ref().unwrap().clone();
+                    self.agc_db
+                        .as_ref()
+                        .unwrap()
+                        .0
+                        .get_seq(sample_name, ctg_name)
+                }
+                Backend::MEMORY => self.seq_db.as_ref().unwrap().get_seq_by_id(sid),
+                Backend::FASTX => self.seq_db.as_ref().unwrap().get_seq_by_id(sid),
+                Backend::FRG => self.frg_db.as_ref().unwrap().get_seq_by_id(sid),
+                Backend::UNKNOWN => vec![],
+            }
+        };
+
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
             return Err(PyValueError::new_err("no index found"));
         }
-        let frag_map = frag_map.unwrap();
-        let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
+
+        let frag_map = frag_map.unwrap();
+
+        let adj_list = if method == "from_fragmap" {
+            seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
+        } else {
+            let keeps = if let Some(keeps) = keeps {
+                Some(FxHashSet::<u32>::from_iter(keeps))
+            } else {
+                None
+            };
+
+            self.seq_info
+                .as_ref()
+                .unwrap()
+                .keys()
+                .into_iter()
+                .map(|k| *k)
+                .collect::<Vec<u32>>()
+                .into_par_iter()
+                .flat_map(|sid| {
+                    let seq = get_seq_by_id(sid);
+                    let mc = if let Some(keeps) = &keeps {
+                        if keeps.contains(&sid) {
+                            0
+                        } else {
+                            min_count
+                        }
+                    } else {
+                        min_count
+                    };
+                    seq_db::generate_smp_adj_list_for_seq(
+                        &seq,
+                        sid,
+                        &frag_map,
+                        self.shmmr_spec.as_ref().unwrap(),
+                        mc,
+                    )
+                })
+                .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
+        };
+
         adj_list.iter().for_each(|(k, v, w)| {
             if v.0 <= w.0 {
                 let key = (*v, *w);
@@ -1469,7 +1532,7 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///     
-    #[args(keeps="None")]
+    #[args(keeps = "None")]
     pub fn generate_principal_mapg_gfa(
         &self,
         min_count: usize,
