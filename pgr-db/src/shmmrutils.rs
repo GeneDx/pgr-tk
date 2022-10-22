@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use bincode::{Decode, Encode};
 use rustc_hash::FxHashMap;
 use std::fmt;
-use bincode::{Decode, Encode};
 
 #[derive(Clone, Debug)]
 pub struct OvlpMatch {
@@ -250,7 +250,6 @@ impl MM128 {
     #[inline(always)]
     pub fn hash(&self) -> u64 {
         self.x >> 8
-
     }
     #[inline(always)]
     pub fn span(&self) -> u8 {
@@ -534,30 +533,31 @@ pub fn sequence_to_shmmrs1(
         pos += 1;
     }
 
-    let shmmrs2 = shmmrs;
-    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
-    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
-    let mut shmmrs3 = Vec::<MM128>::new();
-    shmmrs2
+    //let mut shmmrs = shmmrs;
+    if r > 1 {
+        shmmrs = reduce_shmmr(reduce_shmmr(shmmrs, r, padding), r, padding);
+    };
+    let mut shmmrs2 = Vec::<MM128>::new();
+    shmmrs
         .iter()
         .enumerate()
         .into_iter()
         .for_each(|(i, shmmr)| {
-            if i != 0 && i != shmmrs2.len() - 1 {
-                let p_pos = shmmrs2[i - 1].pos();
-                let pos = shmmrs2[i].pos();
-                let n_pos = shmmrs2[i + 1].pos();
-                let px = shmmrs2[i - 1].x;
-                let x = shmmrs2[i].x;
-                let nx = shmmrs2[i + 1].x;
+            if i != 0 && i != shmmrs.len() - 1 {
+                let p_pos = shmmrs[i - 1].pos();
+                let pos = shmmrs[i].pos();
+                let n_pos = shmmrs[i + 1].pos();
+                let px = shmmrs[i - 1].x;
+                let x = shmmrs[i].x;
+                let nx = shmmrs[i + 1].x;
                 if pos - p_pos > min_span && n_pos - pos > min_span && px != x && x != nx {
-                    shmmrs3.push(*shmmr);
+                    shmmrs2.push(*shmmr);
                 }
             } else {
-                shmmrs3.push(*shmmr);
+                shmmrs2.push(*shmmr);
             }
         });
-    shmmrs3
+    shmmrs2
 }
 
 pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, k: u32, r: u32, min_span: u32) -> Vec<MM128> {
