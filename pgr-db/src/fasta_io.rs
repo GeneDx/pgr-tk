@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use byteorder::ReadBytesExt;
 use flate2::bufread::MultiGzDecoder;
 use std::fs::File;
 use std::io::prelude::*;
@@ -103,7 +104,11 @@ impl<R: BufRead> FastaReader<R> {
         if seq.capacity() as f32 > seq.len() as f32 * 1.2 {
             seq.shrink_to_fit();
         }
-        let source = if self.keep_source {Some(self.filename.to_string())} else {None};
+        let source = if self.keep_source {
+            Some(self.filename.to_string())
+        } else {
+            None
+        };
         let rec = SeqRec {
             source,
             id: id,
@@ -118,7 +123,7 @@ impl<R: BufRead> FastaReader<R> {
         let mut seq = Vec::<u8>::with_capacity(self.seq_capacity);
 
         let _res = self.inner.read_until(b'\n', &mut id_tmp); //read id
-        // fetch the first id up to the first space, strip '\n'
+                                                              // fetch the first id up to the first space, strip '\n'
         let mut r = BufReader::new(&id_tmp[..]);
         let mut id = Vec::<u8>::with_capacity(128);
         let _res = r.read_until(b' ', &mut id);
@@ -136,7 +141,11 @@ impl<R: BufRead> FastaReader<R> {
         if seq.capacity() as f32 > seq.len() as f32 * 1.2 {
             seq.shrink_to_fit();
         }
-        let source = if self.keep_source {Some(self.filename.to_string())} else {None};
+        let source = if self.keep_source {
+            Some(self.filename.to_string())
+        } else {
+            None
+        };
         let rec = SeqRec {
             source,
             id: id,
@@ -164,68 +173,127 @@ impl<R: BufRead> Iterator for FastaReader<R> {
     }
 }
 
-
 pub struct FastqStreamReader {
     inner: std::io::Stdin,
-    seq_capacity: usize 
+    seq_capacity: usize,
 }
 
 impl FastqStreamReader {
     pub fn new(seq_capacity: usize) -> Self {
         FastqStreamReader {
             inner: std::io::stdin(),
-            seq_capacity
-        } 
+            seq_capacity,
+        }
     }
 }
 
 impl Iterator for FastqStreamReader {
     type Item = io::Result<SeqRec>;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut tmp = String::with_capacity(128);
+        let mut tmp = String::with_capacity(self.seq_capacity);
         match self.inner.read_line(&mut tmp) {
             Ok(n) => {
                 if n == 0 {
-                    return None
+                    return None;
                 }
                 let tmp = tmp.trim();
                 if &tmp[0..1] == "@" {
                     let id = tmp[1..].as_bytes().to_vec();
                     let mut seq = String::with_capacity(self.seq_capacity);
                     if self.inner.read_line(&mut seq).unwrap_or(0) == 0 {
-                        return None
+                        return None;
                     }
                     let seq = seq.trim();
                     let seq = seq[..].as_bytes().to_vec();
                     let mut buf = String::with_capacity(self.seq_capacity);
                     if self.inner.read_line(&mut buf).unwrap_or(0) == 0 {
-                        return None
+                        return None;
                     };
                     if self.inner.read_line(&mut buf).unwrap_or(0) == 0 {
-                        return None
+                        return None;
                     };
                     let source = None;
                     let rec = SeqRec {
                         source,
                         id: id,
                         seq: seq,
-                    }; 
+                    };
                     Some(Ok(rec))
                 } else {
                     None
                 }
-            },
-            Err(_) => {
-                None
             }
+            Err(_) => None,
         }
     }
 }
 
+pub struct FastaStreamReader {
+    inner: std::io::Stdin,
+    seq_capacity: usize,
+    next_header: Option<String>,
+}
 
+impl FastaStreamReader {
+    pub fn new(seq_capacity: usize) -> Self {
+        FastaStreamReader {
+            inner: std::io::stdin(),
+            seq_capacity,
+            next_header: None,
+        }
+    }
+}
 
+impl Iterator for FastaStreamReader {
+    type Item = io::Result<SeqRec>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let tmp = if self.next_header.is_none() {
+            let mut t = String::with_capacity(self.seq_capacity);
+            if let Ok(n) = self.inner.read_line(&mut t) {
+                if n == 0 {
+                    return None;
+                }
+            } else {
+                return None;
+            };
+            t
+        } else {
+            self.next_header.as_ref().unwrap().clone()
+        };
+        let header = tmp.trim();
 
-
+        if &header[0..1] == ">" {
+            let id = header[1..].as_bytes().to_vec();
+            let mut line = String::with_capacity(self.seq_capacity);
+            let mut seq = String::with_capacity(self.seq_capacity);
+            loop {
+                if self.inner.read_line(&mut line).unwrap_or(0) == 0 {
+                    self.next_header = None;
+                    break;
+                } else {
+                    if &line[0..1] == ">" {
+                        self.next_header = Some(line.clone());
+                        line.clear();
+                        break;
+                    } else {
+                        seq += &line.trim()[..];
+                        line.clear();
+                    }
+                }
+            }
+            let seq = seq[..].as_bytes().to_vec();
+            let source = None;
+            let rec = SeqRec {
+                source,
+                id: id,
+                seq: seq,
+            };
+            Some(Ok(rec))
+        } else {
+            None
+        }
+    }
+}
 
 fn encode_biseq(s: Vec<u8>) -> Vec<u8> {
     let fourbit_map_f: [u8; 256] = [

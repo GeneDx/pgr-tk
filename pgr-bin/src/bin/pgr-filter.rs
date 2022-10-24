@@ -1,7 +1,7 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
-use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec};
+use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec, FastaStreamReader};
 use pgr_db::kmer_filter::KmerFilter;
 use rayon::prelude::*;
 use std::fs::File;
@@ -26,6 +26,8 @@ struct CmdOptions {
     /// count threshold
     #[clap(long, short, default_value_t = 0.8)]
     threshold: f32,
+    #[clap(long)]
+    fasta_stdin: bool,
 }
 
 fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
@@ -133,8 +135,13 @@ fn main() -> Result<(), std::io::Error> {
             GZFastaReader::RegularFile(reader) => check_seqs(&mut reader.into_iter()),
         }
     } else {
-        let reader = FastqStreamReader::new(128);
-        check_seqs(&mut reader.into_iter());
+        if args.fasta_stdin {
+            let reader = FastaStreamReader::new(256);
+            check_seqs(&mut reader.into_iter());
+        } else {
+            let reader = FastqStreamReader::new(256);
+            check_seqs(&mut reader.into_iter());
+        }
     }
 
     Ok(())
