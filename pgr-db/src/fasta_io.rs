@@ -123,7 +123,8 @@ impl<R: BufRead> FastaReader<R> {
         let mut seq = Vec::<u8>::with_capacity(self.seq_capacity);
 
         let _res = self.inner.read_until(b'\n', &mut id_tmp); //read id
-                                                              // fetch the first id up to the first space, strip '\n'
+
+        // fetch the first id up to the first space, strip '\n'
         let mut r = BufReader::new(&id_tmp[..]);
         let mut id = Vec::<u8>::with_capacity(128);
         let _res = r.read_until(b' ', &mut id);
@@ -131,6 +132,7 @@ impl<R: BufRead> FastaReader<R> {
             .into_iter()
             .filter(|c| *c != b'\n' && *c != b' ' && *c != b'\r')
             .collect::<Vec<u8>>();
+
         // get the seq
         let _res = self.inner.read_until(b'\n', &mut seq);
 
@@ -138,14 +140,17 @@ impl<R: BufRead> FastaReader<R> {
             .drain(..)
             .filter(|c| *c != b'\n' && *c != b'\r')
             .collect::<Vec<u8>>();
+
         if seq.capacity() as f32 > seq.len() as f32 * 1.2 {
             seq.shrink_to_fit();
         }
+
         let source = if self.keep_source {
             Some(self.filename.to_string())
         } else {
             None
         };
+        
         let rec = SeqRec {
             source,
             id: id,
