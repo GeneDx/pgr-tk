@@ -90,7 +90,7 @@ fn main() -> Result<(), std::io::Error> {
             if let Ok(r) = r {
                 seq_data.push(r);
             };
-            if seq_data.len() == 1024 {
+            if seq_data.len() == 64 {
                 seq_data
                     .par_iter()
                     .map(|r| {
