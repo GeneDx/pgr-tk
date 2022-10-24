@@ -600,7 +600,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             if p_region.is_none() {
                 p_region = Some((r, c));
                 seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                (0..r.1).into_iter().for_each(|_| {
+                (r.0..r.1).into_iter().for_each(|_| {
                     cov.push(c);
                 });
             } else {
