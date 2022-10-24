@@ -1,8 +1,8 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
+use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec};
 use pgr_db::kmer_filter::KmerFilter;
-use pgr_db::fasta_io::{reverse_complement, FastaReader, FastqStreamReader, SeqRec};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -24,7 +24,7 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 32)]
     k: usize,
     /// count threshold
-    #[clap(long, short, default_value_t = 4)]
+    #[clap(long, short, default_value_t = 2)]
     threshold: usize,
 }
 
@@ -71,9 +71,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         seq_iter.into_iter().for_each(|r| {
             if let Ok(r) = r {
-                filter.add_seq(&r.seq);
-                let rc_seq = reverse_complement(&r.seq);
-                filter.add_seq(&rc_seq);
+                filter.add_seq_mmers(&r.seq);
             };
         });
     };
@@ -83,7 +81,6 @@ fn main() -> Result<(), std::io::Error> {
 
         GZFastaReader::RegularFile(reader) => add_seqs(&mut reader.into_iter()),
     };
-
 
     let check_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         let mut seq_data = Vec::<SeqRec>::new();
@@ -96,7 +93,7 @@ fn main() -> Result<(), std::io::Error> {
         seq_data
             .into_par_iter()
             .filter(|r| {
-                let c = filter.check_seq(&r.seq);
+                let c = filter.check_seq_mmers(&r.seq);
                 c >= args.threshold
             })
             .collect::<Vec<SeqRec>>()

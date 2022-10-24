@@ -4,6 +4,7 @@ use std::collections::hash_map::DefaultHasher;
 pub struct KmerFilter {
     filter: CuckooFilter<DefaultHasher>,
     kmer_size: usize,
+
 }
 
 impl KmerFilter {
@@ -29,6 +30,28 @@ impl KmerFilter {
         let mut count = 0_usize;
         (0..seq.len() - self.kmer_size).into_iter().for_each(|pos| {
             if self.filter.contains(&seq[pos..pos + self.kmer_size]) {
+                count += 1
+            };
+        });
+        count
+    }
+    
+    pub fn add_seq_mmers(&mut self, seq: &Vec<u8>) {
+        let k = self.kmer_size as u32;
+        let w = k >> 1;
+        let shmmrs = crate::shmmrutils::sequence_to_shmmrs1(0, seq, w, k, 1, 0, false);
+        shmmrs.into_iter().for_each(|mmer| {
+            self.filter.test_and_add(&mmer.x).unwrap();
+        })
+    }
+
+    pub fn check_seq_mmers(&self, seq: &Vec<u8>) -> usize {
+        let mut count = 0_usize;
+        let k = self.kmer_size as u32;
+        let w = k >> 1;
+        let shmmrs = crate::shmmrutils::sequence_to_shmmrs1(0, seq, w, k, 1, 0, false);
+        shmmrs.into_iter().for_each(|mmer| {
+            if self.filter.contains(&mmer.x) {
                 count += 1
             };
         });
