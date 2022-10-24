@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use byteorder::ReadBytesExt;
 use flate2::bufread::MultiGzDecoder;
 use std::fs::File;
 use std::io::prelude::*;
