@@ -87,6 +87,25 @@ fn main() -> Result<(), std::io::Error> {
         for r in seq_iter {
             if let Ok(r) = r {
                 seq_data.push(r);
+            };
+            if seq_data.len() == 1024 {
+                seq_data
+                    .par_iter()
+                    .map(|r| {
+                        let (total, c) = filter.check_seq_mmers(&r.seq);
+                        (r.clone(), total, c)
+                    })
+                    .collect::<Vec<(SeqRec, usize, usize)>>()
+                    .iter()
+                    .for_each(|(r, total, c)| {
+                        if *total > 0 {
+                            if (*c as f32) / (*total as f32) > args.threshold {
+                                println!(">{} {} {}", String::from_utf8_lossy(&r.id), total, c);
+                                println!("{}", String::from_utf8_lossy(&r.seq[..]));
+                            }
+                        }
+                    });
+                seq_data.clear();
             }
         }
 
