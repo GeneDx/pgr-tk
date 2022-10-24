@@ -2,7 +2,7 @@ const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, IntoApp, Parser};
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec, FastaStreamReader};
-use pgr_db::kmer_filter::KmerFilter;
+use pgr_db::kmer_filter::{MinimizerFilter, KmerFilter};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -69,7 +69,8 @@ fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
-    let mut filter = KmerFilter::with_capacity(args.k, 1_usize << 24);
+    //let mut filter = KmerFilter::with_capacity(args.k, 1_usize << 24);
+    let mut filter = MinimizerFilter::new(args.k);
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         seq_iter.into_iter().for_each(|r| {
             if let Ok(r) = r {
