@@ -45,16 +45,16 @@ impl KmerFilter {
         })
     }
 
-    pub fn check_seq_mmers(&self, seq: &Vec<u8>) -> usize {
+    pub fn check_seq_mmers(&self, seq: &Vec<u8>) -> (usize, usize) {
         let mut count = 0_usize;
         let k = self.kmer_size as u32;
         let w = k >> 1;
         let shmmrs = crate::shmmrutils::sequence_to_shmmrs1(0, seq, w, k, 1, 0, false);
-        shmmrs.into_iter().for_each(|mmer| {
+        shmmrs.iter().for_each(|mmer| {
             if self.filter.contains(&mmer.x) {
                 count += 1
             };
         });
-        count
+        (shmmrs.len(), count)
     }
 }

@@ -24,8 +24,8 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 32)]
     k: usize,
     /// count threshold
-    #[clap(long, short, default_value_t = 2)]
-    threshold: usize,
+    #[clap(long, short, default_value_t = 0.8)]
+    threshold: f32,
 }
 
 fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
@@ -92,15 +92,19 @@ fn main() -> Result<(), std::io::Error> {
 
         seq_data
             .into_par_iter()
-            .filter(|r| {
-                let c = filter.check_seq_mmers(&r.seq);
-                c >= args.threshold
+            .map(|r| {
+                let (total, c) = filter.check_seq_mmers(&r.seq);
+                (r, total, c)
             })
-            .collect::<Vec<SeqRec>>()
+            .collect::<Vec<(SeqRec, usize, usize)>>()
             .iter()
-            .for_each(|r| {
-                println!(">{}", String::from_utf8_lossy(&r.id));
-                println!("{}", String::from_utf8_lossy(&r.seq[..]));
+            .for_each(|(r, total, c)| {
+                if *total > 0 {
+                    if (*c as f32) / (*total as f32) > args.threshold {
+                        println!(">{} {} {}", String::from_utf8_lossy(&r.id), total, c);
+                        println!("{}", String::from_utf8_lossy(&r.seq[..]));
+                    }
+                }
             });
     };
 
