@@ -1,6 +1,6 @@
 [package]
 name = "pgrtk"
-version = "0.3.4"
+version = "0.3.6"
 authors = ["Jason Chin <cschin@infoecho.net>"]
 edition = "2018"
 
