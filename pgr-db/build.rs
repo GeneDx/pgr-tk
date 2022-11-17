@@ -25,7 +25,7 @@ fn build_agc() -> Option<()> {
 
     let _ = remove_dir_all(agc_path.as_path());
 
-    // copy the WFA dir to OUT_PATH and build it there... clunky, but
+    // copy the AGC dir to OUT_PATH and build it there... clunky, but
     // don't want to pull in the entire 100MB WFA repo, since git2
     // doesn't seem to support shallow clones, and build scripts
     // should only modify things inside OUT_PATH. since the WFA folder
@@ -128,10 +128,13 @@ fn main() {
         println!("cargo:rustc-env=VERSION_STRING={}", version_string);
     } else {
         let version_string = format!(
-            "{} {} (bioconda {} build, {} [{}] [{}])",
+            "{} {} (bioconda {} build ({}:{}{}), {} [{}] [{}])",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
             BUILD_TYPE,
+            get_branch_name(),
+            get_commit_hash(),
+            if is_working_tree_clean() { "" } else { "+" }, 
             OS,
             ARCH,
             get_rustc_version()
