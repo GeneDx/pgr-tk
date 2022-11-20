@@ -89,16 +89,15 @@ pub fn sparse_aln(
         let mut track = Vec::<HitPair>::new();
         let mut v = best_v;
         while v.is_some() {
-            if let Some(hp) = v {
-                if !unvisited_v.contains(&hp) {
-                    break;
-                };
-                track.push(hp);
-                v = *best_pre_v.get(&hp).unwrap_or(&None);
-            }
+            let hp = v.unwrap();
+            if !unvisited_v.contains(&hp) {
+                break;
+            };
+            track.push(hp);
+            v = *best_pre_v.get(&hp).unwrap_or(&None);
         }
         if track.len() == 0 {
-            break;
+            continue;
         };
         track.reverse();
         track.iter().for_each(|hp| {
