@@ -1,5 +1,5 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
-use clap::{self, IntoApp, Parser};
+use clap::{self, CommandFactory, Parser};
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec, FastaStreamReader};
 use pgr_db::kmer_filter::{MinimizerFilter};

@@ -1,7 +1,7 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 //use std::path::PathBuf;
-use clap::{self, IntoApp, Parser};
+use clap::{self, CommandFactory, Parser};
 
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
