@@ -1499,7 +1499,7 @@ impl SeqIndexDB {
                     .try_for_each(|vv| -> Result<(), std::io::Error> {
                         writer.write(
                             format!(
-                                "F\t{:016x}\t{:016x}\t{}\t{}\t{}\t{}\t{}\n",
+                                "F\t{:016x}_{:016x}\t{}\t{}\t{}\t{}\t{}\n",
                                 v.0 .0, v.0 .1, vv.0, vv.1, vv.2, vv.3, vv.4
                             )
                             .as_bytes(),
