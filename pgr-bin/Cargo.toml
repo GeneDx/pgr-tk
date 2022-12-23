@@ -14,3 +14,4 @@ clap = { version = "4.0.30", features = ["derive"] }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
 regex = "1"
+svg = "*"
