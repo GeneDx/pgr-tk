@@ -3,7 +3,7 @@ use clap::{self, CommandFactory, Parser};
 use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader};
 use std::{fs::File, path};
-use svg::node::{element, Node};
+use svg::node::{element, Node, self};
 use svg::Document;
 
 #[derive(Parser, Debug)]
@@ -58,6 +58,10 @@ fn main() -> Result<(), std::io::Error> {
         e.push((bgn, end, bundle_id, bundle_dir));
     });
 
+    let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
+
+    ctg_data.sort();
+        
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
     } else {
@@ -67,20 +71,15 @@ fn main() -> Result<(), std::io::Error> {
     let scaling_factor = args.track_length as f32 / (args.track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32 * scaling_factor as f32;
     let stroke_width = 0.5;
+    let mut y_offset = 0;
 
-    ctg_data
+    let ctg_with_svg_paths: Vec<(String, Vec<element::Path>, element::Text)> = ctg_data
         .into_iter()
-        .enumerate()
-        .for_each(|(id, (ctg, bundle_segment))| {
-            let mut document = Document::new()
-                .set("viewBox", (0, -16, args.track_length, 24))
-                .set("width", args.track_length)
-                .set("height", 40)
-                .set("preserveAspectRatio", "none");
+        .map(|(ctg, bundle_segment)| {
 
-            bundle_segment
+            let paths: Vec<element::Path> = bundle_segment
                 .into_iter()
-                .for_each(|(bgn, end, bundle_id, direction)| {
+                .map(|(bgn, end, bundle_id, direction)| {
                     let mut bgn = bgn as f32 * scaling_factor + left_padding;
                     let mut end = end as f32 * scaling_factor + left_padding;
                     if direction == 1 {
@@ -103,22 +102,54 @@ fn main() -> Result<(), std::io::Error> {
                             end as f32 + 5.0
                         }
                     };
+                    let bottom0 = -3_i32 + y_offset as i32;
+                    let top0 = 3_i32 + y_offset as i32;
+                    let bottom1 = -4_i32 + y_offset as i32;
+                    let top1 = 4_i32 + y_offset as i32;
+                    let center = y_offset as i32; 
 
                     let path_str = format!(
-					"M {bgn} -3 L {bgn} 3 L {end} 3 L {end} 4 L {arror_end} 0 L {end} -4 L {end} -3 Z"
-				);
-
+					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
                     let path = element::Path::new()
                         .set("fill", bundle_color)
                         .set("stroke", stroke_color)
                         .set("stroke-width", stroke_width)
                         .set("d", path_str);
-                    document.append(path);
-                });
+                    path 
+                })
+                .collect();
+                let text = element::Text::new()
+                    .set("x", left_padding + args.track_range as f32 * scaling_factor)
+                    .set("y", y_offset)
+                    .set("font-size", "10px")
+                    .add(node::Text::new(ctg.clone()));
+                y_offset += 16;
+            (ctg, paths, text)
+        })
+        .collect();
 
-            let ext = format!("{:03}.svg", id);
-            let out_path = path::Path::new(&args.output_prefix).with_extension(ext);
-            svg::save(out_path, &document).unwrap();
-        });
+    let mut document = Document::new()
+        .set("viewBox", (0, -32, args.track_length + 300, 24 + y_offset))
+        .set("width", args.track_length + 300)
+        .set("height", 56 + y_offset)
+        .set("preserveAspectRatio", "none");
+
+    let right_end = args.track_range as f32 * scaling_factor + left_padding;
+    let scale_path_str = format!("M {left_padding} -14 L {left_padding} -20 L {right_end} -20 L {right_end} -14 ");
+    let scale_path = element::Path::new()
+        .set("stroke", "#000")
+        .set("fill", "none")
+        .set("stroke-width", 1)
+        .set("d", scale_path_str);
+    document.append(scale_path);
+
+
+    ctg_with_svg_paths.into_iter().for_each(|(ctg, paths, text)| {
+        println!("{}", ctg);
+        document.append(text);
+        paths.into_iter().for_each(|path| document.append(path));
+    } ); 
+    let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
+    svg::save(out_path, &document).unwrap();
     Ok(())
 }
