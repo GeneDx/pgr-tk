@@ -6,7 +6,7 @@ use rustc_hash::FxHashMap;
 use std::{fs::File, io::BufWriter, io::Write, path::Path};
 
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-query")]
+#[clap(name = "pgr-pbundle-decomp")]
 #[clap(author, version)]
 #[clap(about = "take a fasta file and output the principal bundle decomposition though MAP Graph", long_about = None)]
 struct CmdOptions {
@@ -139,36 +139,42 @@ fn main() -> Result<(), std::io::Error> {
     )?;
     let mut outpu_bed_file =
         BufWriter::new(File::create(output_prefix_path.with_extension("bed"))?);
-    seq_index_db
+
+    let mut seq_info = seq_index_db
         .seq_info
         .unwrap()
         .into_iter()
-        .for_each(|(sid, sdata)| {
-            let (ctg, _src, _len) = sdata;
-            let smps = sid_smps.get(&sid).unwrap();
-            let smp_partitions = group_smps_by_principle_bundle_id(
-                smps,
-                args.bundle_length_cutoff,
-                args.bundle_merge_distance,
+        .map(|(k, v)| (k, v))
+        .collect::<Vec<_>>();
+
+    seq_info.sort_by_key(|k| k.1.0.clone());
+
+    seq_info.into_iter().for_each(|(sid, sdata)| {
+        let (ctg, _src, _len) = sdata;
+        let smps = sid_smps.get(&sid).unwrap();
+        let smp_partitions = group_smps_by_principle_bundle_id(
+            smps,
+            args.bundle_length_cutoff,
+            args.bundle_merge_distance,
+        );
+        smp_partitions.into_iter().for_each(|p| {
+            let b = p[0].0 .2;
+            let e = p[p.len() - 1].0 .3 + args.k;
+            let bid = p[0].1;
+            let direction = p[0].2;
+            let _ = writeln!(
+                outpu_bed_file,
+                "{}\t{}\t{}\t{}:{}:{}:{}:{}",
+                ctg,
+                b,
+                e,
+                bid,
+                bid_to_size[&bid],
+                direction,
+                p[0].3,
+                p[p.len() - 1].3
             );
-            smp_partitions.into_iter().for_each(|p| {
-                let b = p[0].0 .2;
-                let e = p[p.len() - 1].0 .3 + args.k;
-                let bid = p[0].1;
-                let direction = p[0].2;
-                let _ = writeln!(
-                    outpu_bed_file,
-                    "{}\t{}\t{}\t{}:{}:{}:{}:{}",
-                    ctg,
-                    b,
-                    e,
-                    bid,
-                    bid_to_size[&bid],
-                    direction,
-                    p[0].3,
-                    p[p.len() - 1].3
-                );
-            });
         });
+    });
     Ok(())
 }

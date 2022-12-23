@@ -45,6 +45,7 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
+    
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
         let bed_fields = line.split("\t").collect::<Vec<&str>>();
@@ -61,7 +62,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
 
     ctg_data.sort();
-        
+
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
     } else {
