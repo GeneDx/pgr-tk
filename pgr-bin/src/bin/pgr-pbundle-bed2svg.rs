@@ -13,6 +13,8 @@ use svg::Document;
 struct CmdOptions {
     bed_file_path: String,
     output_prefix: String,
+    #[clap(long)]
+    output_order: Option<String>,
     #[clap(long, default_value_t = 100000)]
     track_range: usize,
     #[clap(long, default_value_t = 1600)]
@@ -59,9 +61,24 @@ fn main() -> Result<(), std::io::Error> {
         e.push((bgn, end, bundle_id, bundle_dir));
     });
 
-    let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
 
-    ctg_data.sort();
+
+    let ctg_data = if args.output_order.is_some() {
+        let filename = args.output_order.unwrap();
+        let path= path::Path::new(&filename);
+        let f = BufReader::new(File::open(path)?);
+        let ctg_data: Vec<_> =
+            f.lines().map(|line| {
+                let ctg = line.unwrap();
+                let data = ctg_data.get(&ctg).unwrap().to_owned();
+                (ctg, data)
+            }).collect();
+        ctg_data
+    } else {
+        let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
+        ctg_data.sort();
+        ctg_data
+    };
 
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
@@ -74,7 +91,7 @@ fn main() -> Result<(), std::io::Error> {
     let stroke_width = 0.5;
     let mut y_offset = 0;
 
-    let ctg_with_svg_paths: Vec<(String, Vec<element::Path>, element::Text)> = ctg_data
+    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data
         .into_iter()
         .map(|(ctg, bundle_segment)| {
 
@@ -125,7 +142,7 @@ fn main() -> Result<(), std::io::Error> {
                     .set("font-size", "10px")
                     .add(node::Text::new(ctg.clone()));
                 y_offset += 16;
-            (ctg, paths, text)
+            (ctg, (paths, text))
         })
         .collect();
 
@@ -144,8 +161,7 @@ fn main() -> Result<(), std::io::Error> {
         .set("d", scale_path_str);
     document.append(scale_path);
 
-
-    ctg_with_svg_paths.into_iter().for_each(|(ctg, paths, text)| {
+    ctg_with_svg_paths.into_iter().for_each(|(ctg, (paths, text))| {
         println!("{}", ctg);
         document.append(text);
         paths.into_iter().for_each(|path| document.append(path));
