@@ -3,8 +3,6 @@ use clap::{self, CommandFactory, Parser};
 use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader};
 use std::{fs::File, path};
-use svg::node::{self, element, Node};
-use svg::Document;
 
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-svg")]
@@ -95,19 +93,19 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
-
+    let bed_file_parse_err_msg ="bed file parsing error"; 
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
         let bed_fields = line.split("\t").collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
-        let bgn: u32 = bed_fields[1].parse().unwrap();
-        let end: u32 = bed_fields[2].parse().unwrap();
+        let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
+        let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
         let pbundle_fields = bed_fields[3].split(":").collect::<Vec<&str>>();
-        let bundle_id: u32 = pbundle_fields[0].parse().unwrap();
-        let bundle_v_count: u32 = pbundle_fields[1].parse().unwrap();
-        let bundle_dir: u32 = pbundle_fields[2].parse().unwrap();
-        let bundle_v_bgn: u32 = pbundle_fields[3].parse().unwrap();
-        let bundle_v_end: u32 = pbundle_fields[4].parse().unwrap();
+        let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
+        let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
+        let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
+        let bundle_v_bgn: u32 = pbundle_fields[3].parse().expect(bed_file_parse_err_msg);
+        let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
 
         let e = ctg_data.entry(ctg).or_insert(vec![]);
         let b_seg = BundleSegement {

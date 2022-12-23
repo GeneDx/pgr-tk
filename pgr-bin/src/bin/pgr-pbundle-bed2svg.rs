@@ -47,16 +47,19 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
-    
+    let bed_file_parse_err_msg ="bed file parsing error"; 
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
         let bed_fields = line.split("\t").collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
-        let bgn: u32 = bed_fields[1].parse().unwrap();
-        let end: u32 = bed_fields[2].parse().unwrap();
+        let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
+        let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
         let pbundle_fields = bed_fields[3].split(":").collect::<Vec<&str>>();
-        let bundle_id: u32 = pbundle_fields[0].parse().unwrap();
-        let bundle_dir: u32 = pbundle_fields[2].parse().unwrap();
+        let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
+        //let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
+        let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
+        //let bundle_v_bgn: u32 = pbundle_fields[3].parse().expect(bed_file_parse_err_msg);
+        //let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
         let e = ctg_data.entry(ctg).or_insert(vec![]);
         e.push((bgn, end, bundle_id, bundle_dir));
     });
