@@ -25,7 +25,7 @@ struct CmdOptions {
     stroke_width: f32,
 }
 
-static cmap: [&str; 97] = [
+static CMAP: [&str; 97] = [
     "#870098", "#00aaa5", "#3bff00", "#ec0000", "#00a2c3", "#00f400", "#ff1500", "#0092dd",
     "#00dc00", "#ff8100", "#007ddd", "#00c700", "#ffb100", "#0038dd", "#00af00", "#fcd200",
     "#0000d5", "#009a00", "#f1e700", "#0000b1", "#00a55d", "#d4f700", "#4300a2", "#00aa93",
@@ -107,8 +107,8 @@ fn main() -> Result<(), std::io::Error> {
                         (bgn, end) = (end, bgn);
                     }
 
-                    let bundle_color = cmap[(bundle_id % 97) as usize];
-                    let stroke_color = cmap[((bundle_id * 47) % 43) as usize];
+                    let bundle_color = CMAP[(bundle_id % 97) as usize];
+                    let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
                     let end = if direction == 0 {
                         if end as f32 - 5.0 < bgn {

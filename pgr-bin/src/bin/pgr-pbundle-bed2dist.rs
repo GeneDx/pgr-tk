@@ -1,7 +1,8 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use rustc_hash::FxHashMap;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
 use std::{fs::File, path};
 
 #[derive(Parser, Debug)]
@@ -37,20 +38,16 @@ fn align_bundles(
 ) -> (f32, usize, usize) {
     let q_count = q_bundles.len();
     let t_count = t_bundles.len();
-    let mut S = FxHashMap::<(usize, usize), i64>::default();
-    let mut T = FxHashMap::<(usize, usize), AlnType>::default();
+    let mut s_map = FxHashMap::<(usize, usize), i64>::default();
+    let mut t_map = FxHashMap::<(usize, usize), AlnType>::default();
 
     let mut get_aln_direction_with_best_score =
-        |q_idx: usize, t_idx: usize, S: &FxHashMap<(usize, usize), i64>| -> (AlnType, i64) {
+        |q_idx: usize, t_idx: usize, s_map: &FxHashMap<(usize, usize), i64>| -> (AlnType, i64) {
             let mut best = (AlnType::Match, i64::MIN);
             let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
             let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
-            let (max_len, min_len) = if q_len > t_len {
-                (q_len, t_len)
-            } else {
-                (t_len, q_len)
-            };
-            if (q_idx == 0 && t_idx == 0) {
+            let min_len = if q_len > t_len { t_len } else { q_len };
+            if q_idx == 0 && t_idx == 0 {
                 if (q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id)
                     && (q_bundles[q_idx].bundle_dir == t_bundles[t_idx].bundle_dir)
                 {
@@ -63,23 +60,23 @@ fn align_bundles(
                 {
                     best = (
                         AlnType::Match,
-                        2 * min_len + S.get(&(q_idx - 1, t_idx - 1)).unwrap(),
+                        2 * min_len + s_map.get(&(q_idx - 1, t_idx - 1)).unwrap(),
                     )
                 };
             }
             if t_idx > 0 {
-                let insert_score = -2 * q_len + S.get(&(q_idx, t_idx - 1)).unwrap();
+                let insert_score = -2 * q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
                 if insert_score > best.1 {
                     best = (AlnType::Insertion, insert_score)
                 };
             };
             if q_idx > 0 {
-                let delete_score = -2 * t_len + S.get(&(q_idx - 1, t_idx)).unwrap();
+                let delete_score = -2 * t_len + s_map.get(&(q_idx - 1, t_idx)).unwrap();
                 if delete_score > best.1 {
                     best = (AlnType::Deletion, delete_score)
                 }
             }
-            T.insert((q_idx, t_idx), best.0.clone());
+            t_map.insert((q_idx, t_idx), best.0.clone());
             best
         };
 
@@ -91,8 +88,8 @@ fn align_bundles(
         .flat_map(|t_idx| (0..q_count).map(move |q_idx| (q_idx, t_idx)))
         .for_each(|(q_idx, t_idx)| {
             //println!("{} {}", q_idx, t_idx);
-            let (_, score) = get_aln_direction_with_best_score(q_idx, t_idx, &S);
-            S.insert((q_idx, t_idx), score);
+            let (_, score) = get_aln_direction_with_best_score(q_idx, t_idx, &s_map);
+            s_map.insert((q_idx, t_idx), score);
             /*
             if score > best_score {
                 best_score = score;
@@ -106,9 +103,9 @@ fn align_bundles(
     let mut diff_len = 0_usize;
     let mut max_len = 1_usize;
     loop {
-        if let Some(aln_type) = T.get(&(q_idx, t_idx)) {
-            let qq_idx = q_idx;
-            let tt_idx = t_idx;
+        if let Some(aln_type) = t_map.get(&(q_idx, t_idx)) {
+            // let qq_idx = q_idx;
+            // let tt_idx = t_idx;
             let (diff_len_delta, max_len_delta) = match aln_type {
                 AlnType::Match => {
                     let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
@@ -193,6 +190,9 @@ fn main() -> Result<(), std::io::Error> {
     ctg_data.sort();
     let n_ctg = ctg_data.len();
 
+    let out_path = Path::new(&args.output_prefix).with_extension("dist");
+    let mut out_file = BufWriter::new(File::create(out_path)?);
+
     (0..n_ctg)
         .flat_map(|ctg_idx0| (0..n_ctg).map(move |ctg_idx1| (ctg_idx0, ctg_idx1)))
         .for_each(|(ctg_idx0, ctg_idx1)| {
@@ -208,9 +208,19 @@ fn main() -> Result<(), std::io::Error> {
             } else {
                 (dist1, diff_len1, max_len1)
             };
-            println!("{} {} {} {} {}", ctg0, ctg1, dist, diff_len, max_len);
+            writeln!(
+                out_file,
+                "{} {} {} {} {}",
+                ctg0, ctg1, dist, diff_len, max_len
+            )
+            .expect("writing error");
             if ctg_idx1 != ctg_idx0 {
-                println!("{} {} {} {} {}", ctg1, ctg0, dist, diff_len, max_len);
+                writeln!(
+                    out_file,
+                    "{} {} {} {} {}",
+                    ctg1, ctg0, dist, diff_len, max_len
+                )
+                .expect("writing error");
             }
         });
     Ok(())
