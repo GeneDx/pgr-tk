@@ -31,7 +31,10 @@ enum AlnType {
     Insertion,
 }
 
-fn align_bundles(q_bundles: &Vec<BundleSegement>, t_bundles: &Vec<BundleSegement>) -> (f32, usize, usize) {
+fn align_bundles(
+    q_bundles: &Vec<BundleSegement>,
+    t_bundles: &Vec<BundleSegement>,
+) -> (f32, usize, usize) {
     let q_count = q_bundles.len();
     let t_count = t_bundles.len();
     let mut S = FxHashMap::<(usize, usize), i64>::default();
@@ -48,15 +51,16 @@ fn align_bundles(q_bundles: &Vec<BundleSegement>, t_bundles: &Vec<BundleSegement
                 (t_len, q_len)
             };
             if (q_idx == 0 && t_idx == 0) {
-                if q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id {
-                    best = (
-                        AlnType::Match,
-                        2 * min_len,
-                    )
+                if (q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id)
+                    && (q_bundles[q_idx].bundle_dir == t_bundles[t_idx].bundle_dir)
+                {
+                    best = (AlnType::Match, 2 * min_len)
                 }
-            } 
+            }
             if q_idx > 0 && t_idx > 0 {
-                if q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id {
+                if (q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id)
+                    && (q_bundles[q_idx].bundle_dir == t_bundles[t_idx].bundle_dir)
+                {
                     best = (
                         AlnType::Match,
                         2 * min_len + S.get(&(q_idx - 1, t_idx - 1)).unwrap(),
@@ -132,7 +136,7 @@ fn align_bundles(q_bundles: &Vec<BundleSegement>, t_bundles: &Vec<BundleSegement
             };
             diff_len += diff_len_delta;
             max_len += max_len_delta;
-            /* 
+            /*
             println!(
                 "{} {} {:?} {:?} {:?} {} {}",
                 qq_idx, tt_idx, aln_type, q_bundles[qq_idx].bundle_id, t_bundles[tt_idx].bundle_id, diff_len_delta, max_len_delta
@@ -141,7 +145,6 @@ fn align_bundles(q_bundles: &Vec<BundleSegement>, t_bundles: &Vec<BundleSegement
         } else {
             break;
         }
-
     }
     (diff_len as f32 / max_len as f32, diff_len, max_len)
 }
@@ -200,7 +203,11 @@ fn main() -> Result<(), std::io::Error> {
             let (ctg1, bundles1) = &ctg_data[ctg_idx1];
             let (dist0, diff_len0, max_len0) = align_bundles(bundles0, bundles1);
             let (dist1, diff_len1, max_len1) = align_bundles(bundles1, bundles0);
-            let (dist, diff_len, max_len) = if dist0 > dist1 { (dist0, diff_len0, max_len0) } else { (dist1, diff_len1, max_len1) };
+            let (dist, diff_len, max_len) = if dist0 > dist1 {
+                (dist0, diff_len0, max_len0)
+            } else {
+                (dist1, diff_len1, max_len1)
+            };
             println!("{} {} {} {} {}", ctg0, ctg1, dist, diff_len, max_len);
             if ctg_idx1 != ctg_idx0 {
                 println!("{} {} {} {} {}", ctg1, ctg0, dist, diff_len, max_len);
