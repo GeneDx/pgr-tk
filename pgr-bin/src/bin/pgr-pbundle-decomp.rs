@@ -95,6 +95,9 @@ fn group_smps_by_principle_bundle_id(
             partition = p.clone();
         }
     });
+    if partition.len() > 0 {
+        rtn_partitions.push(partition.clone());
+    }
     rtn_partitions
 }
 
@@ -147,7 +150,7 @@ fn main() -> Result<(), std::io::Error> {
         .map(|(k, v)| (k, v))
         .collect::<Vec<_>>();
 
-    seq_info.sort_by_key(|k| k.1.0.clone());
+    seq_info.sort_by_key(|k| k.1 .0.clone());
 
     seq_info.into_iter().for_each(|(sid, sdata)| {
         let (ctg, _src, _len) = sdata;

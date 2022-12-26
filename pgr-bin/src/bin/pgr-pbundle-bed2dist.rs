@@ -47,16 +47,18 @@ fn align_bundles(
             let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
             let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
             let min_len = if q_len > t_len { t_len } else { q_len };
+            let q_b_seg = q_bundles[q_idx]; 
+            let t_b_seg = t_bundles[t_idx]; 
             if q_idx == 0 && t_idx == 0 {
-                if (q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id)
-                    && (q_bundles[q_idx].bundle_dir == t_bundles[t_idx].bundle_dir)
+                if (q_b_seg.bundle_id == t_b_seg.bundle_id)
+                    && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
                 {
                     best = (AlnType::Match, 2 * min_len)
                 }
             }
             if q_idx > 0 && t_idx > 0 {
-                if (q_bundles[q_idx].bundle_id == t_bundles[t_idx].bundle_id)
-                    && (q_bundles[q_idx].bundle_dir == t_bundles[t_idx].bundle_dir)
+                if (q_b_seg.bundle_id == t_b_seg.bundle_id)
+                    && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
                 {
                     best = (
                         AlnType::Match,
