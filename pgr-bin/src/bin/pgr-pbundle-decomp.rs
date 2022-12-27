@@ -70,14 +70,18 @@ fn group_smps_by_principle_bundle_id(
         new_partition.push((smp, bid, d, bpos));
     });
     let l = new_partition.len();
-    if new_partition[l - 1].0 .3 as usize - new_partition[0].0 .2 as usize > bundle_length_cutoff {
-        all_partitions.push(new_partition.clone());
-    };
+    if l > 0 {
+        if new_partition[l - 1].0 .3 as usize - new_partition[0].0 .2 as usize
+            > bundle_length_cutoff
+        {
+            all_partitions.push(new_partition.clone());
+        };
+    }
 
     let mut rtn_partitions = vec![];
 
     if all_partitions.len() == 0 {
-        return rtn_partitions
+        return rtn_partitions;
     }
     let mut partition = all_partitions[0].clone();
     (1..all_partitions.len()).into_iter().for_each(|idx| {
