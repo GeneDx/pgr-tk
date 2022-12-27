@@ -1,12 +1,13 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
+use kodama::{linkage, Method};
 use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs::File, path};
 
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-pbundle-svg")]
+#[clap(name = "pgr-pbundle-bed2dist")]
 #[clap(author, version)]
 #[clap(about = "generate alignment scores between contigs using bundle decomposition from a principal bundle bed file", long_about = None)]
 struct CmdOptions {
@@ -47,8 +48,8 @@ fn align_bundles(
             let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
             let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
             let min_len = if q_len > t_len { t_len } else { q_len };
-            let q_b_seg = q_bundles[q_idx]; 
-            let t_b_seg = t_bundles[t_idx]; 
+            let q_b_seg = q_bundles[q_idx];
+            let t_b_seg = t_bundles[t_idx];
             if q_idx == 0 && t_idx == 0 {
                 if (q_b_seg.bundle_id == t_b_seg.bundle_id)
                     && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
@@ -195,10 +196,12 @@ fn main() -> Result<(), std::io::Error> {
     let out_path = Path::new(&args.output_prefix).with_extension("dist");
     let mut out_file = BufWriter::new(File::create(out_path)?);
 
+    let mut dist_map = FxHashMap::<(usize, usize), f32>::default();
+
     (0..n_ctg)
         .flat_map(|ctg_idx0| (0..n_ctg).map(move |ctg_idx1| (ctg_idx0, ctg_idx1)))
         .for_each(|(ctg_idx0, ctg_idx1)| {
-            if ctg_idx1 > ctg_idx0 {
+            if ctg_idx0 > ctg_idx1 {
                 return;
             };
             let (ctg0, bundles0) = &ctg_data[ctg_idx0];
@@ -223,7 +226,35 @@ fn main() -> Result<(), std::io::Error> {
                     ctg1, ctg0, dist, diff_len, max_len
                 )
                 .expect("writing error");
+                dist_map.insert((ctg_idx0, ctg_idx1), dist);
             }
         });
+
+    let mut dist_mat = vec![];
+    (0..n_ctg - 1).for_each(|i| {
+        (i + 1..n_ctg).for_each(|j| {
+            dist_mat.push(*dist_map.get(&(i, j)).unwrap());
+        })
+    });
+    let dend = linkage(&mut dist_mat, n_ctg, Method::Average);
+
+    let mut dend_file = BufWriter::new(File::create(
+        Path::new(&args.output_prefix).with_extension("ddg"),
+    )?);
+
+    let steps = dend.steps().to_vec();
+    (0..n_ctg).for_each(|ctg_idx| {
+        writeln!(dend_file, "L {} {}", ctg_idx, ctg_data[ctg_idx].0).expect("can't write dendrogram file");
+    });
+
+    steps.into_iter().enumerate().for_each(|(c, s)| {
+        writeln!(
+            dend_file,
+            "I {} {} {} {} {}",
+            c + n_ctg, s.cluster1, s.cluster2, s.dissimilarity, s.size
+        )
+        .expect("can't write the dendrogram file");
+    });
+
     Ok(())
 }
