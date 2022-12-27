@@ -1,6 +1,5 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
-use kodama::{linkage, Method};
 use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
@@ -24,13 +23,6 @@ struct BundleSegement {
     bundle_dir: u32,
     bundle_v_bgn: u32,
     bundle_v_end: u32,
-}
-
-#[derive(Clone, Copy, Debug)]
-enum AlnType {
-    Match,
-    Deletion,
-    Insertion,
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -103,8 +95,6 @@ fn main() -> Result<(), std::io::Error> {
 
     ctg_data.sort();
     ctg_data.reverse();
-
-    let n_ctg = ctg_data.len();
 
     let out_path = Path::new(&args.output_prefix).with_extension("ord");
     let mut out_file = BufWriter::new(File::create(out_path)?);

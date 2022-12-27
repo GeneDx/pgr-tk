@@ -172,7 +172,7 @@ fn main() -> Result<(), std::io::Error> {
         .set("d", scale_path_str);
     document.append(scale_path);
 
-    ctg_with_svg_paths.into_iter().for_each(|(ctg, (paths, text))| {
+    ctg_with_svg_paths.into_iter().for_each(|(_ctg, (paths, text))| {
         // println!("{}", ctg);
         document.append(text);
         paths.into_iter().for_each(|path| document.append(path));
