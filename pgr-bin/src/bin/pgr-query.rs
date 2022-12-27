@@ -16,6 +16,9 @@ struct CmdOptions {
     query_fastx_path: String,
     output_prfix: String,
 
+    #[clap(long, default_value_t=false)]
+    frg_file: bool,
+
     #[clap(long, short, default_value_t = 0.025)]
     gap_penality_factor: f32,
 
@@ -55,7 +58,11 @@ fn main() -> Result<(), std::io::Error> {
     };
 
     let mut seq_index_db = SeqIndexDB::new();
-    let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+    if args.frg_file {
+        let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
+    } else {
+        let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+    }
     let prefix = Path::new(&args.output_prfix);
     let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
     writeln!(
