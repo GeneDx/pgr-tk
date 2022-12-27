@@ -68,7 +68,7 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(
         hit_file,
         "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-        "idx",
+        "q_idx",
         "q_name",
         "src",
         "ctg",
