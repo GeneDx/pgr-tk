@@ -57,20 +57,22 @@ fn main() -> Result<(), std::io::Error> {
             bundle_v_end,
         };
         e.push(b_seg);
-        if (bundle_v_bgn as i64 - bundle_v_end as i64).abs() as f32 > (bundle_v_count as f32) * 0.5 {
+        if (bundle_v_bgn as i64 - bundle_v_end as i64).abs() as f32 > (bundle_v_count as f32) * 0.5
+        {
             let e = node_length.entry((bundle_id, bundle_dir)).or_insert(vec![]);
             e.push((end as i64 - bgn as i64).abs() as u64);
         }
     });
 
-    let mut node_length = node_length.into_iter().map(|(n, v)| {
-        let c = v.len() as f64;
-        let sum = v.into_iter().sum::<u64>() as f64;
-        (sum/c, n)
-
-    }).collect::<Vec<(f64,(u32,u32))>>();
+    let mut node_length = node_length
+        .into_iter()
+        .map(|(n, v)| {
+            let c = v.len() as f64;
+            let sum = v.into_iter().sum::<u64>() as f64;
+            (sum / c, n)
+        })
+        .collect::<Vec<(f64, (u32, u32))>>();
     node_length.sort_by(|a, b| b.partial_cmp(a).unwrap());
-    
 
     let mut ctg_data = ctg_data
         .into_iter()
@@ -79,14 +81,16 @@ fn main() -> Result<(), std::io::Error> {
             let mut node_count = FxHashMap::<(u32, u32), u32>::default();
             bundle_segs.iter().for_each(|vv| {
                 let node = (vv.bundle_id, vv.bundle_dir);
-                if (vv.bundle_v_bgn as i64 - vv.bundle_v_end as i64).abs() as f32 > (vv.bundle_v_count as f32) * 0.5 {
+                if (vv.bundle_v_bgn as i64 - vv.bundle_v_end as i64).abs() as f32
+                    > (vv.bundle_v_count as f32) * 0.5
+                {
                     let e = node_count.entry(node).or_insert(0);
-                    *e += 1; 
+                    *e += 1;
                 }
             });
             let mut sort_key = vec![];
             node_length.iter().for_each(|&(_, n)| {
-                sort_key.push( *node_count.get(&n).unwrap_or(&0) );  
+                sort_key.push(*node_count.get(&n).unwrap_or(&0));
             });
 
             (sort_key, ctg, bundle_segs)
@@ -98,9 +102,15 @@ fn main() -> Result<(), std::io::Error> {
 
     let out_path = Path::new(&args.output_prefix).with_extension("ord");
     let mut out_file = BufWriter::new(File::create(out_path)?);
-    
+
     ctg_data.into_iter().for_each(|(sort_key, ctg, _)| {
-        writeln!(out_file, "{}\t{:?}", ctg, sort_key).expect("writing error");
+        let sort_key = sort_key
+            .into_iter()
+            .map(|k| format!("{}", k))
+            .collect::<Vec<String>>();
+        let sort_key = sort_key.join(",");
+        writeln!(out_file, "{}\t{
+        }", ctg, sort_key).expect("writing error");
     });
 
     Ok(())
