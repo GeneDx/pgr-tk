@@ -99,7 +99,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let scaling_factor = args.track_length as f32 / (args.track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32 * scaling_factor as f32;
-    let stroke_width = 0.5;
+    let stroke_width = args.stroke_width;
     let mut y_offset = 0;
 
     let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data
