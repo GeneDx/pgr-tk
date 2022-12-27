@@ -503,7 +503,7 @@ impl SeqIndexDB {
         if frag_map.is_none() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "can get fram_map",
+                "can get frag_map",
             ))
         }
         let mut overlaps =
