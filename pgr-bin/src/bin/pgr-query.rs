@@ -67,9 +67,10 @@ fn main() -> Result<(), std::io::Error> {
     let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
     writeln!(
         hit_file,
-        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
         "idx",
         "q_name",
+        "src",
         "ctg",
         "ctg_bgn",
         "ctg_end",
@@ -222,8 +223,10 @@ fn main() -> Result<(), std::io::Error> {
                     BufWriter::new(File::create(prefix.with_extension(ext)).unwrap());
 
                 aln_range.into_iter().for_each(|(sid, rgns)| {
-                    let (ctg, _src, _ctg_len) =
+                    let (ctg, src, _ctg_len) =
                         seq_index_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
+                    //let src = *src.unwrap_or("N/A".to_string()).to_string();
+                    let src = (*src).as_ref().unwrap_or(&"N/A".to_string()).clone();
                     rgns.into_iter()
                         .for_each(|(b, e, _, orientation, mut aln)| {
                             aln.sort();
@@ -231,9 +234,10 @@ fn main() -> Result<(), std::io::Error> {
                             let q_end = aln[aln.len() - 1].0 .1;
                             let _ = writeln!(
                                 hit_file,
-                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                 idx,
                                 q_name,
+                                &src,
                                 ctg,
                                 b,
                                 e,
