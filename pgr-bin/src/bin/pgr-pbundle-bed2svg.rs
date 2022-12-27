@@ -7,14 +7,14 @@ use svg::node::{element, Node, self};
 use svg::Document;
 
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-pbundle-svg")]
+#[clap(name = "pgr-pbundle-bed2svg")]
 #[clap(author, version)]
 #[clap(about = "generate SVG from a principal bundle bed file", long_about = None)]
 struct CmdOptions {
     bed_file_path: String,
     output_prefix: String,
     #[clap(long)]
-    output_order: Option<String>,
+    annotations: Option<String>,
     #[clap(long, default_value_t = 100000)]
     track_range: usize,
     #[clap(long, default_value_t = 1600)]
@@ -64,19 +64,27 @@ fn main() -> Result<(), std::io::Error> {
         e.push((bgn, end, bundle_id, bundle_dir));
     });
 
-
-
-    let ctg_data = if args.output_order.is_some() {
-        let filename = args.output_order.unwrap();
+    //let mut annotations = vec![];
+    let ctg_data = if args.annotations.is_some() {
+        let filename = args.annotations.unwrap();
         let path= path::Path::new(&filename);
-        let f = BufReader::new(File::open(path)?);
+        let annotation_file = BufReader::new(File::open(path)?);
         let ctg_data: Vec<_> =
-            f.lines().map(|line| {
-                let ctg = line.unwrap();
+            annotation_file.lines().map(|line| {
+                let ctg_annotation = line.unwrap();
+                let mut ctg_annotation = ctg_annotation.split("\t"); 
+                let ctg = ctg_annotation.next().expect("error parsing annotation file").to_string();
+
                 let data = ctg_data.get(&ctg).unwrap().to_owned();
-                (ctg, data)
+                if let Some(annotation) = ctg_annotation.next() {
+                //annotations.push( (ctg.clone(), annotation) );
+                    (annotation.to_string(), data)
+                } else {
+                    ("".to_string(), data)
+                }
+
             }).collect();
-        ctg_data
+            ctg_data
     } else {
         let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
         ctg_data.sort();
@@ -107,7 +115,7 @@ fn main() -> Result<(), std::io::Error> {
                         (bgn, end) = (end, bgn);
                     }
 
-                    let bundle_color = CMAP[(bundle_id % 97) as usize];
+                    let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
                     let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
                     let end = if direction == 0 {
@@ -165,7 +173,7 @@ fn main() -> Result<(), std::io::Error> {
     document.append(scale_path);
 
     ctg_with_svg_paths.into_iter().for_each(|(ctg, (paths, text))| {
-        println!("{}", ctg);
+        // println!("{}", ctg);
         document.append(text);
         paths.into_iter().for_each(|path| document.append(path));
     } ); 
