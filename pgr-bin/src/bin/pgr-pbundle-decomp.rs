@@ -75,6 +75,10 @@ fn group_smps_by_principle_bundle_id(
     };
 
     let mut rtn_partitions = vec![];
+
+    if all_partitions.len() == 0 {
+        return rtn_partitions
+    }
     let mut partition = all_partitions[0].clone();
     (1..all_partitions.len()).into_iter().for_each(|idx| {
         let p = all_partitions[idx].clone();
