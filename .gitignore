@@ -8,3 +8,4 @@ libagc.so
 Cargo.lock
 pgr-tk/pgrtk/*.so
 pgr-tk-workstation/*.whl
+docker/github-build
