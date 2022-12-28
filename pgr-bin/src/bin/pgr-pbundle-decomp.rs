@@ -111,6 +111,7 @@ fn group_smps_by_principle_bundle_id(
 
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
+    let cmd_string = CmdOptions::command().to_string();
     let args = CmdOptions::parse();
     let mut seq_index_db = SeqIndexDB::new();
     let _ = seq_index_db.load_from_fastx(args.fastx_path, args.w, args.k, args.r, args.min_span);
@@ -150,6 +151,8 @@ fn main() -> Result<(), std::io::Error> {
     )?;
     let mut outpu_bed_file =
         BufWriter::new(File::create(output_prefix_path.with_extension("bed"))?);
+
+    writeln!(outpu_bed_file, "# cmd: {}", cmd_string).expect("bed file write error");
 
     let mut seq_info = seq_index_db
         .seq_info

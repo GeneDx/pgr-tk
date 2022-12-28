@@ -35,6 +35,12 @@ fn main() -> Result<(), std::io::Error> {
     let mut node_length = FxHashMap::<(u32, u32), Vec<_>>::default();
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
+        if line.len() == 0 {
+            return
+        }
+        if line[0..1] == *"#" {
+            return
+        }
         let bed_fields = line.split("\t").collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
