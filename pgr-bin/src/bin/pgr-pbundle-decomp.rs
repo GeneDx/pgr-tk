@@ -112,7 +112,7 @@ fn group_smps_by_principle_bundle_id(
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
-    let cmd_string = format!("{:?}", std::env::args());
+    let cmd_string = std::env::args().collect::<Vec<String>>().join(" ");
     let mut seq_index_db = SeqIndexDB::new();
     let _ = seq_index_db.load_from_fastx(args.fastx_path, args.w, args.k, args.r, args.min_span);
     let (principal_bundles, sid_smps) =
