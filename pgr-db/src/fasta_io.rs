@@ -31,6 +31,12 @@ pub fn reverse_complement(seq: &Vec<u8>) -> Vec<u8> {
             b'C' => rev_seq.push(b'G'),
             b'G' => rev_seq.push(b'C'),
             b'T' => rev_seq.push(b'A'),
+            b'a' => rev_seq.push(b't'),
+            b'c' => rev_seq.push(b'g'),
+            b'g' => rev_seq.push(b'c'),
+            b't' => rev_seq.push(b'a'),
+            b'N' => rev_seq.push(b'N'),
+            b'n' => rev_seq.push(b'n'),
             _ => rev_seq.push(*b),
         }
     }
