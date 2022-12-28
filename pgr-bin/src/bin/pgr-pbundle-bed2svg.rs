@@ -53,7 +53,7 @@ fn main() -> Result<(), std::io::Error> {
         if line.len() == 0 {
             return
         }
-        if line[0..1] == *"#" {
+        if &line[0..1] == "#" {
             return
         }
         let bed_fields = line.split("\t").collect::<Vec<&str>>();
