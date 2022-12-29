@@ -235,7 +235,7 @@ fn main() -> Result<(), std::io::Error> {
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
                             
-                            let target_seq_name = format!(">{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
+                            let target_seq_name = format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
                             let _ = writeln!(
                                 hit_file,
                                 "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -260,7 +260,7 @@ fn main() -> Result<(), std::io::Error> {
                             } else {
                                 target_seq
                             };
-                            let _ = writeln!(fasta_out, "{}", target_seq_name);
+                            let _ = writeln!(fasta_out, ">{}", target_seq_name);
                             let _ = writeln!(fasta_out, "{}", String::from_utf8_lossy(&target_seq));
                         });
                 });
