@@ -70,15 +70,15 @@ fn main() -> Result<(), std::io::Error> {
         "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
         "q_idx",
         "q_name",
+        "query_bgn",
+        "query_end",
+        "aln_anchor_count",
         "src",
         "ctg",
         "ctg_bgn",
         "ctg_end",
         "orientation",
-        "out_seq_name",
-        "aln_anchor_count",
-        "query_bgn",
-        "query_end"
+        "out_seq_name"
     )?;
 
     query_seqs
@@ -241,15 +241,15 @@ fn main() -> Result<(), std::io::Error> {
                                 "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                 idx,
                                 q_name,
+                                q_bgn,
+                                q_end,
+                                aln.len(),
                                 src,
                                 ctg,
                                 b,
                                 e,
                                 orientation,
-                                target_seq_name, 
-                                aln.len(),
-                                q_bgn,
-                                q_end
+                                target_seq_name
                             );
                             //println!("DBG: {}", seq_id);
                             let target_seq = seq_index_db
