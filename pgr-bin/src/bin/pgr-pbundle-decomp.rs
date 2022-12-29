@@ -1,9 +1,14 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use pgr_bin::SeqIndexDB;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 //use std::fs::File;
-use std::{fs::File, io::BufWriter, io::Write, path::Path};
+use std::{
+    fs::File,
+    io::BufWriter,
+    io::{BufRead, BufReader, Write},
+    path::Path,
+};
 
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-decomp")]
@@ -12,6 +17,8 @@ use std::{fs::File, io::BufWriter, io::Write, path::Path};
 struct CmdOptions {
     fastx_path: String,
     output_prefix: String,
+    #[clap(short, default_value = None)]
+    include: Option<String>,
     #[clap(short, default_value_t = 80)]
     w: u32,
     #[clap(short, default_value_t = 56)]
@@ -114,7 +121,36 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
     let cmd_string = std::env::args().collect::<Vec<String>>().join(" ");
     let mut seq_index_db = SeqIndexDB::new();
-    let _ = seq_index_db.load_from_fastx(args.fastx_path, args.w, args.k, args.r, args.min_span);
+    let filex_path = args.fastx_path.clone();
+    let _ = seq_index_db.load_from_fastx(filex_path.clone(), args.w, args.k, args.r, args.min_span);
+
+    if args.include.is_some() {
+        let f = BufReader::new(
+            File::open(Path::new(&args.include.unwrap())).expect("can't opne the inlude file"),
+        );
+        let include_ctgs = f
+            .lines()
+            .map(|c| c.unwrap().to_string())
+            .collect::<FxHashSet<String>>();
+        let seq_list = include_ctgs
+            .into_iter()
+            .map(|ctg| {
+                let seq = seq_index_db.get_seq(filex_path.clone(), ctg.clone()).expect("fail to fetch sequence");
+                (ctg, seq)
+            })
+            .collect::<Vec<_>>();
+        let mut new_seq_index_db = SeqIndexDB::new();
+        let _ = new_seq_index_db.load_from_seq_list(
+            seq_list,
+            Some(filex_path.as_str()),
+            args.w,
+            args.k,
+            args.r,
+            args.min_span,
+        );
+        seq_index_db = new_seq_index_db;
+    };
+
     let (principal_bundles, sid_smps) =
         seq_index_db.get_principal_bundle_decomposition(args.min_cov, args.min_branch_size, None);
 
@@ -134,12 +170,14 @@ fn main() -> Result<(), std::io::Error> {
         "from_fragmap",
         None,
     )?;
+
     seq_index_db.write_mapg_idx(
         output_prefix_path
             .with_extension("mapg.idx")
             .to_str()
             .unwrap(),
     )?;
+
     seq_index_db.generate_principal_mapg_gfa(
         args.min_cov,
         args.min_branch_size,

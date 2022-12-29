@@ -135,6 +135,46 @@ impl SeqIndexDB {
         Ok(())
     }
 
+    pub fn load_from_seq_list(
+        &mut self,
+        seq_list: Vec<(String, Vec<u8>)>,
+        source: Option<&str>,
+        w: u32,
+        k: u32,
+        r: u32,
+        min_span: u32,
+    ) -> Result<(), std::io::Error> {
+        let spec = ShmmrSpec {
+            w,
+            k,
+            r,
+            min_span,
+            sketch: false,
+        };
+        self.backend = Backend::MEMORY;
+        let source = Some(source.unwrap().to_string());
+        let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
+        let seq_vec = seq_list
+            .into_iter()
+            .enumerate()
+            .map(|(sid, v)| (sid as u32, source.clone(), v.0, v.1))
+            .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
+        sdb.load_seqs_from_seq_vec(&seq_vec);
+
+        self.shmmr_spec = Some(spec);
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
+        self.seq_db = Some(sdb);
+        Ok(())
+    }
+
+
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,

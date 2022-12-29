@@ -67,7 +67,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
     writeln!(
         hit_file,
-        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
         "q_idx",
         "q_name",
         "src",
@@ -75,6 +75,7 @@ fn main() -> Result<(), std::io::Error> {
         "ctg_bgn",
         "ctg_end",
         "orientation",
+        "out_seq_name",
         "aln_anchor_count",
         "query_bgn",
         "query_end"
@@ -232,21 +233,24 @@ fn main() -> Result<(), std::io::Error> {
                             aln.sort();
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
+                            let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
+                            
+                            let target_seq_name = format!(">{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
                             let _ = writeln!(
                                 hit_file,
-                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                 idx,
                                 q_name,
-                                &src,
+                                src,
                                 ctg,
                                 b,
                                 e,
                                 orientation,
+                                target_seq_name, 
                                 aln.len(),
                                 q_bgn,
                                 q_end
                             );
-                            let target_seq_name = format!(">{}_{}_{}_{}", ctg, b, e, orientation);
                             //println!("DBG: {}", seq_id);
                             let target_seq = seq_index_db
                                 .get_sub_seq_by_id(sid, b as usize, e as usize)
