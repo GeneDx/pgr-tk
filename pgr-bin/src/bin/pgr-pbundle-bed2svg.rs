@@ -17,6 +17,8 @@ struct CmdOptions {
     annotations: Option<String>,
     #[clap(long, default_value_t = 100000)]
     track_range: usize,
+    #[clap(long, default_value_t = 10000)]
+    track_tick_interval: usize,
     #[clap(long, default_value_t = 1600)]
     track_length: usize,
     #[clap(long)]
@@ -154,7 +156,7 @@ fn main() -> Result<(), std::io::Error> {
                 })
                 .collect();
                 let text = element::Text::new()
-                    .set("x", left_padding + args.track_range as f32 * scaling_factor)
+                    .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
                     .set("y", y_offset)
                     .set("font-size", "10px")
                     .add(node::Text::new(ctg.clone()));
@@ -177,6 +179,30 @@ fn main() -> Result<(), std::io::Error> {
         .set("stroke-width", 1)
         .set("d", scale_path_str);
     document.append(scale_path);
+
+    assert!(args.track_tick_interval > 0);
+    let mut tickx = args.track_tick_interval;
+    loop {
+        if tickx > args.track_range {
+            break;
+        }
+        let x = tickx as f32 * scaling_factor + left_padding; 
+        let tick_path_str = format!("M {x} -16 L {x} -20");
+        let tick_path = element::Path::new()
+            .set("stroke", "#000")
+            .set("fill", "none")
+            .set("stroke-width", 1)
+            .set("d", tick_path_str);
+        document.append(tick_path);
+        tickx += args.track_tick_interval; 
+    }
+
+    let text = element::Text::new()
+                    .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
+                    .set("y", -14)
+                    .set("font-size", "10px")
+                    .add(node::Text::new(format!("{} bps", args.track_range)));
+    document.append(text);
 
     ctg_with_svg_paths.into_iter().for_each(|(_ctg, (paths, text))| {
         // println!("{}", ctg);
