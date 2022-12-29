@@ -159,6 +159,7 @@ fn main() -> Result<(), std::io::Error> {
                     .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
                     .set("y", y_offset)
                     .set("font-size", "10px")
+                    .set("font-family", "monospace")
                     .add(node::Text::new(ctg.clone()));
                 y_offset += 16;
             (ctg, (paths, text))
@@ -201,6 +202,7 @@ fn main() -> Result<(), std::io::Error> {
                     .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
                     .set("y", -14)
                     .set("font-size", "10px")
+                    .set("font-family", "sans-serif")
                     .add(node::Text::new(format!("{} bps", args.track_range)));
     document.append(text);
 
