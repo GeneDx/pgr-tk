@@ -67,12 +67,13 @@ fn main() -> Result<(), std::io::Error> {
     let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
     writeln!(
         hit_file,
-        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
         "q_idx",
         "q_name",
         "query_bgn",
         "query_end",
         "aln_anchor_count",
+        "q_len",
         "src",
         "ctg",
         "ctg_bgn",
@@ -87,6 +88,7 @@ fn main() -> Result<(), std::io::Error> {
         .for_each(|(idx, seq_rec)| {
             let q_name = String::from_utf8_lossy(&seq_rec.id);
             let query_seq = seq_rec.seq;
+            let q_len = query_seq.len(); 
 
             let query_results = seq_index_db.query_fragment_to_hps(
                 query_seq,
@@ -238,11 +240,12 @@ fn main() -> Result<(), std::io::Error> {
                             let target_seq_name = format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
                             let _ = writeln!(
                                 hit_file,
-                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                 idx,
                                 q_name,
                                 q_bgn,
                                 q_end,
+                                q_len,
                                 aln.len(),
                                 src,
                                 ctg,
