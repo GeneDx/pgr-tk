@@ -17,7 +17,7 @@ use std::{
 struct CmdOptions {
     fastx_path: String,
     output_prefix: String,
-    #[clap(short, default_value = None)]
+    #[clap(long, short, default_value = None)]
     include: Option<String>,
     #[clap(short, default_value_t = 80)]
     w: u32,
