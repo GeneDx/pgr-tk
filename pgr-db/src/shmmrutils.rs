@@ -197,7 +197,7 @@ pub fn match_reads<'a>(
 
         k_max = k_max_new + 1;
         k_min = k_min_new - 1;
-        if matched == true {
+        if matched {
             //println!("match: {} {}", d_final, k_final);
             let mut d_inside = 0_u32;
             if get_delta {
@@ -271,24 +271,24 @@ impl MM128 {
 }
 
 pub fn u64hash(key: u64) -> u64 {
-    let key = (!key).wrapping_add(key << 21); // key = (key << 21) - key - 1;
-    let key = key ^ key >> 24;
-    let key = (key.wrapping_add(key << 3)).wrapping_add(key << 8); // key * 265
-    let key = key ^ key >> 14;
-    let key = (key.wrapping_add(key << 2)).wrapping_add(key << 4); // key * 21
-    let key = key ^ key >> 28;
-    let key = key.wrapping_add(key << 31);
+    let mut key = (!key).wrapping_add(key << 21); // key = (key << 21) - key - 1;
+    key = key ^ key >> 24;
+    key = (key.wrapping_add(key << 3)).wrapping_add(key << 8); // key * 265
+    key = key ^ key >> 14;
+    key = (key.wrapping_add(key << 2)).wrapping_add(key << 4); // key * 21
+    key = key ^ key >> 28;
+    key = key.wrapping_add(key << 31);
     key
 }
 
 fn _u64hash(key: u64) -> u64 {
-    let key = !key + (key << 21); // key = (key << 21) - key - 1;
-    let key = key ^ key >> 24;
-    let key = (key + (key << 3)) + (key << 8); // key * 265
-    let key = key ^ key >> 14;
-    let key = (key + (key << 2)) + (key << 4); // key * 21
-    let key = key ^ key >> 28;
-    let key = key + (key << 31);
+    let mut key = !key + (key << 21); // key = (key << 21) - key - 1;
+    key = key ^ key >> 24;
+    key = (key + (key << 3)) + (key << 8); // key * 265
+    key = key ^ key >> 14;
+    key = (key + (key << 2)) + (key << 4); // key * 21
+    key = key ^ key >> 28;
+    key = key + (key << 31);
     key
 }
 

@@ -46,9 +46,9 @@ pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(i32, Vec<u8>), &'stati
 
         // Set the cost model and parameters.
         attributes.distance_metric = wfa::distance_metric_t_gap_affine;
-        attributes.affine_penalties.mismatch = 4 as i32;
-        attributes.affine_penalties.gap_opening = 4 as i32;
-        attributes.affine_penalties.gap_extension = 1 as i32;
+        attributes.affine_penalties.mismatch = 4_i32;
+        attributes.affine_penalties.gap_opening = 4_i32;
+        attributes.affine_penalties.gap_extension = 1_i32;
 
         // Initialize the aligner object.
         // This should be reused for multiple queries.
@@ -97,7 +97,7 @@ pub fn get_aln_segements(
     let mut cigar_seg: Vec<Vec<u8>> = vec![];
 
     cigar.1.iter().for_each( |&c| { 
-        if cigar_seg.len() == 0 {
+        if cigar_seg.is_empty() {
             cigar_seg.push( vec![c] )
         } else {
             let l = cigar_seg.len();
@@ -147,7 +147,7 @@ pub fn get_aln_segements(
     Ok(v)
 }
 
-pub fn get_aln_map(aln_segs: &Vec<AlnSegment>, s0: &str, s1: &str) -> Result<AlnMap, &'static str> {
+pub fn get_aln_map(aln_segs: &[AlnSegment], s0: &str, s1: &str) -> Result<AlnMap, &'static str> {
     let mut pmap = Vec::<(u32, u32)>::with_capacity(1 << 14);
     let mut ref_a_seq = Vec::<u8>::with_capacity(1 << 14);
     let mut tgt_a_seq = Vec::<u8>::with_capacity(1 << 14);
