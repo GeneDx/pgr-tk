@@ -111,6 +111,8 @@ pub fn sparse_aln(
     out
 }
 
+pub type HitPairLists = Vec<(u32, Vec<(f32, Vec<HitPair>)>)>;
+
 pub fn query_fragment_to_hps(
     shmap: &ShmmrToFrags,
     frag: &Vec<u8>,
@@ -120,7 +122,7 @@ pub fn query_fragment_to_hps(
     max_count_query: Option<u32>,
     max_count_target: Option<u32>,
     max_aln_span: Option<u32>,
-) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
+) -> HitPairLists {
     let r = query_fragment(shmap, frag, shmmr_spec);
 
     let mut sp_count = FxHashMap::<(u64, u64), u32>::default();

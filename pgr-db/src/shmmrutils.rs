@@ -33,8 +33,8 @@ pub struct DeltaPoint {
     pub dk: i32,
 }
 
-fn track_delta_point<'a>(
-    delta_pts: &'a FxHashMap<(u32, i32), DeltaPoint>,
+fn track_delta_point(
+    delta_pts: &FxHashMap<(u32, i32), DeltaPoint>,
     d_final: u32,
     k_final: i32,
     s: u32,
@@ -117,8 +117,6 @@ pub fn match_reads<'a>(
         for k in (k_min..=k_max).step_by(2) {
             let mut x: u32;
             let mut y: u32;
-            let x1: u32;
-            let y1: u32;
             let (_, vn) = uv_map.get(&(k - 1)).unwrap();
             let (_, vp) = uv_map.get(&(k + 1)).unwrap();
             if k == k_min || ((k != k_max) && vn < vp) {
@@ -139,8 +137,8 @@ pub fn match_reads<'a>(
                 delta_pts.entry((d, k)).or_insert(dpt);
             };
 
-            x1 = x;
-            y1 = y;
+            let x1 = x;
+            let y1 = y;
 
             while (x as usize) < len0 && (y as usize) < len1 && seq0[x as usize] == seq1[y as usize]
             {
