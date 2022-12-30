@@ -220,7 +220,7 @@ where
                     is_leaf = true;
                     self.next_node = None;
                 } else {
-                    if succ_list_f.len() > 0 {
+                    if !succ_list_f.is_empty() {
                         // we prefer the same direction first
                         succ_list_f.sort();
                         self.next_node = succ_list_f.pop();

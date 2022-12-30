@@ -43,7 +43,7 @@ impl CompactSeqDBStorage {
             .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
-                let mut line = line.as_str().split("\t");
+                let mut line = line.as_str().split('\t');
                 let sid = line.next().unwrap().parse::<u32>().unwrap();
                 let len = line.next().unwrap().parse::<u32>().unwrap();
                 let ctg_name = line.next().unwrap().to_string();
@@ -90,12 +90,12 @@ impl CompactSeqDBStorage {
                     //println!("p: {} {}", p, p + b.len());
                     _p += b.len();
                 }
-                Fragment::AlnSegments((frag_id, reverse, _length, a)) => {
+                Fragment::AlnSegments((frag_id, reversed, _length, a)) => {
                     if let Fragment::Internal(base_seq) =
                         fetch_frag(frag_id, &self.frag_addr_offsets, &self.frag_file)
                     {
                         let mut seq = seq_db::reconstruct_seq_from_aln_segs(&base_seq, &a);
-                        if reverse == true {
+                        if reversed {
                             seq = crate::fasta_io::reverse_complement(&seq);
                         }
                         reconstructed_seq.extend_from_slice(&seq[self.shmmr_spec.k as usize..]);
@@ -142,11 +142,7 @@ impl GetSeq for CompactSeqDBStorage {
 
         let reconstructed_seq = self.get_seq_from_frag_ids(sub_seq_frag.iter().map(|v| v.0));
 
-        let offset = if sub_seq_frag[0].0 == 0 {
-            bgn - sub_seq_frag[0].1
-        } else {
-            bgn - sub_seq_frag[0].1
-        };
+        let offset = bgn - sub_seq_frag[0].1;
 
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
     }
@@ -155,7 +151,7 @@ impl GetSeq for CompactSeqDBStorage {
 
 fn fetch_frag(
     frag_id: u32,
-    frag_addr_offsets: &Vec<(usize, usize, u32)>,
+    frag_addr_offsets: &[(usize, usize, u32)],
     frag_file: &Mmap,
 ) -> Fragment {
     let config = config::standard();

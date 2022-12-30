@@ -157,9 +157,7 @@ impl<R: BufRead> FastaReader<R> {
         let _res = self.inner.read_until(b'\n', &mut buf);
         let _res = self.inner.read_until(b'\n', &mut buf);
         let res = self.inner.read_until(b'@', &mut buf); //get to id line
-        if res.is_err() {
-            Some(res);
-        } else if res.ok() == Some(0) {
+        if res.ok() == Some(0) {
             return None;
         }
         Some(Ok(rec))
