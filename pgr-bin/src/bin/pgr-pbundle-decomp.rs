@@ -46,7 +46,7 @@ fn group_smps_by_principle_bundle_id(
     let mut pre_direction: Option<u32> = None;
     let mut all_partitions = vec![];
     let mut new_partition = vec![];
-    smps.into_iter().for_each(|&(smp, bundle_info)| {
+    smps.iter().for_each(|&(smp, bundle_info)| {
         if bundle_info.is_none() {
             return;
         };
@@ -77,17 +77,16 @@ fn group_smps_by_principle_bundle_id(
         new_partition.push((smp, bid, d, bpos));
     });
     let l = new_partition.len();
-    if l > 0 {
-        if new_partition[l - 1].0 .3 as usize - new_partition[0].0 .2 as usize
+    if l > 0
+        && new_partition[l - 1].0 .3 as usize - new_partition[0].0 .2 as usize
             > bundle_length_cutoff
-        {
-            all_partitions.push(new_partition.clone());
-        };
-    }
+    {
+        all_partitions.push(new_partition);
+    };
 
     let mut rtn_partitions = vec![];
 
-    if all_partitions.len() == 0 {
+    if all_partitions.is_empty() {
         return rtn_partitions;
     }
     let mut partition = all_partitions[0].clone();
@@ -107,11 +106,11 @@ fn group_smps_by_principle_bundle_id(
             partition.extend(p);
         } else {
             rtn_partitions.push(partition.clone());
-            partition = p.clone();
+            partition = p;
         }
     });
-    if partition.len() > 0 {
-        rtn_partitions.push(partition.clone());
+    if !partition.is_empty() {
+        rtn_partitions.push(partition);
     }
     rtn_partitions
 }
@@ -130,12 +129,14 @@ fn main() -> Result<(), std::io::Error> {
         );
         let include_ctgs = f
             .lines()
-            .map(|c| c.unwrap().to_string())
+            .map(|c| c.unwrap())
             .collect::<FxHashSet<String>>();
         let seq_list = include_ctgs
             .into_iter()
             .map(|ctg| {
-                let seq = seq_index_db.get_seq(filex_path.clone(), ctg.clone()).expect("fail to fetch sequence");
+                let seq = seq_index_db
+                    .get_seq(filex_path.clone(), ctg.clone())
+                    .expect("fail to fetch sequence");
                 (ctg, seq)
             })
             .collect::<Vec<_>>();

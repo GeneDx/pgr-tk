@@ -189,7 +189,7 @@ fn main() -> Result<(), std::io::Error> {
                         let mut last_rgn: (u32, u32, u32, u32, Vec<_>) = (0, 0, 0, 0, vec![]);
                         r_rgns.into_iter().for_each(|r| {
                             if last_rgn.4.is_empty() {
-                                last_rgn = r.clone();
+                                last_rgn = r;
                             } else {
                                 let l_bgn = last_rgn.0;
                                 let l_end = last_rgn.1;
