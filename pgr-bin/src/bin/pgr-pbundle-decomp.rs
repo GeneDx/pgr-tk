@@ -37,8 +37,9 @@ struct CmdOptions {
     bundle_merge_distance: usize,
 }
 
+#[allow(clippy::type_complexity)]
 fn group_smps_by_principle_bundle_id(
-    smps: &Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+    smps: &[((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)],
     bundle_length_cutoff: usize,
     bundle_merge_distance: usize,
 ) -> Vec<Vec<((u64, u64, u32, u32, u8), usize, u32, usize)>> {

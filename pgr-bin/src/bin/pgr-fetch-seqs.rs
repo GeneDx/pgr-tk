@@ -47,7 +47,7 @@ fn main() -> Result<(), std::io::Error> {
             Box::new(io::stdout())
         };
         seq_index_db.seq_info.unwrap().into_iter().for_each(|(sid, (ctg, src, length))| {
-            writeln!(out, "{}\t{}\t{}\t{}", sid, src.unwrap_or("None".to_string()), ctg, length).expect("can't write output file")
+            writeln!(out, "{}\t{}\t{}\t{}", sid, src.unwrap_or_else(|| "None".to_string()), ctg, length).expect("can't write output file")
         });
         return Ok(())
     } 
@@ -57,14 +57,14 @@ fn main() -> Result<(), std::io::Error> {
 
     region_file.lines().into_iter().for_each(|line| {
         let line = line.expect("fail to get a line in the region file"); 
-        let fields = line.split("\t").collect::<Vec<&str>>();
+        let fields = line.split('\t').collect::<Vec<&str>>();
         let label = fields[0].to_string();
         let src = fields[1].to_string();
         let ctg = fields[2].to_string();
         let bgn: usize = fields[3].parse().expect("can't parse bgn");
         let end: usize = fields[4].parse().expect("can't parse end");
-        let reversed: bool = if fields[4].parse::<u32>().expect("can't parse strand") == 1 {true} else {false};
-        let mut seq = seq_index_db.get_sub_seq(src.clone(), ctg.clone(), bgn, end).expect("fail to fetch sequence");
+        let reversed: bool = fields[4].parse::<u32>().expect("can't parse strand") == 1;
+        let mut seq = seq_index_db.get_sub_seq(src, ctg, bgn, end).expect("fail to fetch sequence");
         if reversed {
             seq = fasta_io::reverse_complement(&seq);
         }

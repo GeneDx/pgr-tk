@@ -334,6 +334,7 @@ impl CompactSeqDB {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn seq_to_index(
         source: Option<String>,
         name: String,

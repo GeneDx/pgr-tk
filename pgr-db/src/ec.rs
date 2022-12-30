@@ -153,6 +153,7 @@ pub fn naive_dbg_consensus(
 ///
 /// this methods will ignore haplotype specific signals
 ///
+#[allow(clippy::type_complexity)]
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
@@ -477,6 +478,7 @@ pub fn guided_shmmr_dbg_consensus(
 /// if there is more or equal to the "min_cov"
 ///
 ///
+#[allow(clippy::type_complexity)]
 pub fn shmmr_sparse_aln_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
@@ -515,6 +517,7 @@ pub fn shmmr_sparse_aln_consensus(
 /// if there is more or equal to the "min_cov"
 ///
 ///
+#[allow(clippy::type_complexity)]
 pub fn shmmr_sparse_aln_consensus_with_sdb(
     sids: Vec<u32>,
     sdb: &CompactSeqDB,

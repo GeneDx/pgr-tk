@@ -113,6 +113,7 @@ pub fn sparse_aln(
 
 pub type HitPairLists = Vec<(u32, Vec<(f32, Vec<HitPair>)>)>;
 
+#[allow(clippy::too_many_arguments)]
 pub fn query_fragment_to_hps(
     shmap: &ShmmrToFrags,
     frag: &Vec<u8>,

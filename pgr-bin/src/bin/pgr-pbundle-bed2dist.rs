@@ -50,23 +50,23 @@ fn align_bundles(
             let min_len = if q_len > t_len { t_len } else { q_len };
             let q_b_seg = q_bundles[q_idx];
             let t_b_seg = t_bundles[t_idx];
-            if q_idx == 0 && t_idx == 0 {
-                if (q_b_seg.bundle_id == t_b_seg.bundle_id)
-                    && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
-                {
-                    best = (AlnType::Match, 2 * min_len)
-                }
-            }
-            if q_idx > 0 && t_idx > 0 {
-                if (q_b_seg.bundle_id == t_b_seg.bundle_id)
-                    && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
-                {
-                    best = (
-                        AlnType::Match,
-                        2 * min_len + s_map.get(&(q_idx - 1, t_idx - 1)).unwrap(),
-                    )
-                };
-            }
+            if q_idx == 0
+                && t_idx == 0
+                && (q_b_seg.bundle_id == t_b_seg.bundle_id)
+                && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
+            {
+                best = (AlnType::Match, 2 * min_len)
+            };
+            if q_idx > 0
+                && t_idx > 0
+                && q_b_seg.bundle_id == t_b_seg.bundle_id
+                && (q_b_seg.bundle_dir == t_b_seg.bundle_dir)
+            {
+                best = (
+                    AlnType::Match,
+                    2 * min_len + s_map.get(&(q_idx - 1, t_idx - 1)).unwrap(),
+                )
+            };
             if t_idx > 0 {
                 let insert_score = -2 * q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
                 if insert_score > best.1 {
@@ -79,7 +79,7 @@ fn align_bundles(
                     best = (AlnType::Deletion, delete_score)
                 }
             }
-            t_map.insert((q_idx, t_idx), best.0.clone());
+            t_map.insert((q_idx, t_idx), best.0);
             best
         };
 
@@ -105,46 +105,42 @@ fn align_bundles(
     let mut t_idx = t_count - 1;
     let mut diff_len = 0_usize;
     let mut max_len = 1_usize;
-    loop {
-        if let Some(aln_type) = t_map.get(&(q_idx, t_idx)) {
-            // let qq_idx = q_idx;
-            // let tt_idx = t_idx;
-            let (diff_len_delta, max_len_delta) = match aln_type {
-                AlnType::Match => {
-                    let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
-                    let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
-                    let diff_len_delta = (q_len - t_len).abs() as usize;
-                    let max_len_delata = if q_len > t_len {
-                        q_len as usize
-                    } else {
-                        t_len as usize
-                    };
-                    q_idx -= 1;
-                    t_idx -= 1;
-                    (diff_len_delta, max_len_delata)
-                }
-                AlnType::Deletion => {
-                    let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
-                    q_idx -= 1;
-                    (q_len as usize, q_len as usize)
-                }
-                AlnType::Insertion => {
-                    let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
-                    t_idx -= 1;
-                    (t_len as usize, t_len as usize)
-                }
-            };
-            diff_len += diff_len_delta;
-            max_len += max_len_delta;
-            /*
-            println!(
-                "{} {} {:?} {:?} {:?} {} {}",
-                qq_idx, tt_idx, aln_type, q_bundles[qq_idx].bundle_id, t_bundles[tt_idx].bundle_id, diff_len_delta, max_len_delta
-            );
+    while let Some(aln_type) = t_map.get(&(q_idx, t_idx)) {
+        // let qq_idx = q_idx;
+        // let tt_idx = t_idx;
+        let (diff_len_delta, max_len_delta) = match aln_type {
+            AlnType::Match => {
+                let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
+                let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
+                let diff_len_delta = (q_len - t_len).unsigned_abs() as usize;
+                let max_len_delata = if q_len > t_len {
+                    q_len as usize
+                } else {
+                    t_len as usize
+                };
+                q_idx -= 1;
+                t_idx -= 1;
+                (diff_len_delta, max_len_delata)
+            }
+            AlnType::Deletion => {
+                let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
+                q_idx -= 1;
+                (q_len as usize, q_len as usize)
+            }
+            AlnType::Insertion => {
+                let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
+                t_idx -= 1;
+                (t_len as usize, t_len as usize)
+            }
+        };
+        diff_len += diff_len_delta;
+        max_len += max_len_delta;
+        /*
+        println!(
+            "{} {} {:?} {:?} {:?} {} {}",
+            qq_idx, tt_idx, aln_type, q_bundles[qq_idx].bundle_id, t_bundles[tt_idx].bundle_id, diff_len_delta, max_len_delta
+        );
             */
-        } else {
-            break;
-        }
     }
     (diff_len as f32 / max_len as f32, diff_len, max_len)
 }
@@ -158,18 +154,18 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_parse_err_msg = "bed file parsing error";
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
-        let bed_fields = line.split("\t").collect::<Vec<&str>>();
+        let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
         let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
-        let pbundle_fields = bed_fields[3].split(":").collect::<Vec<&str>>();
+        let pbundle_fields = bed_fields[3].split(':').collect::<Vec<&str>>();
         let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
         let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
         let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
         let bundle_v_bgn: u32 = pbundle_fields[3].parse().expect(bed_file_parse_err_msg);
         let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
 
-        let e = ctg_data.entry(ctg).or_insert(vec![]);
+        let e = ctg_data.entry(ctg).or_default();
         let b_seg = BundleSegement {
             bgn,
             end,
@@ -244,14 +240,19 @@ fn main() -> Result<(), std::io::Error> {
 
     let steps = dend.steps().to_vec();
     (0..n_ctg).for_each(|ctg_idx| {
-        writeln!(dend_file, "L {} {}", ctg_idx, ctg_data[ctg_idx].0).expect("can't write dendrogram file");
+        writeln!(dend_file, "L {} {}", ctg_idx, ctg_data[ctg_idx].0)
+            .expect("can't write dendrogram file");
     });
 
     steps.into_iter().enumerate().for_each(|(c, s)| {
         writeln!(
             dend_file,
             "I {} {} {} {} {}",
-            c + n_ctg, s.cluster1, s.cluster2, s.dissimilarity, s.size
+            c + n_ctg,
+            s.cluster1,
+            s.cluster2,
+            s.dissimilarity,
+            s.size
         )
         .expect("can't write the dendrogram file");
     });
