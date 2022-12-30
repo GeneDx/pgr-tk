@@ -151,7 +151,7 @@ pub fn naive_dbg_consensus(
 
 /// perform error correction using shimmer de Bruijn graph
 ///
-/// this methods can ignore haplotype specific signals
+/// this methods will ignore haplotype specific signals
 ///
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
