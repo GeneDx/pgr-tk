@@ -62,8 +62,7 @@ impl AGCFile {
         let mut sample_ctg = vec![];
 
         unsafe {
-            let agc_handle;
-            agc_handle = AGCHandle(agc_open(
+            let agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
                 1_i32,
             ));
@@ -253,7 +252,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
 
 
             let v_seq_rec = self.agc_thread_pool.install(|| {
-                let seq_buf = next_batch
+                let seq_buf: Vec<SeqRec> = next_batch
                     .par_iter()
                     .map(|(filepath, s, c, bgn, end)| {
                         TL_AGCHANDLE.with(|tl_agc_handle| {
@@ -261,7 +260,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
                                 *tl_agc_handle.borrow_mut() = Some(unsafe {
                                     AGCHandle(agc_open(
                                         CString::new(filepath.clone()).unwrap().into_raw(),
-                                        if self.prefetching {1_i32} else {0_i32},
+                                         self.prefetching as i32,
                                     ))
                                 });
                             }
@@ -294,7 +293,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
                         })
                         //let seq = self.get_seq(s.clone(), c.clone());
                     })
-                    .collect::<Vec<SeqRec>>();
+                    .collect();
                 seq_buf
             });
             seq_buf.2 = v_seq_rec;

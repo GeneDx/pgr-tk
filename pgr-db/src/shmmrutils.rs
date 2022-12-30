@@ -132,8 +132,8 @@ pub fn match_reads<'a>(
 
             if get_delta {
                 let dpt = DeltaPoint {
-                    x: x,
-                    y: y,
+                    x,
+                    y,
                     dk: k - pre_k,
                 };
                 delta_pts.entry((d, k)).or_insert(dpt);
@@ -148,12 +148,10 @@ pub fn match_reads<'a>(
                 y += 1;
             }
 
-            if (x - x1) >= min_match_start {
-                if !start {
-                    rtn.bgn0 = x1;
-                    rtn.bgn1 = y1;
-                    start = true;
-                }
+            if (x - x1) >= min_match_start && !start {
+                rtn.bgn0 = x1;
+                rtn.bgn1 = y1;
+                start = true;
                 // we set the ends here to avoid bad sequences
                 // this way, we are sure that, at least, 8 bases are aligned
                 /*
@@ -313,7 +311,7 @@ impl RingBuffer {
         ];
         RingBuffer {
             v: vv,
-            size: size,
+            size,
             start_pos: 0,
             end_pos: 0,
             len: 0,

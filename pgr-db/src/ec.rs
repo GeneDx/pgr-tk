@@ -116,23 +116,17 @@ pub fn naive_dbg_consensus(
         let mut cur_idx = last_tgt_idx;
         rev_path.push(cur_idx);
         loop {
-            if let Some(p_node) = tgt_rev_path.get(&cur_idx) {
-                if let Some(p_idx) = p_node {
-                    if *kmer_count.get(&p_idx).unwrap() >= min_cov {
-                        cur_idx = *p_idx;
-                        rev_path.push(cur_idx);
-                        continue;
-                    }
+            if let Some(Some(p_idx)) = tgt_rev_path.get(&cur_idx) {
+                if *kmer_count.get(p_idx).unwrap() >= min_cov {
+                    cur_idx = *p_idx;
+                    rev_path.push(cur_idx);
+                    continue;
                 }
             }
 
-            if let Some(p_node) = track_back.get(&cur_idx) {
-                if let Some(p_idx) = p_node {
-                    cur_idx = *p_idx;
-                    rev_path.push(cur_idx);
-                } else {
-                    break;
-                }
+            if let Some(Some(p_idx)) = track_back.get(&cur_idx) {
+                cur_idx = *p_idx;
+                rev_path.push(cur_idx);
             } else {
                 break;
             }
@@ -196,15 +190,11 @@ pub fn shmmr_dbg_consensus(
         let seq = seqs[sid as usize].3[b..e].to_vec();
         let node = ShmmrGraphNode(k.0, k.1, strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
         let seq = reverse_complement(&seq);
         let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
     });
 
     let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
@@ -232,25 +222,18 @@ pub fn shmmr_dbg_consensus(
 
     let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
-    loop {
-        if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
-            let node_count = *score.get(&node).unwrap();
-            let p_node = match p_node {
-                Some(pnode) => Some((pnode.0, pnode.1, pnode.2)),
-                None => None,
-            };
-            out.push((
-                node,
-                p_node,
-                node_count,
-                is_leaf,
-                rank,
-                branch_id,
-                branch_rank,
-            ));
-        } else {
-            break;
-        }
+    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
+        let node_count = *score.get(&node).unwrap();
+        let p_node = p_node.map(|pnode| (pnode.0, pnode.1, pnode.2));
+        out.push((
+            node,
+            p_node,
+            node_count,
+            is_leaf,
+            rank,
+            branch_id,
+            branch_rank,
+        ));
     }
 
     let mut out_seqs = Vec::<(Vec<u8>, Vec<u32>)>::new();
@@ -259,7 +242,7 @@ pub fn shmmr_dbg_consensus(
     let mut out_cov = vec![];
     //let mut head_orientation = 0_u8;
     for (node, _p_node, node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
-        if out_seq.len() == 0 {
+        if out_seq.is_empty() {
             let seq = frg_seqs.get(&node).unwrap().clone();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
@@ -333,7 +316,7 @@ pub fn guided_shmmr_dbg_consensus(
         let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
         score.insert(node, v.len() as u32);
         if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
+            frg_seqs.insert(node, seq);
         };
     });
 
@@ -412,15 +395,15 @@ pub fn guided_shmmr_dbg_consensus(
                         if let Some(pos) = current_node_position {
                             let pos2 = *guide_nodes.get(&succ).unwrap();
                             if pos2 > *pos {
-                                if min_dist.is_none() {
+                                if let Some(mdist) = min_dist {
+                                    let dist = pos2 - *pos;
+                                    if dist < mdist {
+                                        next_guide_node = Some(WeightedNode(s, succ));
+                                    }
+                                } else {
                                     let dist = pos2 - *pos;
                                     min_dist = Some(dist);
                                     next_guide_node = Some(WeightedNode(s, succ));
-                                } else {
-                                    let dist = pos2 - *pos;
-                                    if dist < min_dist.unwrap() {
-                                        next_guide_node = Some(WeightedNode(s, succ));
-                                    }
                                 }
                             }
                         } else {
@@ -434,6 +417,7 @@ pub fn guided_shmmr_dbg_consensus(
             if out_count == 0 {
                 break;
             }
+            
             if next_guide_node.is_some() {
                 next_node = next_guide_node.unwrap();
                 last_in_guide_nodes = Some(next_node.1.clone());

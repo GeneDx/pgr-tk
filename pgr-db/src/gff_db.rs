@@ -225,13 +225,11 @@ impl GFFDB {
 
         let id = if self.id_to_rec.contains_key(id_or_name) {
             Some(id_or_name)
+        } else if self.name_to_rec.contains_key(id_or_name) {
+            let r = self.name_to_rec.get(id_or_name).unwrap();
+            r.attributes.get("ID")
         } else {
-            if self.name_to_rec.contains_key(id_or_name) {
-                let r = self.name_to_rec.get(id_or_name).unwrap();
-                r.attributes.get("ID")
-            } else {
-                None
-            }
+            None
         };
 
         if id.is_none() {

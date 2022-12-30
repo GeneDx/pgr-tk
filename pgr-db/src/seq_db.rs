@@ -77,7 +77,6 @@ pub trait GetSeq {
     fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8>;
 }
 
-
 #[derive(Debug, Clone, Decode, Encode)]
 pub struct CompactSeq {
     pub source: Option<String>,
@@ -697,7 +696,7 @@ impl CompactSeqDB {
 
         reconstructed_seq
     }
-    
+
     pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
         self.reconstruct_seq_from_frags(
             (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
@@ -710,7 +709,6 @@ impl CompactSeqDB {
         vec![]
     }
     */
-
 }
 
 impl GetSeq for CompactSeqDB {
@@ -779,7 +777,7 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn write_to_frag_files(&self, file_prefix: String) -> () {
+    pub fn write_to_frag_files(&self, file_prefix: String) {
         let mut sdx_file =
             BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("csq file open fail"));
         let mut frg_file =
@@ -938,15 +936,13 @@ pub fn generate_smp_adj_list_for_seq(
                     || frag_map.get(&(w.0, w.1)).unwrap().len() < min_count
                 {
                     vec![None]
+                } else if v.3 != w.2 {
+                    vec![None]
                 } else {
-                    if v.3 != w.2 {
-                        vec![None]
-                    } else {
-                        vec![
-                            Some((sid, (v.0, v.1, v.4), (w.0, w.1, w.4))),
-                            Some((sid, (w.0, w.1, 1 - w.4), (v.0, v.1, 1 - v.4))),
-                        ]
-                    }
+                    vec![
+                        Some((sid, (v.0, v.1, v.4), (w.0, w.1, w.4))),
+                        Some((sid, (w.0, w.1, 1 - w.4), (v.0, v.1, 1 - v.4))),
+                    ]
                 }
             })
             .filter(|v| v.is_some())

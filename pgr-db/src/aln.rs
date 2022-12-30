@@ -75,12 +75,12 @@ pub fn sparse_aln(
     let mut unvisited_v = FxHashSet::<HitPair>::default();
     unvisited_v.extend(sp_hits.iter());
     let mut out = Vec::<(f32, Vec<HitPair>)>::new();
-    while unvisited_v.len() > 0 {
+    while !unvisited_v.is_empty() {
         let mut best_s = 0_f32; // global best score
         let mut best_v: Option<HitPair> = None; // global best vertex
                                                 // println!("DBG unvisit len; {}", unvisited_v.len());
         unvisited_v.iter().for_each(|hp| {
-            let s = v_s.get(&hp).unwrap_or(&0_f32);
+            let s = v_s.get(hp).unwrap_or(&0_f32);
             if *s > best_s {
                 best_s = *s;
                 best_v = Some(*hp);
@@ -96,7 +96,7 @@ pub fn sparse_aln(
             track.push(hp);
             v = *best_pre_v.get(&hp).unwrap_or(&None);
         }
-        if track.len() == 0 {
+        if track.is_empty() {
             continue;
         };
         track.reverse();
@@ -121,7 +121,7 @@ pub fn query_fragment_to_hps(
     max_count_target: Option<u32>,
     max_aln_span: Option<u32>,
 ) -> Vec<(u32, Vec<(f32, Vec<HitPair>)>)> {
-    let r = query_fragment(shmap, frag, &shmmr_spec);
+    let r = query_fragment(shmap, frag, shmmr_spec);
 
     let mut sp_count = FxHashMap::<(u64, u64), u32>::default();
     let mut sp_count_query = FxHashMap::<(u64, u64), u32>::default();
@@ -129,8 +129,8 @@ pub fn query_fragment_to_hps(
 
     seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(
         0,
-        &frag,
-        &shmmr_spec,
+        frag,
+        shmmr_spec,
         false,
     ))
     .iter()
@@ -175,7 +175,7 @@ pub fn query_fragment_to_hps(
             if count > max_count_target {
                 return;
             };
-            let e = sid_to_hits.entry(v.1).or_insert(vec![]);
+            let e = sid_to_hits.entry(v.1).or_default();
             let right_frag_coor = (v.2, v.3, v.4);
             e.push((left_frag_coor, right_frag_coor));
         });
@@ -183,13 +183,11 @@ pub fn query_fragment_to_hps(
 
     let max_aln_span = max_aln_span.unwrap_or(8);
 
-    let out = sid_to_hits
+    sid_to_hits
         .into_iter()
         .filter(|(_sid, hps)| hps.len() > 1)
         .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, max_aln_span, penality)))
-        .collect::<Vec<_>>();
-
-    out
+        .collect::<Vec<_>>()
 }
 
 #[test]
