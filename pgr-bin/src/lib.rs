@@ -9,13 +9,13 @@ use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufWriter, BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 pub enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
     RegularFile(FastaReader<BufReader<BufReader<File>>>),
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
     AGC,
     FRG,
@@ -62,13 +62,13 @@ impl SeqIndexDB {
         let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
         let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
 
-        let midx_file = BufReader::new(File::open(prefix.to_string() + ".midx")?);
+        let midx_file = BufReader::new(File::open(prefix + ".midx")?);
         midx_file
             .lines()
             .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
-                let mut line = line.as_str().split("\t");
+                let mut line = line.as_str().split('\t');
                 let sid = line.next().unwrap().parse::<u32>().unwrap();
                 let len = line.next().unwrap().parse::<u32>().unwrap();
                 let ctg_name = line.next().unwrap().to_string();
@@ -174,7 +174,6 @@ impl SeqIndexDB {
         Ok(())
     }
 
-
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
@@ -251,7 +250,11 @@ impl SeqIndexDB {
         }
     }
 
-    pub fn get_seq(&self, sample_name: String, ctg_name: String) -> Result<Vec<u8>, std::io::Error> {
+    pub fn get_seq(
+        &self,
+        sample_name: String,
+        ctg_name: String,
+    ) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
             Backend::AGC => Ok(self
                 .agc_db
@@ -375,7 +378,7 @@ impl SeqIndexDB {
         )>,
     ) {
         fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
-            let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+            let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
             seq_db::pair_shmmrs(&shmmrs)
                 .par_iter()
                 .map(|(s0, s1)| {
@@ -406,7 +409,7 @@ impl SeqIndexDB {
             .map(|(sid, data)| {
                 let (ctg_name, source, _) = data;
                 let source = source.clone().unwrap();
-                let seq = self.get_seq(source.clone(), ctg_name.clone()).unwrap();
+                let seq = self.get_seq(source, ctg_name.clone()).unwrap();
                 (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
             })
             .collect();
@@ -421,7 +424,7 @@ impl SeqIndexDB {
                     if !bundle_visited.contains(&bid.0) {
                         bundle_id_to_orders
                             .entry(bid.0)
-                            .or_insert(vec![])
+                            .or_default()
                             .push(order as f32);
                         bundle_visited.insert(bid.0);
                     }
@@ -431,7 +434,7 @@ impl SeqIndexDB {
                     };
                     bundle_id_to_directions
                         .entry(bid.0)
-                        .or_insert(vec![])
+                        .or_default()
                         .push(direction);
                 }
             })
@@ -442,7 +445,7 @@ impl SeqIndexDB {
             .into_iter()
             .map(|bid| {
                 if let Some(orders) = bundle_id_to_orders.get(&bid) {
-                    let sum: f32 = orders.into_iter().sum();
+                    let sum: f32 = orders.iter().sum();
                     let mean_ord = sum / (orders.len() as f32);
                     let mean_ord = mean_ord as usize;
                     let directions = bundle_id_to_directions.get(&bid).unwrap();
@@ -491,14 +494,11 @@ impl SeqIndexDB {
             .iter()
             .map(|(sid, smps)| {
                 let smps = smps
-                    .into_iter()
+                    .iter()
                     .map(|v| {
-                        let seg_match =
-                            if let Some(m) = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)) {
-                                Some(*m)
-                            } else {
-                                None
-                            };
+                        let seg_match = vertex_to_bundle_id_direction_pos
+                            .get(&(v.0, v.1))
+                            .map(|m| *m);
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
@@ -544,7 +544,7 @@ impl SeqIndexDB {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "can get frag_map",
-            ))
+            ));
         }
         let mut overlaps =
             FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
@@ -556,18 +556,14 @@ impl SeqIndexDB {
         let adj_list = if method == "from_fragmap" {
             seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
         } else {
-            let keeps = if let Some(keeps) = keeps {
-                Some(FxHashSet::<u32>::from_iter(keeps))
-            } else {
-                None
-            };
+            let keeps = keeps.map(FxHashSet::<u32>::from_iter);
 
             self.seq_info
                 .as_ref()
                 .unwrap()
                 .keys()
                 .into_iter()
-                .map(|k| *k)
+                .copied()
                 .collect::<Vec<u32>>()
                 .into_par_iter()
                 .flat_map(|sid| {
@@ -584,7 +580,7 @@ impl SeqIndexDB {
                     seq_db::generate_smp_adj_list_for_seq(
                         &seq,
                         sid,
-                        &frag_map,
+                        frag_map,
                         self.shmmr_spec.as_ref().unwrap(),
                         mc,
                     )
@@ -596,7 +592,7 @@ impl SeqIndexDB {
             if v.0 <= w.0 {
                 let key = (*v, *w);
                 let val = (*k, v.2, w.2);
-                overlaps.entry(key).or_insert_with(|| vec![]).push(val);
+                overlaps.entry(key).or_insert_with(Vec::new).push(val);
                 frag_id.entry((v.0, v.1)).or_insert_with(|| {
                     let c_id = id;
                     id += 1;
@@ -613,11 +609,12 @@ impl SeqIndexDB {
         let mut out_file = BufWriter::new(File::create(filepath).unwrap());
 
         let kmer_size = self.shmmr_spec.as_ref().unwrap().k;
-        out_file.write_all("H\tVN:Z:1.0\tCM:Z:Sparse Genome Graph Generated By pgr-tk\n".as_bytes())?;
-        (&frag_id)
-            .into_iter()
+        out_file
+            .write_all("H\tVN:Z:1.0\tCM:Z:Sparse Genome Graph Generated By pgr-tk\n".as_bytes())?;
+        frag_id
+            .iter()
             .try_for_each(|(smp, id)| -> Result<(), std::io::Error> {
-                let hits = frag_map.get(&smp).unwrap();
+                let hits = frag_map.get(smp).unwrap();
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line = format!(
@@ -677,7 +674,7 @@ impl SeqIndexDB {
                     "C\t{}\t{}\t{}\t{}\n",
                     k,
                     v.0,
-                    v.1.clone().unwrap_or("NA".to_string()),
+                    v.1.clone().unwrap_or_else(|| "NA".to_string()),
                     v.2
                 );
                 writer.write_all(line.as_bytes())?;
@@ -747,7 +744,7 @@ impl SeqIndexDB {
             if v.0 <= w.0 {
                 let key = (*v, *w);
                 let val = (*k, v.2, w.2);
-                overlaps.entry(key).or_insert_with(|| vec![]).push(val);
+                overlaps.entry(key).or_insert_with(Vec::new).push(val);
                 frag_id.entry((v.0, v.1)).or_insert_with(|| {
                     let c_id = id;
                     id += 1;
@@ -764,11 +761,12 @@ impl SeqIndexDB {
         let mut out_file = BufWriter::new(File::create(filepath).unwrap());
 
         let kmer_size = self.shmmr_spec.as_ref().unwrap().k;
-        out_file.write_all("H\tVN:Z:1.0\tCM:Z:Sparse Genome Graph Generated By pgr-tk\n".as_bytes())?;
-        (&frag_id)
-            .into_iter()
+        out_file
+            .write_all("H\tVN:Z:1.0\tCM:Z:Sparse Genome Graph Generated By pgr-tk\n".as_bytes())?;
+        frag_id
+            .iter()
             .try_for_each(|(smp, id)| -> Result<(), std::io::Error> {
-                let hits = frag_map.get(&smp).unwrap();
+                let hits = frag_map.get(smp).unwrap();
                 let ave_len =
                     hits.iter().fold(0_u32, |len_sum, &s| len_sum + s.3 - s.2) / hits.len() as u32;
                 let seg_line;
