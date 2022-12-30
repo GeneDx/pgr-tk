@@ -154,7 +154,7 @@ pub fn reconstruct_seq_from_aln_segs(base_seq: &[u8], aln_segs: &[AlnSegment]) -
     for s in aln_segs.iter() {
         match s {
             AlnSegment::FullMatch => {
-                seq.extend_from_slice(&base_seq[..]);
+                seq.extend_from_slice(base_seq);
             }
             AlnSegment::Match(x1, x2) => {
                 seq.extend_from_slice(&base_seq[*x1 as usize..*x2 as usize]);
@@ -582,7 +582,7 @@ impl CompactSeqDB {
                     .iter()
                     .zip(cs.seq_frag_range.0..cs.seq_frag_range.0 + cs.seq_frag_range.1)
                     .for_each(|((shmmr, bgn, end, orientation), frg_id)| {
-                        let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
+                        let e = self.frag_map.entry(*shmmr).or_default();
                         e.push((frg_id, sid, *bgn, *end, *orientation));
                     });
                 self.seqs.push(cs);
@@ -632,7 +632,6 @@ impl CompactSeqDB {
                 break;
             }
         }
-        ();
     }
 
     pub fn load_index_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
@@ -871,15 +870,7 @@ pub fn frag_map_to_adj_list(
     (0..out.len() - 1)
         .into_par_iter()
         .flat_map(|i| {
-            let v = out[i];
-            let w = out[i + 1];
-            if v.is_none() {
-                vec![None]
-            } else if w.is_none() {
-                vec![None]
-            } else {
-                let v = v.unwrap();
-                let w = w.unwrap();
+            if let (Some(v), Some(w)) = (out[i], out[i + 1]) {
                 if v.0 != w.0 || v.2 != w.1 {
                     vec![None]
                 } else {
@@ -892,6 +883,8 @@ pub fn frag_map_to_adj_list(
                         )),
                     ]
                 }
+            } else {
+                vec![None]
             }
         })
         .filter(|v| v.is_some())
@@ -932,21 +925,24 @@ pub fn generate_smp_adj_list_for_seq(
                 let w = res[i + 1];
                 if frag_map.get(&(v.0, v.1)).is_none() || frag_map.get(&(w.0, w.1)).is_none() {
                     vec![None]
-                } else if frag_map.get(&(v.0, v.1)).unwrap().len() < min_count
-                    || frag_map.get(&(w.0, w.1)).unwrap().len() < min_count
-                {
-                    vec![None]
-                } else if v.3 != w.2 {
-                    vec![None]
                 } else {
-                    vec![
-                        Some((sid, (v.0, v.1, v.4), (w.0, w.1, w.4))),
-                        Some((sid, (w.0, w.1, 1 - w.4), (v.0, v.1, 1 - v.4))),
-                    ]
+                    if frag_map.get(&(v.0, v.1)).unwrap().len() < min_count
+                        || frag_map.get(&(w.0, w.1)).unwrap().len() < min_count
+                    {
+                        vec![None]
+                    } else {
+                        if v.3 != w.2 {
+                            vec![None]
+                        } else {
+                            vec![
+                                Some((sid, (v.0, v.1, v.4), (w.0, w.1, w.4))),
+                                Some((sid, (w.0, w.1, 1 - w.4), (v.0, v.1, 1 - v.4))),
+                            ]
+                        }
+                    }
                 }
             })
-            .filter(|v| v.is_some())
-            .map(|v| v.unwrap())
+            .flatten()
             .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
     }
 }
@@ -991,23 +987,19 @@ pub fn sort_adj_list_by_weighted_dfs(
 
     let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
-    loop {
-        if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
-            let node_count = *score.get(&node).unwrap();
-            let p_node = p_node.map(|pnode| (pnode.0, pnode.1, pnode.2));
-            out.push((
-                (node.0, node.1, node.2),
-                p_node,
-                node_count,
-                is_leaf,
-                rank,
-                branch_id,
-                branch_rank,
-            ));
-            //println!("{:?}", node);
-        } else {
-            break;
-        }
+    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
+        let node_count = *score.get(&node).unwrap();
+        let p_node = p_node.map(|pnode| (pnode.0, pnode.1, pnode.2));
+        out.push((
+            (node.0, node.1, node.2),
+            p_node,
+            node_count,
+            is_leaf,
+            rank,
+            branch_id,
+            branch_rank,
+        ));
+        //println!("{:?}", node);
     }
     out
 }
