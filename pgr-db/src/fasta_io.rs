@@ -23,7 +23,7 @@ pub struct FastaReader<R> {
     keep_source: bool,
 }
 
-pub fn reverse_complement(seq: &Vec<u8>) -> Vec<u8> {
+pub fn reverse_complement(seq: &[u8]) -> Vec<u8> {
     let mut rev_seq = Vec::new();
     for b in seq.iter().rev() {
         match b {
@@ -55,7 +55,7 @@ impl<R: BufRead> FastaReader<R> {
             let r = inner.by_ref();
             let mut buf = Vec::<u8>::new();
             r.take(1).read_to_end(&mut buf)?;
-            if buf.len() < 1 {
+            if buf.is_empty() {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("empty file: {}", filename),
@@ -88,9 +88,7 @@ impl<R: BufRead> FastaReader<R> {
         let mut seq = Vec::<u8>::with_capacity(self.seq_capacity);
 
         let res = self.inner.read_until(b'\n', &mut id_tmp);
-        if res.is_err() {
-            Some(res);
-        } else if res.ok() == Some(0) {
+        if res.ok() == Some(0) {
             return None;
         }
         let mut r = BufReader::new(&id_tmp[..]);
@@ -273,7 +271,7 @@ impl Iterator for FastaStreamReader {
                     line.clear();
                     break;
                 } else {
-                    seq += &line.trim()[..];
+                    seq += line.trim();
                     line.clear();
                 }
             }

@@ -309,15 +309,11 @@ pub fn guided_shmmr_dbg_consensus(
         let seq = seqs[sid as usize].3[b..e].to_vec();
         let node = ShmmrGraphNode(k.0, k.1, strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
         let seq = reverse_complement(&seq);
         let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq);
-        };
+        frg_seqs.entry(node).or_insert(seq);
     });
 
     let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
@@ -335,7 +331,7 @@ pub fn guided_shmmr_dbg_consensus(
     });
 
     let get_shmmr_nodes_from_seq = |seq: &Vec<u8>| -> Vec<((u64, u64, u8), u32)> {
-        let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+        let shmmrs = sequence_to_shmmrs(0, seq, shmmr_spec, false);
         seq_db::pair_shmmrs(&shmmrs)
             .iter()
             .map(|(s0, s1)| {
@@ -418,10 +414,10 @@ pub fn guided_shmmr_dbg_consensus(
                 break;
             }
             
-            if next_guide_node.is_some() {
-                next_node = next_guide_node.unwrap();
-                last_in_guide_nodes = Some(next_node.1.clone());
-            } else if succ_list_f.len() > 0 {
+            if let Some(node) = next_guide_node { 
+                next_node = node;
+                last_in_guide_nodes = Some(next_node.1);
+            } else if !succ_list_f.is_empty() {
                 succ_list_f.sort();
                 next_node = succ_list_f.pop().unwrap();
             } else {
@@ -435,7 +431,7 @@ pub fn guided_shmmr_dbg_consensus(
     let mut out_cov = vec![];
     //let mut head_orientation = 0_u8;
     for (node, node_count) in out {
-        if out_seq.len() == 0 {
+        if out_seq.is_empty() {
             let seq = frg_seqs.get(&node).unwrap().clone();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
@@ -538,7 +534,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         let hit_pairs = query_fragment_to_hps(
             &sdb.frag_map,
             &seq0,
-            &shmmr_spec,
+            shmmr_spec,
             0.1,
             Some(32),
             Some(32),
@@ -548,16 +544,16 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
 
         let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
         hit_pairs.into_iter().for_each(|(sid, hits)| {
-            if hits.len() > 0 {
+            if !hits.is_empty() {
                 // only use the main chian
                 let hps = &hits[0].1;
-                hps.into_iter().for_each(|&(v, w)| {
-                    hit_map.entry(v).or_insert(vec![]).push((sid, w));
+                hps.iter().for_each(|&(v, w)| {
+                    hit_map.entry(v).or_default().push((sid, w));
                 })
             }
         });
 
-        let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
+        let mut keys = hit_map.keys().copied().collect::<Vec<(u32, u32, u8)>>();
         let mut reliable_regions = Vec::<((u32, u32, u8), u32)>::new();
         keys.sort();
         keys.into_iter().for_each(|k| {
@@ -597,12 +593,12 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                     let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
                     let c_hit = hit_map.get(&r).unwrap();
                     let p_hit = p_hit
-                        .into_iter()
-                        .map(|v| *v)
+                        .iter()
+                        .copied() 
                         .collect::<FxHashMap<u32, (u32, u32, u8)>>();
                     let c_hit = c_hit
-                        .into_iter()
-                        .map(|v| *v)
+                        .iter()
+                        .copied()
                         .collect::<FxHashMap<u32, (u32, u32, u8)>>();
 
                     let k = shmmr_spec.k as usize;
@@ -639,7 +635,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                             .collect::<Vec<(u32, Vec<u8>)>>();
                     let mut patch_cov = 0_u32;
                     let mut patch_seq = vec![];
-                    if seq_count.len() > 0 {
+                    if !seq_count.is_empty() {
                         seq_count.sort();
                         (patch_cov, patch_seq) = seq_count[seq_count.len() - 1].clone();
                     }
@@ -668,7 +664,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             }
         });
 
-        out_seqs.push((seq.clone(), cov.clone()));
+        out_seqs.push((seq, cov));
 
         Ok(out_seqs)
     }
@@ -676,7 +672,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
     let out = sids
         .par_iter()
         .map(|&sid| {
-            if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, &sdb, min_cov) {
+            if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, sdb, min_cov) {
                 (sid, out)
             } else {
                 (sid, vec![])
