@@ -52,17 +52,17 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_parse_err_msg ="bed file parsing error"; 
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
-        if line.len() == 0 {
+        if line.is_empty() {
             return
         }
         if &line[0..1] == "#" {
             return
         }
-        let bed_fields = line.split("\t").collect::<Vec<&str>>();
+        let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
         let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
-        let pbundle_fields = bed_fields[3].split(":").collect::<Vec<&str>>();
+        let pbundle_fields = bed_fields[3].split(':').collect::<Vec<&str>>();
         let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
         //let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
         let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
@@ -80,7 +80,7 @@ fn main() -> Result<(), std::io::Error> {
         let ctg_data: Vec<_> =
             annotation_file.lines().map(|line| {
                 let ctg_annotation = line.unwrap();
-                let mut ctg_annotation = ctg_annotation.split("\t"); 
+                let mut ctg_annotation = ctg_annotation.split('\t'); 
                 let ctg = ctg_annotation.next().expect("error parsing annotation file").to_string();
 
                 let data = ctg_data.get(&ctg).unwrap().to_owned();
@@ -126,19 +126,18 @@ fn main() -> Result<(), std::io::Error> {
                     let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
                     let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
-                    let end = if direction == 0 {
-                        if end as f32 - 5.0 < bgn {
-                            bgn
-                        } else {
-                            end as f32 - 5.0
-                        }
-                    } else {
-                        if end as f32 + 5.0 > bgn {
+                    let end = 
+                        if direction == 0 {
+                            if end as f32 - 5.0 < bgn {
+                                bgn
+                            } else {
+                                end as f32 - 5.0
+                            }
+                        } else if end as f32 + 5.0 > bgn {
                             bgn
                         } else {
                             end as f32 + 5.0
-                        }
-                    };
+                        };
                     let bottom0 = -3_i32 + y_offset as i32;
                     let top0 = 3_i32 + y_offset as i32;
                     let bottom1 = -4_i32 + y_offset as i32;
@@ -147,12 +146,11 @@ fn main() -> Result<(), std::io::Error> {
 
                     let path_str = format!(
 					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
-                    let path = element::Path::new()
+                    element::Path::new()
                         .set("fill", bundle_color)
                         .set("stroke", stroke_color)
                         .set("stroke-width", stroke_width)
-                        .set("d", path_str);
-                    path 
+                        .set("d", path_str)
                 })
                 .collect();
                 let text = element::Text::new()
