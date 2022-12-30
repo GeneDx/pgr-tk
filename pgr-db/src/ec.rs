@@ -433,18 +433,15 @@ pub fn guided_shmmr_dbg_consensus(
             }
             if out_count == 0 {
                 break;
+            }
+            if next_guide_node.is_some() {
+                next_node = next_guide_node.unwrap();
+                last_in_guide_nodes = Some(next_node.1.clone());
+            } else if succ_list_f.len() > 0 {
+                succ_list_f.sort();
+                next_node = succ_list_f.pop().unwrap();
             } else {
-                if next_guide_node.is_some() {
-                    next_node = next_guide_node.unwrap();
-                    last_in_guide_nodes = Some(next_node.1.clone());
-                } else {
-                    if succ_list_f.len() > 0 {
-                        succ_list_f.sort();
-                        next_node = succ_list_f.pop().unwrap();
-                    } else {
-                        break;
-                    }
-                }
+                break;
             }
             out.push((node.1, *score.get(&node.1).unwrap()));
         }
@@ -501,7 +498,7 @@ pub fn guided_shmmr_dbg_consensus(
 /// this methods try to perseve SNP specific to a guide read (the first one in the list)
 /// if there is more or equal to the "min_cov"
 ///
-/// 
+///
 pub fn shmmr_sparse_aln_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
@@ -528,7 +525,7 @@ pub fn shmmr_sparse_aln_consensus(
             )
         })
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
-    sdb.load_seqs_from_seq_vec(&seqs);  
+    sdb.load_seqs_from_seq_vec(&seqs);
     let out = shmmr_sparse_aln_consensus_with_sdb(vec![0], &sdb, min_cov).unwrap();
 
     Ok(out[0].1.clone())
@@ -539,22 +536,22 @@ pub fn shmmr_sparse_aln_consensus(
 /// this methods try to perseve SNP specific to a guide read (the first one in the list)
 /// if there is more or equal to the "min_cov"
 ///
-/// 
+///
 pub fn shmmr_sparse_aln_consensus_with_sdb(
     sids: Vec<u32>,
     sdb: &CompactSeqDB,
     min_cov: u32,
 ) -> Result<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>, &'static str> {
-    let shmmr_spec = &sdb.shmmr_spec; 
+    let shmmr_spec = &sdb.shmmr_spec;
     assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
-  
+
     fn shmmr_sparse_aln_consensus_with_sdb_one(
         sid0: u32,
         sdb: &CompactSeqDB,
         min_cov: u32,
     ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
-        let shmmr_spec = &sdb.shmmr_spec; 
+        let shmmr_spec = &sdb.shmmr_spec;
         let seq0 = sdb.get_seq_by_id(sid0);
         let hit_pairs = query_fragment_to_hps(
             &sdb.frag_map,
@@ -584,7 +581,9 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         keys.into_iter().for_each(|k| {
             let m = hit_map.get(&k).unwrap();
             let mut count = FxHashSet::<u32>::default();
-            m.iter().for_each(|(sid, _)| {count.insert(*sid);});
+            m.iter().for_each(|(sid, _)| {
+                count.insert(*sid);
+            });
 
             //println!("DBG X {:?} {:?}",k ,m.len());
             if count.len() >= min_cov as usize {
@@ -635,15 +634,14 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                             let w = *c_hit.get(&sid).unwrap();
                             //println!("DBG R: {} {:?} {:?}", sid, p_region, r);
                             //println!("DBG S: {} {:?} {:?}", sid, v, w);
-                            
+
                             if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
                                 let s0 = sdb.get_seq_by_id(sid);
                                 let s = s0[v.1 as usize..w.0 as usize].to_vec();
                                 *seq_count.entry(s).or_insert(0) += 1
                             } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
                                 let s0 = sdb.get_seq_by_id(sid);
-                                let s = s0[w.1 as usize - k..v.0 as usize - k]
-                                    .to_vec();
+                                let s = s0[w.1 as usize - k..v.0 as usize - k].to_vec();
                                 let s = reverse_complement(&s);
                                 *seq_count.entry(s).or_insert(0) += 1
                             } else {
@@ -652,16 +650,22 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                         }
                     }
 
-                    let mut seq_count = seq_count.into_iter().map(|(k, v)| {(v, k)}).collect::<Vec<(u32, Vec<u8>)>>();
+                    let mut seq_count =
+                        seq_count
+                            .into_iter()
+                            .map(|(k, v)| (v, k))
+                            .collect::<Vec<(u32, Vec<u8>)>>();
                     let mut patch_cov = 0_u32;
                     let mut patch_seq = vec![];
                     if seq_count.len() > 0 {
                         seq_count.sort();
-                        (patch_cov, patch_seq) = seq_count[seq_count.len()-1].clone(); 
+                        (patch_cov, patch_seq) = seq_count[seq_count.len() - 1].clone();
                     }
 
                     if patch_cov >= min_cov {
-                        (0..patch_seq.len()).into_iter().for_each(|_| cov.push(patch_cov));
+                        (0..patch_seq.len())
+                            .into_iter()
+                            .for_each(|_| cov.push(patch_cov));
                         seq.extend(patch_seq);
                         seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                         (r.0..r.1).into_iter().for_each(|_| {
@@ -687,15 +691,17 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         Ok(out_seqs)
     }
 
-    let out = sids.par_iter().map(|&sid| {
-        if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, &sdb, min_cov) { 
-            (sid, out)
-        } else {
-            (sid, vec![])
-        }
-    }).collect::<Vec<(u32,Vec<(Vec<u8>, Vec<u32>)>)>>();
+    let out = sids
+        .par_iter()
+        .map(|&sid| {
+            if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, &sdb, min_cov) {
+                (sid, out)
+            } else {
+                (sid, vec![])
+            }
+        })
+        .collect::<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>>();
     Ok(out)
-
 }
 
 #[cfg(test)]
@@ -705,7 +711,7 @@ mod test {
     use crate::ec::shmmr_dbg_consensus;
     use crate::ec::shmmr_sparse_aln_consensus;
     use crate::ec::shmmr_sparse_aln_consensus_with_sdb;
-    use crate::seq_db::{GetSeq, CompactSeqDB};
+    use crate::seq_db::{CompactSeqDB, GetSeq};
     use crate::shmmrutils::ShmmrSpec;
     #[test]
     fn test_naive_dbg_consensus() {
@@ -793,7 +799,6 @@ mod test {
             println!("{:?}", c);
         }
     }
-
 
     #[test]
     fn test_shmmr_sparse_aln_consensus_with_sdb() {

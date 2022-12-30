@@ -289,7 +289,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
                             SeqRec {
                                 source: Some(s.clone()),
                                 id: c.as_bytes().to_vec(),
-                                seq: seq,
+                                seq,
                             }
                         })
                         //let seq = self.get_seq(s.clone(), c.clone());
