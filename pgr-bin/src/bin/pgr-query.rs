@@ -116,7 +116,7 @@ fn main() -> Result<(), std::io::Error> {
                                 }
                             }
                             let orientation = if f_count > r_count { 0_u32 } else { 1_u32 };
-                            let e = sid_to_alns.entry(sid).or_insert(vec![]);
+                            let e = sid_to_alns.entry(sid).or_insert_with(Vec::new);
                             e.push((aln, orientation))
                         }
                     })
@@ -132,7 +132,7 @@ fn main() -> Result<(), std::io::Error> {
                         target_coordiantes.sort();
                         let bgn = target_coordiantes[0].0;
                         let end = target_coordiantes[target_coordiantes.len() - 1].1;
-                        let e = aln_range.entry(sid).or_insert(vec![]);
+                        let e = aln_range.entry(sid).or_insert_with(Vec::new);
                         e.push((bgn, end, end - bgn, orientation, aln));
                     })
                 });
@@ -144,13 +144,13 @@ fn main() -> Result<(), std::io::Error> {
                         let mut f_rgns = rgns
                             .iter()
                             .filter(|&v| v.3 == 0)
-                            .map(|v| v.clone())
+                            .cloned()
                             .collect::<Vec<_>>();
 
                         let mut r_rgns = rgns
                             .iter()
                             .filter(|&v| v.3 == 1)
-                            .map(|v| v.clone())
+                            .cloned()
                             .collect::<Vec<_>>();
 
                         f_rgns.sort();
@@ -159,9 +159,8 @@ fn main() -> Result<(), std::io::Error> {
                         let mut out_rgns = vec![];
                         let mut last_rgn: (u32, u32, u32, u32, Vec<_>) = (0, 0, 0, 0, vec![]);
                         f_rgns.into_iter().for_each(|r| {
-                            if last_rgn.4.len() == 0 {
-                                last_rgn = r.clone();
-                                return;
+                            if last_rgn.4.is_empty() {
+                                last_rgn = r;
                             } else {
                                 let l_bgn = last_rgn.0;
                                 let l_end = last_rgn.1;
@@ -178,20 +177,19 @@ fn main() -> Result<(), std::io::Error> {
                                     last_rgn = (bgn, end, len, orientation, aln);
                                 } else {
                                     out_rgns.push(last_rgn.clone());
-                                    last_rgn = r.clone();
+                                    last_rgn = r;
                                 }
                             }
                         });
                         if last_rgn.2 > 0 {
                             //not empty
-                            out_rgns.push(last_rgn.clone());
+                            out_rgns.push(last_rgn);
                         };
 
                         let mut last_rgn: (u32, u32, u32, u32, Vec<_>) = (0, 0, 0, 0, vec![]);
                         r_rgns.into_iter().for_each(|r| {
-                            if last_rgn.4.len() == 0 {
+                            if last_rgn.4.is_empty() {
                                 last_rgn = r.clone();
-                                return;
                             } else {
                                 let l_bgn = last_rgn.0;
                                 let l_end = last_rgn.1;
@@ -208,13 +206,13 @@ fn main() -> Result<(), std::io::Error> {
                                     last_rgn = (bgn, end, len, orientation, aln);
                                 } else {
                                     out_rgns.push(last_rgn.clone());
-                                    last_rgn = r.clone();
+                                    last_rgn = r;
                                 }
                             }
                         });
                         if last_rgn.2 > 0 {
                             //not empty
-                            out_rgns.push(last_rgn.clone());
+                            out_rgns.push(last_rgn);
                         };
 
                         (sid, out_rgns)
