@@ -1,6 +1,7 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use pgr_bin::SeqIndexDB;
+use pgr_db::fasta_io;
 use std::fs::File;
 use std::io::{self, Write, BufReader, BufRead, BufWriter};
 use std::path::Path;
@@ -62,9 +63,12 @@ fn main() -> Result<(), std::io::Error> {
         let ctg = fields[2].to_string();
         let bgn: usize = fields[3].parse().expect("can't parse bgn");
         let end: usize = fields[4].parse().expect("can't parse end");
-        let seq = seq_index_db.get_sub_seq(src.clone(), ctg.clone(), bgn, end).expect("fail to fetch sequence");
-
-
+        let reversed: bool = if fields[4].parse::<u32>().expect("can't parse strand") == 1 {true} else {false};
+        let mut seq = seq_index_db.get_sub_seq(src.clone(), ctg.clone(), bgn, end).expect("fail to fetch sequence");
+        if reversed {
+            seq = fasta_io::reverse_complement(&seq);
+        }
+        
         let mut out = if args.output_file.is_some() {
             let f = BufWriter::new(File::open(args.output_file.clone().unwrap()).expect("can't open the ouptfile"));
             Box::new(f) as Box<dyn Write>
