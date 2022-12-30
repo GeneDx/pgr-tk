@@ -1,8 +1,8 @@
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::aln;
 use pgr_db::fasta_io::FastaReader;
-use pgr_db::seq_db;
-use pgr_db::seq_db::GetSeq;
+use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
+use pgr_db::seq_db::{self, GetSeq};
 use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use pgr_db::{agc_io, frag_file_io};
 use rayon::prelude::*;
@@ -547,7 +547,7 @@ impl SeqIndexDB {
             ));
         }
         let mut overlaps =
-            FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
+            FxHashMap::<(ShmmrGraphNode, ShmmrGraphNode), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
 
@@ -585,7 +585,7 @@ impl SeqIndexDB {
                         mc,
                     )
                 })
-                .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
+                .collect::<AdjList>()
         };
 
         adj_list.iter().for_each(|(k, v, w)| {
@@ -726,7 +726,7 @@ impl SeqIndexDB {
         let frag_map = frag_map.unwrap();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
         let mut overlaps =
-            FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
+            FxHashMap::<(ShmmrGraphNode, ShmmrGraphNode), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
         let (pb, filtered_adj_list) =

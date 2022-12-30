@@ -2,6 +2,7 @@
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 use pgr_db::aln::{self, HitPair};
+use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 use pgr_db::seq_db;
 use pgr_db::seqs2variants;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
@@ -1005,6 +1006,15 @@ impl SeqIndexDB {
         } else {
             let frag_map = frag_map.unwrap();
             seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
+                .iter()
+                .map(|adj_pair| {
+                    (
+                        adj_pair.0,
+                        (adj_pair.1 .0, adj_pair.1 .1, adj_pair.1 .2),
+                        (adj_pair.2 .0, adj_pair.2 .1, adj_pair.2 .2),
+                    )
+                })
+                .collect()
         }
     }
 
@@ -1038,8 +1048,28 @@ impl SeqIndexDB {
         u32,
         u32,
     )> {
+        let adj_list = adj_list
+            .iter()
+            .map(|&(v0, v1, v2)| (v0, ShmmrGraphNode(v1.0, v1.1, v1.2), ShmmrGraphNode(v2.0, v2.1, v2.2)))
+            .collect::<AdjList>();
+
+        let start = ShmmrGraphNode(start.0, start.1, start.2);
+
         if let Some(frag_map) = self.get_shmmr_map_internal() {
             seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+                .iter()
+                .map(|v| {
+                    (
+                        (v.0 .0, v.0 .1, v.0 .2),
+                        v.1.map(|w| (w.0, w.1, w.2)),
+                        v.2,
+                        v.3,
+                        v.4,
+                        v.5,
+                        v.6
+                    )
+                })
+                .collect::<Vec<_>>()
         } else {
             vec![]
         }
@@ -1332,7 +1362,7 @@ impl SeqIndexDB {
             return Err(PyValueError::new_err("no index found"));
         }
         let mut overlaps =
-            FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
+            FxHashMap::<(ShmmrGraphNode, ShmmrGraphNode), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
 
@@ -1374,7 +1404,7 @@ impl SeqIndexDB {
                         mc,
                     )
                 })
-                .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>()
+                .collect::<AdjList>()
         };
 
         adj_list.iter().for_each(|(k, v, w)| {
@@ -1547,7 +1577,7 @@ impl SeqIndexDB {
         let frag_map = frag_map.unwrap();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
         let mut overlaps =
-            FxHashMap::<((u64, u64, u8), (u64, u64, u8)), Vec<(u32, u8, u8)>>::default();
+            FxHashMap::<(ShmmrGraphNode, ShmmrGraphNode), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
         let (pb, filtered_adj_list) =
