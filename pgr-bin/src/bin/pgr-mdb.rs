@@ -1,4 +1,4 @@
-const VERSION_STRING: &'static str = env!("VERSION_STRING");
+const VERSION_STRING: &str = env!("VERSION_STRING");
 
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};

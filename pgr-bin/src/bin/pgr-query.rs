@@ -1,4 +1,4 @@
-const VERSION_STRING: &'static str = env!("VERSION_STRING");
+const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use pgr_bin::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::SeqRec;

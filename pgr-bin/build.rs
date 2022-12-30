@@ -10,7 +10,7 @@ const BUILD_TYPE: &'static str = "release";
 
 fn main() {
     let branch_name = get_branch_name();
-    if branch_name != String::from("bioconda") {
+    if branch_name != *"bioconda" {
         let version_string = format!(
             "{} {} ({}:{}{}, {} build, {} [{}] [{}])",
             env!("CARGO_PKG_NAME"),
