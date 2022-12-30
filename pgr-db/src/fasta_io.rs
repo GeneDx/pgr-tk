@@ -114,11 +114,7 @@ impl<R: BufRead> FastaReader<R> {
         } else {
             None
         };
-        let rec = SeqRec {
-            source,
-            id: id,
-            seq: seq,
-        };
+        let rec = SeqRec { source, id, seq };
 
         Some(Ok(rec))
     }
@@ -155,12 +151,8 @@ impl<R: BufRead> FastaReader<R> {
         } else {
             None
         };
-        
-        let rec = SeqRec {
-            source,
-            id: id,
-            seq: seq,
-        };
+
+        let rec = SeqRec { source, id, seq };
         // ignore QV
         let mut buf = Vec::<u8>::with_capacity(1024);
         let _res = self.inner.read_until(b'+', &mut buf);
@@ -223,11 +215,7 @@ impl Iterator for FastqStreamReader {
                         return None;
                     };
                     let source = None;
-                    let rec = SeqRec {
-                        source,
-                        id: id,
-                        seq: seq,
-                    };
+                    let rec = SeqRec { source, id, seq };
                     Some(Ok(rec))
                 } else {
                     None
@@ -280,24 +268,18 @@ impl Iterator for FastaStreamReader {
                 if self.inner.read_line(&mut line).unwrap_or(0) == 0 {
                     self.next_header = None;
                     break;
+                } else if &line[0..1] == ">" {
+                    self.next_header = Some(line.clone());
+                    line.clear();
+                    break;
                 } else {
-                    if &line[0..1] == ">" {
-                        self.next_header = Some(line.clone());
-                        line.clear();
-                        break;
-                    } else {
-                        seq += &line.trim()[..];
-                        line.clear();
-                    }
+                    seq += &line.trim()[..];
+                    line.clear();
                 }
             }
             let seq = seq[..].as_bytes().to_vec();
             let source = None;
-            let rec = SeqRec {
-                source,
-                id: id,
-                seq: seq,
-            };
+            let rec = SeqRec { source, id, seq };
             Some(Ok(rec))
         } else {
             None

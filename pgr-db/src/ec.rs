@@ -484,10 +484,8 @@ pub fn guided_shmmr_dbg_consensus(
             println!("YY");
         }
         */
-        if last_in_guide_nodes.is_some() {
-            if node == last_in_guide_nodes.unwrap() {
-                break;
-            }
+        if last_in_guide_nodes.is_some() && node == last_in_guide_nodes.unwrap() {
+            break;
         }
     }
     Ok((out_seq, out_cov))
