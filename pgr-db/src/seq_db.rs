@@ -1,6 +1,6 @@
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
-use crate::graph_utils::ShmmrGraphNode;
+use crate::graph_utils::{ShmmrGraphNode, AdjPair, AdjList};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use bincode::{config, Decode, Encode};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
@@ -37,7 +37,7 @@ pub enum AlnSegment {
     Match(u32, u32),
     Insertion(u8),
 }
-
+#[allow(clippy::large_enum_variant)]
 enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
     RegularFile(FastaReader<BufReader<BufReader<File>>>),
@@ -51,7 +51,7 @@ pub enum Fragment {
     Suffix(Bases),
 }
 
-impl<'a> fmt::Display for Fragment {
+impl fmt::Display for Fragment {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Fragment::AlnSegments(d) => write!(
@@ -71,6 +71,11 @@ pub type ShmmrPair = (u64, u64);
 pub type Fragments = Vec<Fragment>;
 pub type FragmentSignature = (u32, u32, u32, u32, u8); //frg_id, seq_id, bgn, end, orientation(to shimmer pair)
 pub type ShmmrToFrags = FxHashMap<ShmmrPair, Vec<FragmentSignature>>;
+
+pub trait GetSeq {
+    fn get_seq_by_id(&self, sid: u32) -> Vec<u8>;
+    fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8>;
+}
 
 #[derive(Debug, Clone, Decode, Encode)]
 pub struct CompactSeq {
@@ -107,7 +112,7 @@ pub fn deltas_to_aln_segs(
     frg: &Vec<u8>,
 ) -> Vec<AlnSegment> {
     let mut aln_segs = Vec::<AlnSegment>::new();
-    if deltas.len() == 0 {
+    if deltas.is_empty() {
         aln_segs.push(AlnSegment::FullMatch);
         //println!("aln_segs: {:?}", aln_segs);
         return aln_segs;
@@ -144,12 +149,12 @@ pub fn deltas_to_aln_segs(
     aln_segs
 }
 
-pub fn reconstruct_seq_from_aln_segs(base_seq: &Vec<u8>, aln_segs: &Vec<AlnSegment>) -> Vec<u8> {
+pub fn reconstruct_seq_from_aln_segs(base_seq: &[u8], aln_segs: &[AlnSegment]) -> Vec<u8> {
     let mut seq = Vec::<u8>::new();
     for s in aln_segs.iter() {
         match s {
             AlnSegment::FullMatch => {
-                seq.extend_from_slice(&base_seq[..]);
+                seq.extend_from_slice(base_seq);
             }
             AlnSegment::Match(x1, x2) => {
                 seq.extend_from_slice(&base_seq[*x1 as usize..*x2 as usize]);
@@ -192,7 +197,7 @@ impl CompactSeqDB {
         let mut frg_id = frags.len() as u32;
 
         //assert!(shmmrs.len() > 0);
-        if shmmrs.len() == 0 {
+        if shmmrs.is_empty() {
             let frg = seq[..].to_vec();
             frags.push(Fragment::Prefix(frg));
             seq_frags.push(frg_id);
@@ -244,7 +249,7 @@ impl CompactSeqDB {
                             let rc;
                             if orientation != t_frg_id.4 {
                                 frg = reverse_complement(
-                                    &seq[(bgn - self.shmmr_spec.k) as usize..end as usize].to_vec(),
+                                    &seq[(bgn - self.shmmr_spec.k) as usize..end as usize],
                                 );
                                 rc = true;
                             } else {
@@ -337,7 +342,7 @@ impl CompactSeqDB {
         shmmrs: Vec<MM128>,
     ) -> (CompactSeq, Vec<((u64, u64), u32, u32, u8)>) {
         //assert!(shmmrs.len() > 0);
-        if shmmrs.len() == 0 {
+        if shmmrs.is_empty() {
             return (
                 CompactSeq {
                     source,
@@ -372,7 +377,7 @@ impl CompactSeqDB {
             .collect::<Vec<_>>();
 
         let seq_frags: Vec<u32> = (0..(shmmr_pairs.len() as u32)).collect();
-        let seq_frag_range = if seq_frags.len() == 0 {
+        let seq_frag_range = if seq_frags.is_empty() {
             (0, 0)
         } else {
             (seq_frags[0] as u32, seq_frags.len() as u32)
@@ -432,7 +437,7 @@ impl CompactSeqDB {
         let all_shmmers = seqs
             .par_iter()
             .map(|(sid, _, _, seq)| {
-                let shmmrs = sequence_to_shmmrs(*sid, &seq, &self.shmmr_spec, false);
+                let shmmrs = sequence_to_shmmrs(*sid, seq, &self.shmmr_spec, false);
                 //let shmmrs = sequence_to_shmmrs2(*sid, &seq, 80, KMERSIZE, 4);
                 (*sid, shmmrs)
             })
@@ -474,7 +479,6 @@ impl CompactSeqDB {
                 break;
             }
         }
-        ();
     }
 
     pub fn load_seqs_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
@@ -499,8 +503,10 @@ impl CompactSeqDB {
 
     pub fn load_seqs_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         match self.get_fastx_reader(filepath)? {
+            #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
             GZFastaReader::GZFile(reader) => self.load_seq_from_reader(&mut reader.into_iter()),
 
+            #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
             GZFastaReader::RegularFile(reader) => {
                 self.load_seq_from_reader(&mut reader.into_iter())
             }
@@ -539,7 +545,6 @@ impl CompactSeqDB {
                 break;
             }
         }
-        ();
     }
 
     pub fn load_index_from_seq_vec(&mut self, seqs: &Vec<(u32, Option<String>, String, Vec<u8>)>) {
@@ -579,7 +584,7 @@ impl CompactSeqDB {
                     .iter()
                     .zip(cs.seq_frag_range.0..cs.seq_frag_range.0 + cs.seq_frag_range.1)
                     .for_each(|((shmmr, bgn, end, orientation), frg_id)| {
-                        let e = self.frag_map.entry(*shmmr).or_insert(vec![]);
+                        let e = self.frag_map.entry(*shmmr).or_default();
                         e.push((frg_id, sid, *bgn, *end, *orientation));
                     });
                 self.seqs.push(cs);
@@ -629,13 +634,14 @@ impl CompactSeqDB {
                 break;
             }
         }
-        ();
     }
 
     pub fn load_index_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         match self.get_fastx_reader(filepath)? {
+            #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
             GZFastaReader::GZFile(reader) => self.load_index_from_reader(&mut reader.into_iter()),
 
+            #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
             GZFastaReader::RegularFile(reader) => {
                 self.load_index_from_reader(&mut reader.into_iter())
             }
@@ -675,10 +681,10 @@ impl CompactSeqDB {
                     //println!("p: {} {}", p, p + b.len());
                     _p += b.len();
                 }
-                Fragment::AlnSegments((frg_id, reverse, _length, a)) => {
+                Fragment::AlnSegments((frg_id, reversed, _length, a)) => {
                     if let Fragment::Internal(base_seq) = frags.get(*frg_id as usize).unwrap() {
-                        let mut seq = reconstruct_seq_from_aln_segs(&base_seq, a);
-                        if *reverse == true {
+                        let mut seq = reconstruct_seq_from_aln_segs(base_seq, a);
+                        if *reversed {
                             seq = reverse_complement(&seq);
                         }
                         reconstructed_seq.extend_from_slice(&seq[self.shmmr_spec.k as usize..]);
@@ -692,21 +698,29 @@ impl CompactSeqDB {
         reconstructed_seq
     }
 
+    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
+        self.reconstruct_seq_from_frags(
+            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+        )
+    }
+
     /* TODO */
     /*
     pub fn get_sub_seq(&self, seq: &CompactSeq, b: usize, e:usize) -> Vec<u8> {
         vec![]
     }
     */
+}
 
-    pub fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
+impl GetSeq for CompactSeqDB {
+    fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
         self.reconstruct_seq_from_frags(
             (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
         )
     }
 
-    pub fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
+    fn get_sub_seq_by_id(&self, sid: u32, bgn: u32, end: u32) -> Vec<u8> {
         assert!((sid as usize) < self.seqs.len());
         let frag_range = &self.seqs[sid as usize].seq_frag_range;
 
@@ -737,12 +751,6 @@ impl CompactSeqDB {
         let offset = bgn - sub_seq_frag[0].1;
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
     }
-
-    pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
-        self.reconstruct_seq_from_frags(
-            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
-        )
-    }
 }
 
 impl CompactSeqDB {
@@ -760,7 +768,7 @@ impl CompactSeqDB {
                     s.id,
                     s.len,
                     s.name,
-                    s.source.clone().unwrap_or("-".to_string())
+                    s.source.clone().unwrap_or_else(|| "-".to_string())
                 )?;
                 Ok(())
             })?;
@@ -770,7 +778,7 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn write_to_frag_files(&self, file_prefix: String) -> () {
+    pub fn write_to_frag_files(&self, file_prefix: String) {
         let mut sdx_file =
             BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("csq file open fail"));
         let mut frg_file =
@@ -808,7 +816,7 @@ impl CompactSeqDB {
             let l = v.len();
             frag_addr_offeset.push((offset, v.len(), *frag_len));
             offset += l;
-            frg_file.write(v).expect(" frag file writing error");
+            frg_file.write_all(v).expect("frag file writing error");
         });
 
         bincode::encode_into_std_write((frag_addr_offeset, &self.seqs), &mut sdx_file, config)
@@ -822,15 +830,15 @@ pub fn frag_map_to_adj_list(
     frag_map: &ShmmrToFrags,
     min_count: usize,
     keeps: Option<Vec<u32>>, // a list of sequence id that we like to keep the sequence in the adj list regardless the coverage
-) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+) -> AdjList {
     let mut out = frag_map
         .par_iter()
         .flat_map(|v| {
             v.1.iter()
-                .map(|vv| (vv.1, vv.2, vv.3, (v.0 .0, v.0 .1, vv.4)))
-                .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>() //(seq_id, bgn, end, (hash0, hash1, orientation))
+                .map(|vv| (vv.1, vv.2, vv.3, ShmmrGraphNode(v.0 .0, v.0 .1, vv.4)))
+                .collect::<Vec<(u32, u32, u32, ShmmrGraphNode)>>() //(seq_id, bgn, end, (hash0, hash1, orientation))
         })
-        .collect::<Vec<(u32, u32, u32, (u64, u64, u8))>>();
+        .collect::<Vec<(u32, u32, u32, ShmmrGraphNode)>>();
     if out.len() < 2 {
         return vec![];
     }
@@ -850,7 +858,7 @@ pub fn frag_map_to_adj_list(
                     None
                 }
             })
-            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+            .collect::<Vec<Option<(u32, u32, u32, ShmmrGraphNode)>>>()
     } else {
         out.into_par_iter()
             .map(|v| {
@@ -860,57 +868,108 @@ pub fn frag_map_to_adj_list(
                     None
                 }
             })
-            .collect::<Vec<Option<(u32, u32, u32, (u64, u64, u8))>>>()
+            .collect::<Vec<Option<(u32, u32, u32, ShmmrGraphNode)>>>()
     };
 
     (0..out.len() - 1)
         .into_par_iter()
         .flat_map(|i| {
-            let v = out[i];
-            let w = out[i + 1];
-            if v.is_none() || w.is_none() {
-                vec![None]
-            } else {
-                let v = v.unwrap();
-                let w = w.unwrap();
-                if v.0 != w.0 {
+            if let (Some(v), Some(w)) = (out[i], out[i + 1]) {
+                if v.0 != w.0 || v.2 != w.1 {
                     vec![None]
                 } else {
                     vec![
                         Some((v.0, v.3, w.3)),
                         Some((
                             v.0,
-                            (w.3 .0, w.3 .1, 1 - w.3 .2),
-                            (v.3 .0, v.3 .1, 1 - v.3 .2),
+                            ShmmrGraphNode(w.3 .0, w.3 .1, 1 - w.3 .2),
+                            ShmmrGraphNode(v.3 .0, v.3 .1, 1 - v.3 .2),
                         )),
                     ]
                 }
+            } else {
+                vec![None]
             }
         })
         .filter(|v| v.is_some())
         .map(|v| v.unwrap())
-        .collect::<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>>() // seq_id, node0, node1
+        .collect::<AdjList>() // seq_id, node0, node1
 }
 
-pub fn sort_adj_list_by_weighted_dfs(
+
+pub fn generate_smp_adj_list_for_seq(
+    seq: &Vec<u8>,
+    sid: u32,
     frag_map: &ShmmrToFrags,
-    adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
-    start: (u64, u64, u8),
-) -> Vec<(
-    (u64, u64, u8),
-    Option<(u64, u64, u8)>,
+    shmmr_spec: &ShmmrSpec,
+    min_count: usize,
+) -> AdjList {
+    let shmmrs = sequence_to_shmmrs(0, seq, shmmr_spec, false);
+    let res = pair_shmmrs(&shmmrs)
+        .iter()
+        .map(|(s0, s1)| {
+            let p0 = s0.pos() + 1;
+            let p1 = s1.pos() + 1;
+            let s0 = s0.x >> 8;
+            let s1 = s1.x >> 8;
+            if s0 < s1 {
+                (s0, s1, p0, p1, 0_u8)
+            } else {
+                (s1, s0, p0, p1, 1_u8)
+            }
+        })
+        .collect::<Vec<(u64, u64, u32, u32, u8)>>();
+
+    if res.len() < 2 {
+        vec![]
+    } else {
+        (0..res.len() - 1)
+            .into_iter()
+            .flat_map(|i| {
+                let v = res[i];
+                let w = res[i + 1];
+                if (frag_map.get(&(v.0, v.1)).is_none() || frag_map.get(&(w.0, w.1)).is_none())
+                    || (frag_map.get(&(v.0, v.1)).unwrap().len() < min_count
+                        || frag_map.get(&(w.0, w.1)).unwrap().len() < min_count)
+                    || v.3 != w.2
+                {
+                    vec![None]
+                } else {
+                    vec![
+                        Some((sid, ShmmrGraphNode(v.0, v.1, v.4), ShmmrGraphNode(w.0, w.1, w.4))),
+                        Some((sid, ShmmrGraphNode(w.0, w.1, 1 - w.4), ShmmrGraphNode(v.0, v.1, 1 - v.4))),
+                    ]
+                }
+            })
+            .flatten()
+            .collect::<AdjList>()
+    }
+}
+
+
+
+type PBundleNode = (
+    // node, Option<previous_node>, node_weight, is_leaf, global_rank, branch, branch_rank
+    ShmmrGraphNode,
+    Option<ShmmrGraphNode>,
     u32,
     bool,
     u32,
     u32,
     u32,
-)> {
-    // node, node_weight, is_leaf, global_rank, branch, branch_rank
+);  
+
+pub fn sort_adj_list_by_weighted_dfs(
+    frag_map: &ShmmrToFrags,
+    adj_list: &[AdjPair],
+    start: ShmmrGraphNode,
+) -> Vec<PBundleNode> {
+
     use crate::graph_utils::BiDiGraphWeightedDfs;
 
     let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
     let mut score = FxHashMap::<ShmmrGraphNode, u32>::default();
-    adj_list.into_iter().for_each(|&(_sid, v, w)| {
+    adj_list.iter().for_each(|&(_sid, v, w)| {
         let vv = (v.0, v.1);
         let ww = (w.0, w.1);
         let v = ShmmrGraphNode(v.0, v.1, v.2);
@@ -932,69 +991,61 @@ pub fn sort_adj_list_by_weighted_dfs(
 
     let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
-    loop {
-        if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
-            let node_count = *score.get(&node).unwrap();
-            let p_node = match p_node {
-                Some(pnode) => Some((pnode.0, pnode.1, pnode.2)),
-                None => None,
-            };
-            out.push((
-                (node.0, node.1, node.2),
-                p_node,
-                node_count,
-                is_leaf,
-                rank,
-                branch_id,
-                branch_rank,
-            ));
-            //println!("{:?}", node);
-        } else {
-            break;
-        }
+    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
+        let node_count = *score.get(&node).unwrap();
+        let p_node = p_node.map(|pnode| ShmmrGraphNode(pnode.0, pnode.1, pnode.2));
+        out.push((
+            ShmmrGraphNode(node.0, node.1, node.2),
+            p_node,
+            node_count,
+            is_leaf,
+            rank,
+            branch_id,
+            branch_rank,
+        ));
+        //println!("{:?}", node);
     }
     out
 }
 
 pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
-    adj_list: &Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
+    adj_list: &[AdjPair],
     path_len_cutoff: usize,
 ) -> (
     Vec<Vec<ShmmrGraphNode>>,
-    Vec<(u32, (u64, u64, u8), (u64, u64, u8))>,
+    AdjList,
 ) {
-    assert!(adj_list.len() > 0);
+    assert!(!adj_list.is_empty());
     let s = adj_list[0].1;
     let sorted_adj_list = sort_adj_list_by_weighted_dfs(frag_map, adj_list, s);
 
-    let mut paths: Vec<Vec<(u64, u64, u8)>> = vec![];
-    let mut path: Vec<(u64, u64, u8)> = vec![];
+    let mut paths: Vec<Vec<ShmmrGraphNode>> = vec![];
+    let mut path: Vec<ShmmrGraphNode> = vec![];
     for v in sorted_adj_list.into_iter() {
         path.push(v.0);
-        if v.3 == true {
+        if v.3 {
             // it is a leaf node
             paths.push(path.clone());
             path.clear()
         }
     }
 
-    let long_paths: Vec<Vec<(u64, u64, u8)>> = paths
+    let long_paths = paths
         .into_iter()
-        .filter(|p| p.len() > path_len_cutoff as usize)
-        .collect();
+        .filter(|p| p.len() > path_len_cutoff as usize);
 
     let mut main_bundle_path_vertices = FxHashSet::<(u64, u64)>::default();
 
-    long_paths.into_iter().for_each(|p| {
+    long_paths.for_each(|p| {
         p.into_iter().for_each(|v| {
             main_bundle_path_vertices.insert((v.0, v.1));
         })
     });
 
     let mut g0 = DiGraphMap::<ShmmrGraphNode, ()>::new();
-    let mut filtered_adj_list = Vec::<(u32, (u64, u64, u8), (u64, u64, u8))>::new();
-    adj_list.into_iter().for_each(|&(sid, v, w)| {
+    let mut filtered_adj_list = AdjList::new();
+    adj_list.iter().for_each(|&(sid, v, w)| {
         if main_bundle_path_vertices.contains(&(v.0, v.1))
             && main_bundle_path_vertices.contains(&(w.0, w.1))
         {
@@ -1026,14 +1077,14 @@ pub fn get_principal_bundles_from_adj_list(
         }
     }
     // if the whole graph is a loop
-    if starts.len() == 0 {
+    if starts.is_empty() {
         let v = g1.nodes().next().unwrap();
         starts.push(v);
     };
 
     let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
 
-    while starts.len() != 0 {
+    while !starts.is_empty() {
         let s = starts.pop().unwrap();
         let mut dfs = Dfs::new(&g1, s);
         let mut path = Vec::<ShmmrGraphNode>::new();
@@ -1045,7 +1096,7 @@ pub fn get_principal_bundles_from_adj_list(
                 path.push(v);
             }
         }
-        if path.len() > 0 {
+        if !path.is_empty() {
             path.iter().for_each(|&v| {
                 g1.remove_node(v);
                 g1.remove_node(ShmmrGraphNode(v.0, v.1, 1 - v.2));
@@ -1071,7 +1122,7 @@ pub fn get_principal_bundles_from_adj_list(
         }
 
         // if the whole graph is a loop
-        if starts.len() == 0 {
+        if starts.is_empty() {
             if let Some(v) = g1.nodes().next() {
                 starts.push(v);
             }
@@ -1082,21 +1133,23 @@ pub fn get_principal_bundles_from_adj_list(
 }
 
 impl CompactSeqDB {
-    pub fn generate_smp_adj_list(
+    pub fn generate_smp_adj_list_from_frag_map(
         &self,
         min_count: usize,
         keeps: Option<Vec<u32>>,
-    ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    ) -> AdjList {
         frag_map_to_adj_list(&self.frag_map, min_count, keeps)
     }
 }
+
+type FragmentHit = ((u64, u64), (u32, u32, u8), Vec<FragmentSignature>); // ((hash0, hash1), (pos0, pos1, orientation), fragments)
 
 pub fn query_fragment(
     shmmr_map: &ShmmrToFrags,
     frag: &Vec<u8>,
     shmmr_spec: &ShmmrSpec,
-) -> Vec<((u64, u64), (u32, u32, u8), Vec<FragmentSignature>)> {
-    let shmmrs = sequence_to_shmmrs(0, &frag, &shmmr_spec, false);
+) -> Vec<FragmentHit> {
+    let shmmrs = sequence_to_shmmrs(0, frag, shmmr_spec, false);
     let query_results = pair_shmmrs(&shmmrs)
         .par_iter()
         .map(|(s0, s1)| {
@@ -1127,14 +1180,14 @@ pub fn get_match_positions_with_fragment(
     shmmr_spec: &ShmmrSpec,
 ) -> FxHashMap<u32, Vec<(u32, u32, u8)>> {
     let mut res = FxHashMap::<u32, Vec<(u32, u32, u8)>>::default();
-    query_fragment(shmmr_map, &frag, shmmr_spec)
+    query_fragment(shmmr_map, frag, shmmr_spec)
         .into_iter()
         .for_each(|v| {
             let q_direction = v.1 .2;
             v.2.into_iter().for_each(|w| {
                 let (_, sid, p0, p1, direction) = w;
                 let direction = if direction == q_direction { 0 } else { 1 };
-                res.entry(sid).or_insert(vec![]).push((p0, p1, direction));
+                res.entry(sid).or_default().push((p0, p1, direction));
             });
         });
     res.iter_mut().for_each(|(_k, v)| v.sort());
@@ -1155,11 +1208,11 @@ pub fn write_shmr_map_file(
     buf.write_u32::<LittleEndian>(shmmr_spec.k as u32)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.r as u32)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.min_span as u32)?;
-    buf.write_u32::<LittleEndian>(if shmmr_spec.sketch { 1 } else { 0 } as u32)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.sketch as u32)?;
 
     buf.write_u64::<LittleEndian>(shmmr_map.len() as u64)?;
     shmmr_map
-        .into_iter()
+        .iter()
         .try_for_each(|(k, v)| -> Result<(), std::io::Error> {
             buf.write_u64::<LittleEndian>(k.0)?;
             buf.write_u64::<LittleEndian>(k.1)?;

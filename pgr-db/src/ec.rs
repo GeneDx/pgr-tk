@@ -4,7 +4,7 @@
 use crate::aln::query_fragment_to_hps;
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
-use crate::seq_db::{self, CompactSeqDB};
+use crate::seq_db::{self, CompactSeqDB, GetSeq};
 use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
 use petgraph::EdgeDirection::Outgoing;
@@ -116,23 +116,17 @@ pub fn naive_dbg_consensus(
         let mut cur_idx = last_tgt_idx;
         rev_path.push(cur_idx);
         loop {
-            if let Some(p_node) = tgt_rev_path.get(&cur_idx) {
-                if let Some(p_idx) = p_node {
-                    if *kmer_count.get(&p_idx).unwrap() >= min_cov {
-                        cur_idx = *p_idx;
-                        rev_path.push(cur_idx);
-                        continue;
-                    }
+            if let Some(Some(p_idx)) = tgt_rev_path.get(&cur_idx) {
+                if *kmer_count.get(p_idx).unwrap() >= min_cov {
+                    cur_idx = *p_idx;
+                    rev_path.push(cur_idx);
+                    continue;
                 }
             }
 
-            if let Some(p_node) = track_back.get(&cur_idx) {
-                if let Some(p_idx) = p_node {
-                    cur_idx = *p_idx;
-                    rev_path.push(cur_idx);
-                } else {
-                    break;
-                }
+            if let Some(Some(p_idx)) = track_back.get(&cur_idx) {
+                cur_idx = *p_idx;
+                rev_path.push(cur_idx);
             } else {
                 break;
             }
@@ -157,7 +151,7 @@ pub fn naive_dbg_consensus(
 
 /// perform error correction using shimmer de Bruijn graph
 ///
-/// this methods can ignore haplotype specific signals
+/// this methods will ignore haplotype specific signals
 ///
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
@@ -196,18 +190,14 @@ pub fn shmmr_dbg_consensus(
         let seq = seqs[sid as usize].3[b..e].to_vec();
         let node = ShmmrGraphNode(k.0, k.1, strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
         let seq = reverse_complement(&seq);
         let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0, None);
+    let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -232,25 +222,18 @@ pub fn shmmr_dbg_consensus(
 
     let mut wdfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
-    loop {
-        if let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
-            let node_count = *score.get(&node).unwrap();
-            let p_node = match p_node {
-                Some(pnode) => Some((pnode.0, pnode.1, pnode.2)),
-                None => None,
-            };
-            out.push((
-                node,
-                p_node,
-                node_count,
-                is_leaf,
-                rank,
-                branch_id,
-                branch_rank,
-            ));
-        } else {
-            break;
-        }
+    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = wdfs_walker.next(&g) {
+        let node_count = *score.get(&node).unwrap();
+        let p_node = p_node.map(|pnode| (pnode.0, pnode.1, pnode.2));
+        out.push((
+            node,
+            p_node,
+            node_count,
+            is_leaf,
+            rank,
+            branch_id,
+            branch_rank,
+        ));
     }
 
     let mut out_seqs = Vec::<(Vec<u8>, Vec<u32>)>::new();
@@ -259,7 +242,7 @@ pub fn shmmr_dbg_consensus(
     let mut out_cov = vec![];
     //let mut head_orientation = 0_u8;
     for (node, _p_node, node_count, is_leaf, _rank, _branch_id, _branch_rank) in out {
-        if out_seq.len() == 0 {
+        if out_seq.is_empty() {
             let seq = frg_seqs.get(&node).unwrap().clone();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
@@ -326,18 +309,14 @@ pub fn guided_shmmr_dbg_consensus(
         let seq = seqs[sid as usize].3[b..e].to_vec();
         let node = ShmmrGraphNode(k.0, k.1, strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert_with(|| seq.clone());
         let seq = reverse_complement(&seq);
         let node = ShmmrGraphNode(k.0, k.1, 1 - strand);
         score.insert(node, v.len() as u32);
-        if !frg_seqs.contains_key(&node) {
-            frg_seqs.insert(node, seq.clone());
-        };
+        frg_seqs.entry(node).or_insert(seq);
     });
 
-    let adj_list = sdb.generate_smp_adj_list(0, None);
+    let adj_list = sdb.generate_smp_adj_list_from_frag_map(0, None);
     let s0 = adj_list[0];
 
     //println!("s0:{:?}", s0);
@@ -352,7 +331,7 @@ pub fn guided_shmmr_dbg_consensus(
     });
 
     let get_shmmr_nodes_from_seq = |seq: &Vec<u8>| -> Vec<((u64, u64, u8), u32)> {
-        let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+        let shmmrs = sequence_to_shmmrs(0, seq, shmmr_spec, false);
         seq_db::pair_shmmrs(&shmmrs)
             .iter()
             .map(|(s0, s1)| {
@@ -412,15 +391,15 @@ pub fn guided_shmmr_dbg_consensus(
                         if let Some(pos) = current_node_position {
                             let pos2 = *guide_nodes.get(&succ).unwrap();
                             if pos2 > *pos {
-                                if min_dist.is_none() {
+                                if let Some(mdist) = min_dist {
+                                    let dist = pos2 - *pos;
+                                    if dist < mdist {
+                                        next_guide_node = Some(WeightedNode(s, succ));
+                                    }
+                                } else {
                                     let dist = pos2 - *pos;
                                     min_dist = Some(dist);
                                     next_guide_node = Some(WeightedNode(s, succ));
-                                } else {
-                                    let dist = pos2 - *pos;
-                                    if dist < min_dist.unwrap() {
-                                        next_guide_node = Some(WeightedNode(s, succ));
-                                    }
                                 }
                             }
                         } else {
@@ -433,18 +412,16 @@ pub fn guided_shmmr_dbg_consensus(
             }
             if out_count == 0 {
                 break;
+            }
+            
+            if let Some(node) = next_guide_node { 
+                next_node = node;
+                last_in_guide_nodes = Some(next_node.1);
+            } else if !succ_list_f.is_empty() {
+                succ_list_f.sort();
+                next_node = succ_list_f.pop().unwrap();
             } else {
-                if next_guide_node.is_some() {
-                    next_node = next_guide_node.unwrap();
-                    last_in_guide_nodes = Some(next_node.1.clone());
-                } else {
-                    if succ_list_f.len() > 0 {
-                        succ_list_f.sort();
-                        next_node = succ_list_f.pop().unwrap();
-                    } else {
-                        break;
-                    }
-                }
+                break;
             }
             out.push((node.1, *score.get(&node.1).unwrap()));
         }
@@ -454,7 +431,7 @@ pub fn guided_shmmr_dbg_consensus(
     let mut out_cov = vec![];
     //let mut head_orientation = 0_u8;
     for (node, node_count) in out {
-        if out_seq.len() == 0 {
+        if out_seq.is_empty() {
             let seq = frg_seqs.get(&node).unwrap().clone();
             for _ in 0..seq.len() {
                 out_cov.push(node_count);
@@ -487,10 +464,8 @@ pub fn guided_shmmr_dbg_consensus(
             println!("YY");
         }
         */
-        if last_in_guide_nodes.is_some() {
-            if node == last_in_guide_nodes.unwrap() {
-                break;
-            }
+        if last_in_guide_nodes.is_some() && node == last_in_guide_nodes.unwrap() {
+            break;
         }
     }
     Ok((out_seq, out_cov))
@@ -501,7 +476,7 @@ pub fn guided_shmmr_dbg_consensus(
 /// this methods try to perseve SNP specific to a guide read (the first one in the list)
 /// if there is more or equal to the "min_cov"
 ///
-/// 
+///
 pub fn shmmr_sparse_aln_consensus(
     seqs: Vec<Vec<u8>>,
     shmmr_spec: &Option<ShmmrSpec>,
@@ -528,7 +503,7 @@ pub fn shmmr_sparse_aln_consensus(
             )
         })
         .collect::<Vec<(u32, Option<String>, String, Vec<u8>)>>();
-    sdb.load_seqs_from_seq_vec(&seqs);  
+    sdb.load_seqs_from_seq_vec(&seqs);
     let out = shmmr_sparse_aln_consensus_with_sdb(vec![0], &sdb, min_cov).unwrap();
 
     Ok(out[0].1.clone())
@@ -539,27 +514,27 @@ pub fn shmmr_sparse_aln_consensus(
 /// this methods try to perseve SNP specific to a guide read (the first one in the list)
 /// if there is more or equal to the "min_cov"
 ///
-/// 
+///
 pub fn shmmr_sparse_aln_consensus_with_sdb(
     sids: Vec<u32>,
     sdb: &CompactSeqDB,
     min_cov: u32,
 ) -> Result<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>, &'static str> {
-    let shmmr_spec = &sdb.shmmr_spec; 
+    let shmmr_spec = &sdb.shmmr_spec;
     assert!(shmmr_spec.k % 2 == 1); // the k needs to odd to break symmetry
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
-  
+
     fn shmmr_sparse_aln_consensus_with_sdb_one(
         sid0: u32,
         sdb: &CompactSeqDB,
         min_cov: u32,
     ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
-        let shmmr_spec = &sdb.shmmr_spec; 
+        let shmmr_spec = &sdb.shmmr_spec;
         let seq0 = sdb.get_seq_by_id(sid0);
         let hit_pairs = query_fragment_to_hps(
             &sdb.frag_map,
             &seq0,
-            &shmmr_spec,
+            shmmr_spec,
             0.1,
             Some(32),
             Some(32),
@@ -569,22 +544,24 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
 
         let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
         hit_pairs.into_iter().for_each(|(sid, hits)| {
-            if hits.len() > 0 {
+            if !hits.is_empty() {
                 // only use the main chian
                 let hps = &hits[0].1;
-                hps.into_iter().for_each(|&(v, w)| {
-                    hit_map.entry(v).or_insert(vec![]).push((sid, w));
+                hps.iter().for_each(|&(v, w)| {
+                    hit_map.entry(v).or_default().push((sid, w));
                 })
             }
         });
 
-        let mut keys = hit_map.keys().map(|v| *v).collect::<Vec<(u32, u32, u8)>>();
+        let mut keys = hit_map.keys().copied().collect::<Vec<(u32, u32, u8)>>();
         let mut reliable_regions = Vec::<((u32, u32, u8), u32)>::new();
         keys.sort();
         keys.into_iter().for_each(|k| {
             let m = hit_map.get(&k).unwrap();
             let mut count = FxHashSet::<u32>::default();
-            m.iter().for_each(|(sid, _)| {count.insert(*sid);});
+            m.iter().for_each(|(sid, _)| {
+                count.insert(*sid);
+            });
 
             //println!("DBG X {:?} {:?}",k ,m.len());
             if count.len() >= min_cov as usize {
@@ -600,7 +577,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             if p_region.is_none() {
                 p_region = Some((r, c));
                 seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                (0..r.1).into_iter().for_each(|_| {
+                (r.0..r.1).into_iter().for_each(|_| {
                     cov.push(c);
                 });
             } else {
@@ -616,12 +593,12 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                     let p_hit = hit_map.get(&p_region.unwrap().0).unwrap();
                     let c_hit = hit_map.get(&r).unwrap();
                     let p_hit = p_hit
-                        .into_iter()
-                        .map(|v| *v)
+                        .iter()
+                        .copied() 
                         .collect::<FxHashMap<u32, (u32, u32, u8)>>();
                     let c_hit = c_hit
-                        .into_iter()
-                        .map(|v| *v)
+                        .iter()
+                        .copied()
                         .collect::<FxHashMap<u32, (u32, u32, u8)>>();
 
                     let k = shmmr_spec.k as usize;
@@ -635,15 +612,14 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                             let w = *c_hit.get(&sid).unwrap();
                             //println!("DBG R: {} {:?} {:?}", sid, p_region, r);
                             //println!("DBG S: {} {:?} {:?}", sid, v, w);
-                            
+
                             if v.0 < w.0 && v.1 < w.1 && v.1 < w.0 {
                                 let s0 = sdb.get_seq_by_id(sid);
                                 let s = s0[v.1 as usize..w.0 as usize].to_vec();
                                 *seq_count.entry(s).or_insert(0) += 1
                             } else if w.0 < v.0 && w.1 < v.1 && w.1 < v.0 {
                                 let s0 = sdb.get_seq_by_id(sid);
-                                let s = s0[w.1 as usize - k..v.0 as usize - k]
-                                    .to_vec();
+                                let s = s0[w.1 as usize - k..v.0 as usize - k].to_vec();
                                 let s = reverse_complement(&s);
                                 *seq_count.entry(s).or_insert(0) += 1
                             } else {
@@ -652,16 +628,22 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                         }
                     }
 
-                    let mut seq_count = seq_count.into_iter().map(|(k, v)| {(v, k)}).collect::<Vec<(u32, Vec<u8>)>>();
+                    let mut seq_count =
+                        seq_count
+                            .into_iter()
+                            .map(|(k, v)| (v, k))
+                            .collect::<Vec<(u32, Vec<u8>)>>();
                     let mut patch_cov = 0_u32;
                     let mut patch_seq = vec![];
-                    if seq_count.len() > 0 {
+                    if !seq_count.is_empty() {
                         seq_count.sort();
-                        (patch_cov, patch_seq) = seq_count[seq_count.len()-1].clone(); 
+                        (patch_cov, patch_seq) = seq_count[seq_count.len() - 1].clone();
                     }
 
                     if patch_cov >= min_cov {
-                        (0..patch_seq.len()).into_iter().for_each(|_| cov.push(patch_cov));
+                        (0..patch_seq.len())
+                            .into_iter()
+                            .for_each(|_| cov.push(patch_cov));
                         seq.extend(patch_seq);
                         seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
                         (r.0..r.1).into_iter().for_each(|_| {
@@ -682,20 +664,22 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             }
         });
 
-        out_seqs.push((seq.clone(), cov.clone()));
+        out_seqs.push((seq, cov));
 
         Ok(out_seqs)
     }
 
-    let out = sids.par_iter().map(|&sid| {
-        if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, &sdb, min_cov) { 
-            (sid, out)
-        } else {
-            (sid, vec![])
-        }
-    }).collect::<Vec<(u32,Vec<(Vec<u8>, Vec<u32>)>)>>();
+    let out = sids
+        .par_iter()
+        .map(|&sid| {
+            if let Ok(out) = shmmr_sparse_aln_consensus_with_sdb_one(sid, sdb, min_cov) {
+                (sid, out)
+            } else {
+                (sid, vec![])
+            }
+        })
+        .collect::<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>>();
     Ok(out)
-
 }
 
 #[cfg(test)]
@@ -705,7 +689,7 @@ mod test {
     use crate::ec::shmmr_dbg_consensus;
     use crate::ec::shmmr_sparse_aln_consensus;
     use crate::ec::shmmr_sparse_aln_consensus_with_sdb;
-    use crate::seq_db::CompactSeqDB;
+    use crate::seq_db::{CompactSeqDB, GetSeq};
     use crate::shmmrutils::ShmmrSpec;
     #[test]
     fn test_naive_dbg_consensus() {
@@ -793,7 +777,6 @@ mod test {
             println!("{:?}", c);
         }
     }
-
 
     #[test]
     fn test_shmmr_sparse_aln_consensus_with_sdb() {

@@ -615,4 +615,42 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
     return rtn_partitions
 
 
+def get_principle_bundle_bed_file_for_query(seqs, w=64, k=56, r=4, min_span=32, min_cov=2, min_branch_length=8):
+    
+    sdb = pgrtk.SeqIndexDB()
+    sdb.load_from_seq_list(seqs, "memory", w, k, r, min_span)
+    
+    principal_bundles, sid_smps = sdb.get_principal_bundle_decomposition(min_cov, min_branch_length)
+    
+    sid_smps = dict(sid_smps)
+    seq_info = sdb.seq_info.copy()
+    sinfo = list(seq_info.items())
+    sinfo.sort(key=lambda x: x[1][0])
+
+    bundle_layout = []
+    for sid, data in sinfo:
+
+        ctg, _, _ = data
+
+        ctg_items = ctg.split("_")
+        ctg_bgn = int(ctg_items[-3])
+        ctg_end = int(ctg_items[-2])
+        ctg_dir = int(ctg_items[-1])
+        #assert(ctg_dir==0)
+
+        smps = sid_smps[sid]
+        smp_partitions = pgrtk.group_smps_by_principle_bundle_id(smps, 50, 100000)
+        mi = 0
+
+        smp_partitions.reverse()
+        for p in smp_partitions:
+            b = p[0][0][2]
+            e = p[-1][0][3] + k
+            bid = p[0][1]
+
+            direction = p[0][2]
+            bundle_layout.append( (ctg, ctg_bgn+b, ctg_bgn+e, "{}:{}:{}:{}".format(bid, direction, p[0][3], p[-1][3])) )
+            
+    return bundle_layout
+
 

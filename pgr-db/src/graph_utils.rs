@@ -10,6 +10,7 @@ use std::hash::Hash;
 #[derive(Copy, Clone)]
 pub struct WeightedNode<N>(pub u32, pub N);
 
+
 impl<N> Ord for WeightedNode<N> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
@@ -45,7 +46,11 @@ pub trait BiDiNode {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct ShmmrGraphNode(pub u64, pub u64, pub u8);
+pub struct ShmmrGraphNode(pub u64, pub u64, pub u8); // (hash0, hash1, orientation)
+
+pub type AdjPair = (u32, ShmmrGraphNode, ShmmrGraphNode); // (sid, A_vertex, B_vertex)
+
+pub type AdjList = Vec<AdjPair>;
 
 impl BiDiNode for ShmmrGraphNode {
     fn reverse(&self) -> Self {
@@ -220,7 +225,7 @@ where
                     is_leaf = true;
                     self.next_node = None;
                 } else {
-                    if succ_list_f.len() > 0 {
+                    if !succ_list_f.is_empty() {
                         // we prefer the same direction first
                         succ_list_f.sort();
                         self.next_node = succ_list_f.pop();

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
+use bincode::{Decode, Encode};
 use rustc_hash::FxHashMap;
 use std::fmt;
-use bincode::{Decode, Encode};
 
 #[derive(Clone, Debug)]
 pub struct OvlpMatch {
@@ -33,8 +33,8 @@ pub struct DeltaPoint {
     pub dk: i32,
 }
 
-fn track_delta_point<'a>(
-    delta_pts: &'a FxHashMap<(u32, i32), DeltaPoint>,
+fn track_delta_point(
+    delta_pts: &FxHashMap<(u32, i32), DeltaPoint>,
     d_final: u32,
     k_final: i32,
     s: u32,
@@ -117,8 +117,6 @@ pub fn match_reads<'a>(
         for k in (k_min..=k_max).step_by(2) {
             let mut x: u32;
             let mut y: u32;
-            let x1: u32;
-            let y1: u32;
             let (_, vn) = uv_map.get(&(k - 1)).unwrap();
             let (_, vp) = uv_map.get(&(k + 1)).unwrap();
             if k == k_min || ((k != k_max) && vn < vp) {
@@ -132,15 +130,15 @@ pub fn match_reads<'a>(
 
             if get_delta {
                 let dpt = DeltaPoint {
-                    x: x,
-                    y: y,
+                    x,
+                    y,
                     dk: k - pre_k,
                 };
                 delta_pts.entry((d, k)).or_insert(dpt);
             };
 
-            x1 = x;
-            y1 = y;
+            let x1 = x;
+            let y1 = y;
 
             while (x as usize) < len0 && (y as usize) < len1 && seq0[x as usize] == seq1[y as usize]
             {
@@ -148,12 +146,10 @@ pub fn match_reads<'a>(
                 y += 1;
             }
 
-            if (x - x1) >= min_match_start {
-                if !start {
-                    rtn.bgn0 = x1;
-                    rtn.bgn1 = y1;
-                    start = true;
-                }
+            if (x - x1) >= min_match_start && !start {
+                rtn.bgn0 = x1;
+                rtn.bgn1 = y1;
+                start = true;
                 // we set the ends here to avoid bad sequences
                 // this way, we are sure that, at least, 8 bases are aligned
                 /*
@@ -199,7 +195,7 @@ pub fn match_reads<'a>(
 
         k_max = k_max_new + 1;
         k_min = k_min_new - 1;
-        if matched == true {
+        if matched {
             //println!("match: {} {}", d_final, k_final);
             let mut d_inside = 0_u32;
             if get_delta {
@@ -250,7 +246,6 @@ impl MM128 {
     #[inline(always)]
     pub fn hash(&self) -> u64 {
         self.x >> 8
-
     }
     #[inline(always)]
     pub fn span(&self) -> u8 {
@@ -274,24 +269,24 @@ impl MM128 {
 }
 
 pub fn u64hash(key: u64) -> u64 {
-    let key = (!key).wrapping_add(key << 21); // key = (key << 21) - key - 1;
-    let key = key ^ key >> 24;
-    let key = (key.wrapping_add(key << 3)).wrapping_add(key << 8); // key * 265
-    let key = key ^ key >> 14;
-    let key = (key.wrapping_add(key << 2)).wrapping_add(key << 4); // key * 21
-    let key = key ^ key >> 28;
-    let key = key.wrapping_add(key << 31);
+    let mut key = (!key).wrapping_add(key << 21); // key = (key << 21) - key - 1;
+    key = key ^ key >> 24;
+    key = (key.wrapping_add(key << 3)).wrapping_add(key << 8); // key * 265
+    key = key ^ key >> 14;
+    key = (key.wrapping_add(key << 2)).wrapping_add(key << 4); // key * 21
+    key = key ^ key >> 28;
+    key = key.wrapping_add(key << 31);
     key
 }
 
 fn _u64hash(key: u64) -> u64 {
-    let key = !key + (key << 21); // key = (key << 21) - key - 1;
-    let key = key ^ key >> 24;
-    let key = (key + (key << 3)) + (key << 8); // key * 265
-    let key = key ^ key >> 14;
-    let key = (key + (key << 2)) + (key << 4); // key * 21
-    let key = key ^ key >> 28;
-    let key = key + (key << 31);
+    let mut key = !key + (key << 21); // key = (key << 21) - key - 1;
+    key = key ^ key >> 24;
+    key = (key + (key << 3)) + (key << 8); // key * 265
+    key = key ^ key >> 14;
+    key = (key + (key << 2)) + (key << 4); // key * 21
+    key = key ^ key >> 28;
+    key = key + (key << 31);
     key
 }
 
@@ -314,7 +309,7 @@ impl RingBuffer {
         ];
         RingBuffer {
             v: vv,
-            size: size,
+            size,
             start_pos: 0,
             end_pos: 0,
             len: 0,
@@ -534,30 +529,31 @@ pub fn sequence_to_shmmrs1(
         pos += 1;
     }
 
-    let shmmrs2 = shmmrs;
-    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
-    let shmmrs2 = reduce_shmmr(shmmrs2, r, padding);
-    let mut shmmrs3 = Vec::<MM128>::new();
-    shmmrs2
+    //let mut shmmrs = shmmrs;
+    if r > 1 {
+        shmmrs = reduce_shmmr(reduce_shmmr(shmmrs, r, padding), r, padding);
+    };
+    let mut shmmrs2 = Vec::<MM128>::new();
+    shmmrs
         .iter()
         .enumerate()
         .into_iter()
         .for_each(|(i, shmmr)| {
-            if i != 0 && i != shmmrs2.len() - 1 {
-                let p_pos = shmmrs2[i - 1].pos();
-                let pos = shmmrs2[i].pos();
-                let n_pos = shmmrs2[i + 1].pos();
-                let px = shmmrs2[i - 1].x;
-                let x = shmmrs2[i].x;
-                let nx = shmmrs2[i + 1].x;
+            if i != 0 && i != shmmrs.len() - 1 {
+                let p_pos = shmmrs[i - 1].pos();
+                let pos = shmmrs[i].pos();
+                let n_pos = shmmrs[i + 1].pos();
+                let px = shmmrs[i - 1].x;
+                let x = shmmrs[i].x;
+                let nx = shmmrs[i + 1].x;
                 if pos - p_pos > min_span && n_pos - pos > min_span && px != x && x != nx {
-                    shmmrs3.push(*shmmr);
+                    shmmrs2.push(*shmmr);
                 }
             } else {
-                shmmrs3.push(*shmmr);
+                shmmrs2.push(*shmmr);
             }
         });
-    shmmrs3
+    shmmrs2
 }
 
 pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, k: u32, r: u32, min_span: u32) -> Vec<MM128> {

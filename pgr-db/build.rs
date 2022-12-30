@@ -2,9 +2,9 @@ extern crate bindgen;
 use std::env::consts::{ARCH, OS};
 
 #[cfg(debug_assertions)]
-const BUILD_TYPE: &'static str = "debug";
+const BUILD_TYPE: &str = "debug";
 #[cfg(not(debug_assertions))]
-const BUILD_TYPE: &'static str = "release";
+const BUILD_TYPE: &str = "release";
 
 use std::{
     env,
@@ -14,7 +14,7 @@ use std::{
 };
 
 fn build_agc() -> Option<()> {
-    let mut agc_dir = read_dir(&"../agc").ok()?;
+    let mut agc_dir = read_dir("../agc").ok()?;
     if !agc_dir.any(|f| f.unwrap().file_name() == "makefile") {
         return None;
     }
@@ -25,7 +25,7 @@ fn build_agc() -> Option<()> {
 
     let _ = remove_dir_all(agc_path.as_path());
 
-    // copy the WFA dir to OUT_PATH and build it there... clunky, but
+    // copy the AGC dir to OUT_PATH and build it there... clunky, but
     // don't want to pull in the entire 100MB WFA repo, since git2
     // doesn't seem to support shallow clones, and build scripts
     // should only modify things inside OUT_PATH. since the WFA folder
@@ -111,7 +111,7 @@ fn main() {
 
     // from https://vallentin.dev/2019/06/06/versioning
     let branch_name = get_branch_name();
-    if branch_name != String::from("bioconda") {
+    if branch_name != *"bioconda" {
         let version_string = format!(
             "{} {} ({}:{}{}, {} build, {} [{}] [{}])",
             env!("CARGO_PKG_NAME"),
@@ -128,10 +128,13 @@ fn main() {
         println!("cargo:rustc-env=VERSION_STRING={}", version_string);
     } else {
         let version_string = format!(
-            "{} {} (bioconda {} build, {} [{}] [{}])",
+            "{} {} (bioconda {} build ({}:{}{}), {} [{}] [{}])",
             env!("CARGO_PKG_NAME"),
             env!("CARGO_PKG_VERSION"),
             BUILD_TYPE,
+            get_branch_name(),
+            get_commit_hash(),
+            if is_working_tree_clean() { "" } else { "+" }, 
             OS,
             ARCH,
             get_rustc_version()

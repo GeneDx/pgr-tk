@@ -8,7 +8,7 @@ pub struct SeqLocus {
     pub len: u32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlnSegType {
     Match,
     Mismatch,
@@ -46,9 +46,9 @@ pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(i32, Vec<u8>), &'stati
 
         // Set the cost model and parameters.
         attributes.distance_metric = wfa::distance_metric_t_gap_affine;
-        attributes.affine_penalties.mismatch = 4 as i32;
-        attributes.affine_penalties.gap_opening = 4 as i32;
-        attributes.affine_penalties.gap_extension = 1 as i32;
+        attributes.affine_penalties.mismatch = 4_i32;
+        attributes.affine_penalties.gap_opening = 4_i32;
+        attributes.affine_penalties.gap_extension = 1_i32;
 
         // Initialize the aligner object.
         // This should be reused for multiple queries.
@@ -64,14 +64,15 @@ pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(i32, Vec<u8>), &'stati
         );
         assert_eq!(status, 0);
         if status != 0 {
-            return Err("wfa align failed")
+            return Err("wfa align failed");
         };
 
         let cigar = *(*wf_aligner).cigar;
         //println!("{:?}", cigar);
-        let cigar_vec = (cigar.begin_offset.. cigar.end_offset).into_iter().map(|offset| {
-            *cigar.operations.add(offset as usize) as u8
-        }).collect::<Vec<u8>>();
+        let cigar_vec = (cigar.begin_offset..cigar.end_offset)
+            .into_iter()
+            .map(|offset| *cigar.operations.add(offset as usize) as u8)
+            .collect::<Vec<u8>>();
         let score = cigar.score;
         // Clean up memory.
         wfa::wavefront_aligner_delete(wf_aligner);
@@ -93,36 +94,36 @@ pub fn get_aln_segements(
     let mut v = AlnSegments::new();
     let mut p0: u32 = 0;
     let mut p1: u32 = 0;
-    
+
     let mut cigar_seg: Vec<Vec<u8>> = vec![];
 
-    cigar.1.iter().for_each( |&c| { 
-        if cigar_seg.len() == 0 {
-            cigar_seg.push( vec![c] )
+    cigar.1.iter().for_each(|&c| {
+        if cigar_seg.is_empty() {
+            cigar_seg.push(vec![c])
         } else {
             let l = cigar_seg.len();
-            let last = &mut cigar_seg[l-1];
-            if last[last.len()-1] == c {
+            let last = &mut cigar_seg[l - 1];
+            if last[last.len() - 1] == c {
                 last.push(c)
             } else {
-                cigar_seg.push( vec![c] );
+                cigar_seg.push(vec![c]);
             }
         }
     });
-    
-    cigar_seg.iter().map(|v|    
-        {
+
+    cigar_seg
+        .iter()
+        .map(|v| {
             let tag = v[0];
             let adv = v.len() as u32;
-            let advs = match tag {
+            match tag {
                 b'M' => Some((AlnSegType::Match, adv, adv)),
                 b'X' => Some((AlnSegType::Mismatch, adv, adv)),
                 b'I' => Some((AlnSegType::Insertion, 0, adv)),
                 b'D' => Some((AlnSegType::Deletion, adv, 0)),
-                _ => None
+                _ => None,
             }
-            .unwrap();
-            advs
+            .unwrap()
         })
         .for_each(|advs| {
             let sl_r = SeqLocus {
@@ -147,11 +148,11 @@ pub fn get_aln_segements(
     Ok(v)
 }
 
-pub fn get_aln_map(aln_segs: &Vec<AlnSegment>, s0: &str, s1: &str) -> Result<AlnMap, &'static str> {
+pub fn get_aln_map(aln_segs: &[AlnSegment], s0: &str, s1: &str) -> Result<AlnMap, &'static str> {
     let mut pmap = Vec::<(u32, u32)>::with_capacity(1 << 14);
     let mut ref_a_seq = Vec::<u8>::with_capacity(1 << 14);
     let mut tgt_a_seq = Vec::<u8>::with_capacity(1 << 14);
-    let mut aln_seq = Vec::<u8>::with_capacity(1 << 14 );
+    let mut aln_seq = Vec::<u8>::with_capacity(1 << 14);
     let mut aln_p = 0;
     aln_segs.iter().for_each(|f| {
         let ref_bgn = f.ref_loc.bgn;
@@ -264,7 +265,6 @@ pub fn get_aln_fragment(
     )
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -279,7 +279,7 @@ mod test {
         let cigar = get_cigar(&seq0, &seq1);
         println!("{:?}", cigar);
     }
-    
+
     #[test]
     fn test_get_aln_map() {
         let seq0 = include_str!("../test/test_data/seq0")
@@ -343,5 +343,4 @@ mod test {
         assert!(String::from_utf8_lossy(&out.1) == "|||||||||||".to_string());
         assert!(String::from_utf8_lossy(&out.2) == "CTTTCAAGTAA".to_string());
     }
-    
 }

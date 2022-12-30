@@ -1,8 +1,8 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
-use clap::{self, IntoApp, Parser};
+use clap::{self, CommandFactory, Parser};
 use flate2::bufread::MultiGzDecoder;
-use pgr_db::kmer_filter::KmerFilter;
-use pgr_db::fasta_io::{reverse_complement, FastaReader, FastqStreamReader, SeqRec};
+use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec, FastaStreamReader};
+use pgr_db::kmer_filter::{MinimizerFilter};
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
@@ -24,8 +24,10 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 32)]
     k: usize,
     /// count threshold
-    #[clap(long, short, default_value_t = 4)]
-    threshold: usize,
+    #[clap(long, short, default_value_t = 0.8)]
+    threshold: f32,
+    #[clap(long)]
+    fasta_stdin: bool,
 }
 
 fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
@@ -67,13 +69,12 @@ fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
-    let mut filter = KmerFilter::with_capacity(args.k, 1_usize << 24);
+    //let mut filter = KmerFilter::with_capacity(args.k, 1_usize << 24);
+    let mut filter = MinimizerFilter::new(args.k);
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         seq_iter.into_iter().for_each(|r| {
             if let Ok(r) = r {
-                filter.add_seq(&r.seq);
-                let rc_seq = reverse_complement(&r.seq);
-                filter.add_seq(&rc_seq);
+                filter.add_seq_mmers(&r.seq);
             };
         });
     };
@@ -84,26 +85,48 @@ fn main() -> Result<(), std::io::Error> {
         GZFastaReader::RegularFile(reader) => add_seqs(&mut reader.into_iter()),
     };
 
-
     let check_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         let mut seq_data = Vec::<SeqRec>::new();
         for r in seq_iter {
             if let Ok(r) = r {
                 seq_data.push(r);
+            };
+            if seq_data.len() == 64 {
+                seq_data
+                    .par_iter()
+                    .map(|r| {
+                        let (total, c) = filter.check_seq_mmers(&r.seq);
+                        (r.clone(), total, c)
+                    })
+                    .collect::<Vec<(SeqRec, usize, usize)>>()
+                    .iter()
+                    .for_each(|(r, total, c)| {
+                        if *total > 0 {
+                            if (*c as f32) / (*total as f32) > args.threshold {
+                                println!(">{} {} {}", String::from_utf8_lossy(&r.id), total, c);
+                                println!("{}", String::from_utf8_lossy(&r.seq[..]));
+                            }
+                        }
+                    });
+                seq_data.clear();
             }
         }
 
         seq_data
             .into_par_iter()
-            .filter(|r| {
-                let c = filter.check_seq(&r.seq);
-                c >= args.threshold
+            .map(|r| {
+                let (total, c) = filter.check_seq_mmers(&r.seq);
+                (r, total, c)
             })
-            .collect::<Vec<SeqRec>>()
+            .collect::<Vec<(SeqRec, usize, usize)>>()
             .iter()
-            .for_each(|r| {
-                println!(">{}", String::from_utf8_lossy(&r.id));
-                println!("{}", String::from_utf8_lossy(&r.seq[..]));
+            .for_each(|(r, total, c)| {
+                if *total > 0 {
+                    if (*c as f32) / (*total as f32) > args.threshold {
+                        println!(">{} {} {}", String::from_utf8_lossy(&r.id), total, c);
+                        println!("{}", String::from_utf8_lossy(&r.seq[..]));
+                    }
+                }
             });
     };
 
@@ -113,8 +136,13 @@ fn main() -> Result<(), std::io::Error> {
             GZFastaReader::RegularFile(reader) => check_seqs(&mut reader.into_iter()),
         }
     } else {
-        let reader = FastqStreamReader::new(128);
-        check_seqs(&mut reader.into_iter());
+        if args.fasta_stdin {
+            let reader = FastaStreamReader::new(256);
+            check_seqs(&mut reader.into_iter());
+        } else {
+            let reader = FastqStreamReader::new(256);
+            check_seqs(&mut reader.into_iter());
+        }
     }
 
     Ok(())

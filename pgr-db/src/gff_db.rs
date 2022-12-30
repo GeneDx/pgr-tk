@@ -24,48 +24,44 @@ pub struct GFFRecord {
 }
 
 impl GFFRecord {
-    pub fn from_line(line: &String) -> GFFRecord {
+    pub fn from_line(line: &str) -> GFFRecord {
         let fields = line
             .trim_end()
-            .split("\t")
+            .split('\t')
             .into_iter()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
         GFFRecord::from_fields(&fields)
     }
 
-    pub fn from_fields(fields: &Vec<String>) -> GFFRecord {
+    pub fn from_fields(fields: &[String]) -> GFFRecord {
         let seqid = fields[0].clone();
         let source = fields[1].clone();
         let type_ = fields[2].clone();
         let bgn = fields[3]
             .parse::<u32>()
-            .expect(format!("can't parse the start coordindate").as_str());
+            .expect("can't parse the start coordindate");
         let end = fields[4]
             .parse::<u32>()
-            .expect(format!("can't parse the end coordindate").as_str());
+            .expect("can't parse the end coordindate");
         let score = match fields[5].as_str() {
             "." => None,
-            s => Some(
-                s.parse::<f32>()
-                    .expect(format!("can't parse score").as_str()),
-            ),
+            s => Some(s.parse::<f32>().expect("can't parse score")),
         };
 
-        let strand = fields[6][0..1].chars().nth(0).unwrap();
-        let phase =
-            match fields[7].as_str() {
-                "." => None,
-                s => Some(s.parse::<u8>().expect(
-                    format!("fail to parse the phase field {}", fields[6].as_str(),).as_str(),
-                )),
-            };
+        let strand = fields[6][0..1].chars().next().unwrap();
+        let phase = match fields[7].as_str() {
+            "." => None,
+            s => Some(s.parse::<u8>().unwrap_or_else(|_| {
+                panic!("fail to parse the phase field {}", fields[6].as_str())
+            })),
+        };
         let attributes = fields[8]
-            .split(";")
+            .split(';')
             .into_iter()
             .map(|s| {
                 let kv = s
-                    .split("=")
+                    .split('=')
                     .into_iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<String>>();
@@ -163,7 +159,7 @@ impl GFFDB {
                     let parent_id = rec.attributes.get("Parent").unwrap();
                     children
                         .entry(parent_id.clone())
-                        .or_insert_with(|| vec![])
+                        .or_insert_with(Vec::new)
                         .push(rec.clone());
                 }
             } else {
@@ -179,15 +175,15 @@ impl GFFDB {
         })
     }
 
-    pub fn from_list_of_fields(list_of_fields: &Vec<Vec<String>>) -> GFFDB {
+    pub fn from_list_of_fields(list_of_fields: &[Vec<String>]) -> GFFDB {
         let header = Vec::<String>::new();
         let mut records = Vec::<Rc<GFFRecord>>::new();
         let mut id_to_rec = IdToGffRec::default();
         let mut name_to_rec = NameToGffRec::default();
         let mut children = IdToChildren::default();
 
-        list_of_fields.into_iter().for_each(|fields| {
-            let rec = Rc::new(GFFRecord::from_fields(&fields));
+        list_of_fields.iter().for_each(|fields| {
+            let rec = Rc::new(GFFRecord::from_fields(fields));
             records.push(rec.clone());
 
             if rec.attributes.contains_key("ID") {
@@ -202,7 +198,7 @@ impl GFFDB {
                 let parent_id = rec.attributes.get("Parent").unwrap();
                 children
                     .entry(parent_id.clone())
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(Vec::new)
                     .push(rec.clone());
             }
         });
@@ -225,18 +221,14 @@ impl GFFDB {
 
         let id = if self.id_to_rec.contains_key(id_or_name) {
             Some(id_or_name)
+        } else if self.name_to_rec.contains_key(id_or_name) {
+            let r = self.name_to_rec.get(id_or_name).unwrap();
+            r.attributes.get("ID")
         } else {
-            if self.name_to_rec.contains_key(id_or_name) {
-                let r = self.name_to_rec.get(id_or_name).unwrap();
-                r.attributes.get("ID")
-            } else {
-                None
-            }
+            None
         };
 
-        if id.is_none() {
-            return None;
-        }
+        id?;
 
         let id = id.unwrap();
         match self.children.get(id) {
@@ -262,7 +254,7 @@ impl GFFDB {
         println!("{}", serde_json::to_string(&self).unwrap());
     }
 
-    pub fn load_json(s: &String) -> serde_json::Result<GFFDB> {
+    pub fn load_json(s: &str) -> serde_json::Result<GFFDB> {
         let gffdb: GFFDB = serde_json::from_str(s)?;
         Ok(gffdb)
     }
