@@ -175,7 +175,7 @@ impl GFFDB {
         })
     }
 
-    pub fn from_list_of_fields(list_of_fields: &Vec<Vec<String>>) -> GFFDB {
+    pub fn from_list_of_fields(list_of_fields: &[Vec<String>]) -> GFFDB {
         let header = Vec::<String>::new();
         let mut records = Vec::<Rc<GFFRecord>>::new();
         let mut id_to_rec = IdToGffRec::default();

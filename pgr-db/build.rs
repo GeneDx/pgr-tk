@@ -2,9 +2,9 @@ extern crate bindgen;
 use std::env::consts::{ARCH, OS};
 
 #[cfg(debug_assertions)]
-const BUILD_TYPE: &'static str = "debug";
+const BUILD_TYPE: &str = "debug";
 #[cfg(not(debug_assertions))]
-const BUILD_TYPE: &'static str = "release";
+const BUILD_TYPE: &str = "release";
 
 use std::{
     env,
@@ -14,7 +14,7 @@ use std::{
 };
 
 fn build_agc() -> Option<()> {
-    let mut agc_dir = read_dir(&"../agc").ok()?;
+    let mut agc_dir = read_dir("../agc").ok()?;
     if !agc_dir.any(|f| f.unwrap().file_name() == "makefile") {
         return None;
     }
@@ -111,7 +111,7 @@ fn main() {
 
     // from https://vallentin.dev/2019/06/06/versioning
     let branch_name = get_branch_name();
-    if branch_name != String::from("bioconda") {
+    if branch_name != *"bioconda" {
         let version_string = format!(
             "{} {} ({}:{}{}, {} build, {} [{}] [{}])",
             env!("CARGO_PKG_NAME"),

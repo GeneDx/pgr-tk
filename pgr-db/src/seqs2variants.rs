@@ -8,7 +8,7 @@ pub struct SeqLocus {
     pub len: u32,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AlnSegType {
     Match,
     Mismatch,
