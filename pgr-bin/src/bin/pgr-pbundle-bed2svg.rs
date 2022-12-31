@@ -68,7 +68,7 @@ fn main() -> Result<(), std::io::Error> {
         let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
         //let bundle_v_bgn: u32 = pbundle_fields[3].parse().expect(bed_file_parse_err_msg);
         //let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
-        let e = ctg_data.entry(ctg).or_insert(vec![]);
+        let e = ctg_data.entry(ctg).or_default();
         e.push((bgn, end, bundle_id, bundle_dir));
     });
 
@@ -110,6 +110,7 @@ fn main() -> Result<(), std::io::Error> {
     let stroke_width = args.stroke_width;
     let mut y_offset = 0;
 
+    #[allow(clippy::needless_collect)] // we do need to evaluate as we depend on the side effect to set y_offset right
     let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data
         .into_iter()
         .map(|(ctg, bundle_segment)| {

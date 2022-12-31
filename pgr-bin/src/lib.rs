@@ -10,6 +10,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+
+#[allow(clippy::large_enum_variant)]
 pub enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
     RegularFile(FastaReader<BufReader<BufReader<File>>>),
@@ -33,10 +35,18 @@ pub struct SeqIndexDB {
     pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
     pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
+    #[allow(clippy::type_complexity)]
     pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>,
     /// a dictionary maps id -> (ctg_name, source, len)
+    #[allow(clippy::type_complexity)]
     pub seq_info: Option<HashMap<u32, (String, Option<String>, u32)>>,
     pub backend: Backend,
+}
+
+impl Default for SeqIndexDB {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SeqIndexDB {
@@ -51,6 +61,7 @@ impl SeqIndexDB {
             backend: Backend::UNKNOWN,
         }
     }
+
     pub fn load_from_agc_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
         let (shmmr_spec, new_map) =
             seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
@@ -174,6 +185,7 @@ impl SeqIndexDB {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
@@ -365,6 +377,7 @@ impl SeqIndexDB {
             .collect()
     }
 
+    #[allow(clippy::type_complexity)] // TODO: Define the type for readability
     pub fn get_principal_bundle_decomposition(
         &self,
         min_count: usize,
@@ -498,7 +511,7 @@ impl SeqIndexDB {
                     .map(|v| {
                         let seg_match = vertex_to_bundle_id_direction_pos
                             .get(&(v.0, v.1))
-                            .map(|m| *m);
+                            .copied();
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();

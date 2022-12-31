@@ -35,24 +35,24 @@ fn main() -> Result<(), std::io::Error> {
     let mut node_length = FxHashMap::<(u32, u32), Vec<_>>::default();
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap();
-        if line.len() == 0 {
+        if line.is_empty() {
             return
         }
         if &line[0..1] == "#" {
             return
         }
-        let bed_fields = line.split("\t").collect::<Vec<&str>>();
+        let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
         let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
-        let pbundle_fields = bed_fields[3].split(":").collect::<Vec<&str>>();
+        let pbundle_fields = bed_fields[3].split(':').collect::<Vec<&str>>();
         let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
         let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
         let bundle_dir: u32 = pbundle_fields[2].parse().expect(bed_file_parse_err_msg);
         let bundle_v_bgn: u32 = pbundle_fields[3].parse().expect(bed_file_parse_err_msg);
         let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
 
-        let e = ctg_data.entry(ctg).or_insert(vec![]);
+        let e = ctg_data.entry(ctg).or_default();
         let b_seg = BundleSegement {
             bgn,
             end,
@@ -65,8 +65,8 @@ fn main() -> Result<(), std::io::Error> {
         e.push(b_seg);
         if (bundle_v_bgn as i64 - bundle_v_end as i64).abs() as f32 > (bundle_v_count as f32) * 0.5
         {
-            let e = node_length.entry((bundle_id, bundle_dir)).or_insert(vec![]);
-            e.push((end as i64 - bgn as i64).abs() as u64);
+            let e = node_length.entry((bundle_id, bundle_dir)).or_default();
+            e.push((end as i64 - bgn as i64).unsigned_abs() as u64);
         }
     });
 

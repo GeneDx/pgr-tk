@@ -16,7 +16,7 @@ struct CmdOptions {
     query_fastx_path: String,
     output_prfix: String,
 
-    #[clap(long, default_value_t=false)]
+    #[clap(long, default_value_t = false)]
     frg_file: bool,
 
     #[clap(long, short, default_value_t = 0.025)]
@@ -52,8 +52,10 @@ fn main() -> Result<(), std::io::Error> {
     };
 
     match get_fastx_reader(args.query_fastx_path)? {
+        #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
         GZFastaReader::GZFile(reader) => add_seqs(&mut reader.into_iter()),
 
+        #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
         GZFastaReader::RegularFile(reader) => add_seqs(&mut reader.into_iter()),
     };
 
@@ -67,19 +69,22 @@ fn main() -> Result<(), std::io::Error> {
     let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
     writeln!(
         hit_file,
-        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-        "q_idx",
-        "q_name",
-        "query_bgn",
-        "query_end",
-        "q_len",
-        "aln_anchor_count",
-        "src",
-        "ctg",
-        "ctg_bgn",
-        "ctg_end",
-        "orientation",
-        "out_seq_name"
+        "#{}",
+        [
+            "q_idx",
+            "q_name",
+            "query_bgn",
+            "query_end",
+            "q_len",
+            "aln_anchor_count",
+            "src",
+            "ctg",
+            "ctg_bgn",
+            "ctg_end",
+            "orientation",
+            "out_seq_name"
+        ]
+        .join("\t")
     )?;
 
     query_seqs
@@ -88,7 +93,7 @@ fn main() -> Result<(), std::io::Error> {
         .for_each(|(idx, seq_rec)| {
             let q_name = String::from_utf8_lossy(&seq_rec.id);
             let query_seq = seq_rec.seq;
-            let q_len = query_seq.len(); 
+            let q_len = query_seq.len();
 
             let query_results = seq_index_db.query_fragment_to_hps(
                 query_seq,
@@ -234,8 +239,9 @@ fn main() -> Result<(), std::io::Error> {
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
-                            
-                            let target_seq_name = format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
+
+                            let target_seq_name =
+                                format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
                             let _ = writeln!(
                                 hit_file,
                                 "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -257,7 +263,7 @@ fn main() -> Result<(), std::io::Error> {
                                 .get_sub_seq_by_id(sid, b as usize, e as usize)
                                 .unwrap();
                             let target_seq = if orientation == 1 {
-                                pgr_db::fasta_io::reverse_complement(&target_seq)                               
+                                pgr_db::fasta_io::reverse_complement(&target_seq)
                             } else {
                                 target_seq
                             };
