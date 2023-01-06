@@ -80,6 +80,8 @@ struct SeqIndexDB {
     pub seq_info: Option<HashMap<u32, (String, Option<String>, u32)>>,
 
     pub backend: Backend,
+
+    pub principal_bundles: Option<(usize, usize, Vec<Vec<(u64, u64, u8)>>)>,
 }
 
 #[pymethods]
@@ -95,6 +97,7 @@ impl SeqIndexDB {
             seq_index: None,
             seq_info: None,
             backend: Backend::UNKNOWN,
+            principal_bundles: None,
         }
     }
 
@@ -1050,7 +1053,13 @@ impl SeqIndexDB {
     )> {
         let adj_list = adj_list
             .iter()
-            .map(|&(v0, v1, v2)| (v0, ShmmrGraphNode(v1.0, v1.1, v1.2), ShmmrGraphNode(v2.0, v2.1, v2.2)))
+            .map(|&(v0, v1, v2)| {
+                (
+                    v0,
+                    ShmmrGraphNode(v1.0, v1.1, v1.2),
+                    ShmmrGraphNode(v2.0, v2.1, v2.2),
+                )
+            })
             .collect::<AdjList>();
 
         let start = ShmmrGraphNode(start.0, start.1, start.2);
@@ -1066,7 +1075,7 @@ impl SeqIndexDB {
                         v.3,
                         v.4,
                         v.5,
-                        v.6
+                        v.6,
                     )
                 })
                 .collect::<Vec<_>>()
@@ -1094,12 +1103,18 @@ impl SeqIndexDB {
     ///
     #[args(keeps = "None")]
     pub fn get_principal_bundles(
-        &self,
+        &mut self,
         min_count: usize,
         path_len_cutoff: usize,
         keeps: Option<Vec<u32>>,
     ) -> Vec<Vec<(u64, u64, u8)>> {
-        if let Some(frag_map) = self.get_shmmr_map_internal() {
+        if let Some((m, plc, pb)) = self.principal_bundles.as_ref() {
+            if *m == min_count && *plc == path_len_cutoff {
+                return pb.clone();
+            }
+        }
+
+        let pb = if let Some(frag_map) = self.get_shmmr_map_internal() {
             let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize, keeps);
 
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
@@ -1109,7 +1124,9 @@ impl SeqIndexDB {
                 .collect::<Vec<Vec<(u64, u64, u8)>>>()
         } else {
             vec![]
-        }
+        };
+        self.principal_bundles = Some((min_count, path_len_cutoff, pb.clone()));
+        pb
     }
 
     fn get_vertex_map_from_priciple_bundles(
@@ -1164,7 +1181,7 @@ impl SeqIndexDB {
     ///
     #[args(keeps = "None")]
     pub fn get_principal_bundle_decomposition(
-        &self,
+        &mut self,
         min_count: usize,
         path_len_cutoff: usize,
         keeps: Option<Vec<u32>>,
@@ -1187,15 +1204,12 @@ impl SeqIndexDB {
                 let (ctg_name, source, _) = data;
                 let source = source.clone().unwrap();
                 let seq = self.get_seq(source.clone(), ctg_name.clone()).unwrap();
-                (*sid, seq) 
+                (*sid, seq)
             })
             .collect();
 
-        self.get_principal_bundle_projection_internal(pb, seqid_seq_list)
-
+        self._get_principal_bundle_projection_internal(pb, seqid_seq_list)
     }
-
-
 
     /// Project sequences outside the sequence database on to a principal bundle decomposition  
     ///
@@ -1210,7 +1224,7 @@ impl SeqIndexDB {
     ///     if the number is small, the generated principal paths will be more fragemented.
     ///  
     /// sequences : (contig_id: int, list of sequences)
-    /// 
+    ///
     /// Returns
     /// -------
     /// tuple
@@ -1225,10 +1239,10 @@ impl SeqIndexDB {
     ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
     ///                                   (principal_bundle_id, direction, order_in_the_bundle))
     ///
-    /// 
+    ///
     #[args(keeps = "None")]
     pub fn get_principal_bundle_projection(
-        &self,
+        &mut self,
         min_count: usize,
         path_len_cutoff: usize,
         sequences: Vec<(u32, Vec<u8>)>,
@@ -1242,14 +1256,13 @@ impl SeqIndexDB {
     ) {
         let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
         //println!("DBG: # bundles {}", pb.len());
-        self.get_principal_bundle_projection_internal(pb, sequences)
+        self._get_principal_bundle_projection_internal(pb, sequences)
     }
- 
-    
-    fn get_principal_bundle_projection_internal(
+
+    fn _get_principal_bundle_projection_internal(
         &self,
         pb: Vec<Vec<(u64, u64, u8)>>,
-        sequences: Vec<(u32, Vec<u8>)>
+        sequences: Vec<(u32, Vec<u8>)>,
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
         Vec<(
@@ -1281,10 +1294,9 @@ impl SeqIndexDB {
         let mut vertex_to_bundle_id_direction_pos =
             self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
-        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = sequences.into_iter()
-            .map(|(sid, seq)| {
-                (sid as u32, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
-            })
+        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = sequences
+            .into_iter()
+            .map(|(sid, seq)| (sid as u32, get_smps(seq, &self.shmmr_spec.clone().unwrap())))
             .collect();
 
         // data for reordering the bundles and for re-ordering them along the sequnces
@@ -1387,7 +1399,6 @@ impl SeqIndexDB {
 
         (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     }
-
 
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
     ///
