@@ -146,6 +146,35 @@ impl SeqIndexDB {
         Ok(())
     }
 
+    pub fn append_from_fastx(&mut self, filepath: String) ->  Result<(), std::io::Error>  {
+        assert!(
+            self.backend == Backend::FASTX,
+            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+        );
+        let sdb = self.seq_db.as_mut().unwrap();
+        sdb.load_seqs_from_fastx(filepath)?;
+        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
+        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
+        Ok(())
+    }
+
+    pub fn write_frag_and_index_files(&self, file_prefix: String) -> () {
+        if self.seq_db.is_some() {
+            let internal = self.seq_db.as_ref().unwrap();
+
+            internal.write_to_frag_files(file_prefix.clone());
+            internal
+                .write_shmr_map_index(file_prefix.clone())
+                .expect("write mdb file fail");
+        };
+    }
+
     pub fn load_from_seq_list(
         &mut self,
         seq_list: Vec<(String, Vec<u8>)>,
