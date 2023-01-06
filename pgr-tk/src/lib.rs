@@ -1025,7 +1025,7 @@ impl SeqIndexDB {
             })
             .collect();
 
-        self.get_principal_bundle_projection_internal(pb, seqid_seq_list)
+        self._get_principal_bundle_projection_internal(pb, seqid_seq_list)
     }
 
     /// Project sequences outside the sequence database on to a principal bundle decomposition  
@@ -1072,10 +1072,10 @@ impl SeqIndexDB {
     ) {
         let pb = self.get_principal_bundles(min_count, path_len_cutoff);
         //println!("DBG: # bundles {}", pb.len());
-        self.get_principal_bundle_projection_internal(pb, sequences)
+        self._get_principal_bundle_projection_internal(pb, sequences)
     }
 
-    fn get_principal_bundle_projection_internal(
+    fn _get_principal_bundle_projection_internal(
         &self,
         pb: Vec<Vec<(u64, u64, u8)>>,
         sequences: Vec<(u32, Vec<u8>)>,
