@@ -1175,6 +1175,88 @@ impl SeqIndexDB {
             Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
         )>,
     ) {
+        let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
+        //println!("DBG: # bundles {}", pb.len());
+
+        let seqid_seq_list: Vec<(u32, Vec<u8>)> = self
+            .seq_info
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|(sid, data)| {
+                let (ctg_name, source, _) = data;
+                let source = source.clone().unwrap();
+                let seq = self.get_seq(source.clone(), ctg_name.clone()).unwrap();
+                (*sid, seq) 
+            })
+            .collect();
+
+        self.get_principal_bundle_projection_internal(pb, seqid_seq_list)
+
+    }
+
+
+
+    /// Project sequences outside the sequence database on to a principal bundle decomposition  
+    ///
+    /// Parameters
+    /// ----------
+    /// min_count : int
+    ///     minimum coverage count to be included in the graph
+    ///
+    /// path_len_cut_off : int
+    ///     remove short path less than path_len_cut_off when generating the principal path
+    ///     
+    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///  
+    /// sequences : (contig_id: int, list of sequences)
+    /// 
+    /// Returns
+    /// -------
+    /// tuple
+    ///     a tuple consist of two lists: (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
+    ///  
+    ///     principal_bundles = list of (principal_bundle_id, ave_bundle_position, list_bundle_vertex)
+    ///    
+    ///     list_of_bundle_vertex = list of (hash0:u64, hash0:u64, direction:u8)
+    ///
+    ///     seqid_smps_with_bundle_id_seg_direction = list of shimmer pairs in the database annotated with principal bundle id and direction
+    ///     
+    ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
+    ///                                   (principal_bundle_id, direction, order_in_the_bundle))
+    ///
+    /// 
+    #[args(keeps = "None")]
+    pub fn get_principal_bundle_projection(
+        &self,
+        min_count: usize,
+        path_len_cutoff: usize,
+        sequences: Vec<(u32, Vec<u8>)>,
+        keeps: Option<Vec<u32>>,
+    ) -> (
+        Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
+        Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>,
+    ) {
+        let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
+        //println!("DBG: # bundles {}", pb.len());
+        self.get_principal_bundle_projection_internal(pb, sequences)
+    }
+ 
+    
+    fn get_principal_bundle_projection_internal(
+        &self,
+        pb: Vec<Vec<(u64, u64, u8)>>,
+        sequences: Vec<(u32, Vec<u8>)>
+    ) -> (
+        Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
+        Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>,
+    ) {
         fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
             let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
             seq_db::pair_shmmrs(&shmmrs)
@@ -1193,22 +1275,15 @@ impl SeqIndexDB {
                 .collect::<Vec<(u64, u64, u32, u32, u8)>>()
         }
 
-        let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
+        //let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
         //println!("DBG: # bundles {}", pb.len());
 
         let mut vertex_to_bundle_id_direction_pos =
             self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
-        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
-            .seq_info
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|(sid, data)| {
-                let (ctg_name, source, _) = data;
-                let source = source.clone().unwrap();
-                let seq = self.get_seq(source.clone(), ctg_name.clone()).unwrap();
-                (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
+        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = sequences.into_iter()
+            .map(|(sid, seq)| {
+                (sid as u32, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
             })
             .collect();
 
@@ -1312,6 +1387,7 @@ impl SeqIndexDB {
 
         (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     }
+
 
     /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
     ///
