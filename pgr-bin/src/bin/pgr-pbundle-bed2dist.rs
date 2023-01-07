@@ -149,17 +149,16 @@ fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
     let bed_file_path = path::Path::new(&args.bed_file_path);
-    let bed_file = BufReader::new(File::open(bed_file_path)?);
+    let bed_file = BufReader::new(File::open(bed_file_path).expect("can't open the bed file"));
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
     bed_file.lines().into_iter().for_each(|line| {
-        
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
-            return
+            return;
         }
         if &line[0..1] == "#" {
-            return
+            return;
         }
         let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
@@ -197,7 +196,7 @@ fn main() -> Result<(), std::io::Error> {
     let n_ctg = ctg_data.len();
 
     let out_path = Path::new(&args.output_prefix).with_extension("dist");
-    let mut out_file = BufWriter::new(File::create(out_path)?);
+    let mut out_file = BufWriter::new(File::create(out_path).expect("can't create the dist file"));
 
     let mut dist_map = FxHashMap::<(usize, usize), f32>::default();
 
@@ -241,16 +240,20 @@ fn main() -> Result<(), std::io::Error> {
     });
     let dend = linkage(&mut dist_mat, n_ctg, Method::Average);
 
-    let mut dend_file = BufWriter::new(File::create(
-        Path::new(&args.output_prefix).with_extension("ddg"),
-    )?);
+    let mut dend_file = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("ddg"))
+            .expect("can't create the ddg file"),
+    );
 
     let steps = dend.steps().to_vec();
+    let mut node_data = FxHashMap::<usize, (String, Vec<usize>, f32)>::default();
     (0..n_ctg).for_each(|ctg_idx| {
         writeln!(dend_file, "L {} {}", ctg_idx, ctg_data[ctg_idx].0)
             .expect("can't write dendrogram file");
+        node_data.insert(ctg_idx, (format!("{}", ctg_idx), vec![ctg_idx], 0.0_f32));
     });
 
+    let mut last_node_id = 0_usize;
     steps.into_iter().enumerate().for_each(|(c, s)| {
         writeln!(
             dend_file,
@@ -262,6 +265,57 @@ fn main() -> Result<(), std::io::Error> {
             s.size
         )
         .expect("can't write the dendrogram file");
+
+        let (node_string1, nodes1, height1) = node_data.remove(&s.cluster1).unwrap();
+        let (node_string2, nodes2, height2) = node_data.remove(&s.cluster2).unwrap();
+        let new_node_id = c + n_ctg;
+        let new_node_string;
+        let mut nodes = Vec::<usize>::new();
+        if nodes1.len() > nodes2.len() {
+            nodes.extend(nodes1);
+            nodes.extend(nodes2);
+            new_node_string = format!(
+                "({}:{}, {}:{})",
+                node_string1,
+                s.dissimilarity - height1,
+                node_string2,
+                s.dissimilarity - height2
+            )
+        } else {
+            nodes.extend(nodes2);
+            nodes.extend(nodes1);
+            new_node_string = format!(
+                "({}:{}, {}:{})",
+                node_string2,
+                s.dissimilarity - height2,
+                node_string1,
+                s.dissimilarity - height1
+            )
+        };
+        node_data.insert(new_node_id, (new_node_string, nodes, s.dissimilarity));
+        last_node_id = new_node_id;
+    });
+
+    let mut tree_file = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("nwk"))
+            .expect("can't create the nwk file"),
+    );
+
+    let emptyp_string = ("".to_string(), vec![], 0.0);
+    let (tree_string, nodes, _) = node_data.get(&last_node_id).unwrap_or(&emptyp_string);
+    writeln!(tree_file, "{};", tree_string).expect("can't write the nwk file");
+
+    let mut cls_order_file = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("hc.ord"))
+            .expect("can't create the hc.ord file"),
+    );
+    nodes.into_iter().for_each(|&ctg_idx| {
+        writeln!(
+            cls_order_file,
+            "{}\t{}\t{}",
+            ctg_data[ctg_idx].0, ctg_data[ctg_idx].0, ctg_idx
+        )
+        .expect("can't write hc.orf file");
     });
 
     Ok(())
