@@ -34,7 +34,7 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_parse_err_msg = "bed file parsing error";
     let mut node_length = FxHashMap::<(u32, u32), Vec<_>>::default();
     bed_file.lines().into_iter().for_each(|line| {
-        let line = line.unwrap();
+        let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return
         }

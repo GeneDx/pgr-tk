@@ -155,6 +155,9 @@ fn main() -> Result<(), std::io::Error> {
     bed_file.lines().into_iter().for_each(|line| {
         
         let line = line.unwrap().trim().to_string();
+        if line.is_empty() {
+            return
+        }
         if &line[0..1] == "#" {
             return
         }

@@ -51,7 +51,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg ="bed file parsing error"; 
     bed_file.lines().into_iter().for_each(|line| {
-        let line = line.unwrap();
+        let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return
         }
