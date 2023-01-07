@@ -153,7 +153,11 @@ fn main() -> Result<(), std::io::Error> {
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
     bed_file.lines().into_iter().for_each(|line| {
-        let line = line.unwrap();
+        
+        let line = line.unwrap().trim().to_string();
+        if &line[0..1] == "#" {
+            return
+        }
         let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
