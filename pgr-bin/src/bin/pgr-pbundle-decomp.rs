@@ -121,8 +121,10 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
     let cmd_string = std::env::args().collect::<Vec<String>>().join(" ");
     let mut seq_index_db = SeqIndexDB::new();
-    let filex_path = args.fastx_path.clone();
-    let _ = seq_index_db.load_from_fastx(filex_path.clone(), args.w, args.k, args.r, args.min_span);
+    let fastx_path = args.fastx_path.clone();
+    seq_index_db
+        .load_from_fastx(fastx_path.clone(), args.w, args.k, args.r, args.min_span)
+        .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
 
     if args.include.is_some() {
         let f = BufReader::new(
@@ -133,7 +135,7 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .map(|ctg| {
                 let seq = seq_index_db
-                    .get_seq(filex_path.clone(), ctg.clone())
+                    .get_seq(fastx_path.clone(), ctg.clone())
                     .expect("fail to fetch sequence");
                 (ctg, seq)
             })
@@ -141,7 +143,7 @@ fn main() -> Result<(), std::io::Error> {
         let mut new_seq_index_db = SeqIndexDB::new();
         let _ = new_seq_index_db.load_from_seq_list(
             seq_list,
-            Some(filex_path.as_str()),
+            Some(fastx_path.as_str()),
             args.w,
             args.k,
             args.r,
