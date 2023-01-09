@@ -36,10 +36,10 @@ fn main() -> Result<(), std::io::Error> {
     bed_file.lines().into_iter().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
-            return
+            return;
         }
         if &line[0..1] == "#" {
-            return
+            return;
         }
         let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
@@ -115,8 +115,13 @@ fn main() -> Result<(), std::io::Error> {
             .map(|k| format!("{}", k))
             .collect::<Vec<String>>();
         let sort_key = sort_key.join(",");
-        writeln!(out_file, "{}\t{
-        }", ctg, sort_key).expect("writing error");
+        writeln!(
+            out_file,
+            "{}\t{
+        }",
+            ctg, sort_key
+        )
+        .expect("writing error");
     });
 
     Ok(())

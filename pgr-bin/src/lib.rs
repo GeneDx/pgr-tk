@@ -145,7 +145,7 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    pub fn append_from_fastx(&mut self, filepath: String) ->  Result<(), std::io::Error>  {
+    pub fn append_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         assert!(
             self.backend == Backend::FASTX,
             "Only DB created with load_from_fastx() can add data from anothe fastx file"
@@ -537,9 +537,7 @@ impl SeqIndexDB {
                 let smps = smps
                     .iter()
                     .map(|v| {
-                        let seg_match = vertex_to_bundle_id_direction_pos
-                            .get(&(v.0, v.1))
-                            .copied();
+                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();

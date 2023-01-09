@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
-
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-mdb")]
 #[clap(author, version)]
@@ -66,7 +65,6 @@ fn main() {
                     .expect(format!("fail to read the fastx file: {}", filepath).as_str());
             }
         });
-    
-    sdb.write_frag_and_index_files(args.prefix);
 
+    sdb.write_frag_and_index_files(args.prefix);
 }
