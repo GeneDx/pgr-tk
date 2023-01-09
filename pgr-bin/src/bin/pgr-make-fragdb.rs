@@ -59,10 +59,10 @@ fn main() {
                 .to_string();
             if fid == 0 {
                 sdb.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
-                    .expect(format!("fail to read the fastx file: {}", filepath).as_str());
+                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
             } else {
                 sdb.append_from_fastx(filepath.clone())
-                    .expect(format!("fail to read the fastx file: {}", filepath).as_str());
+                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
             }
         });
 

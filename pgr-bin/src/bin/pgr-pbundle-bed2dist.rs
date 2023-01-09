@@ -251,12 +251,11 @@ fn main() -> Result<(), std::io::Error> {
         let (node_string1, nodes1, height1) = node_data.remove(&s.cluster1).unwrap();
         let (node_string2, nodes2, height2) = node_data.remove(&s.cluster2).unwrap();
         let new_node_id = c + n_ctg;
-        let new_node_string;
         let mut nodes = Vec::<usize>::new();
-        if nodes1.len() > nodes2.len() {
+        let new_node_string = if nodes1.len() > nodes2.len() {
             nodes.extend(nodes1);
             nodes.extend(nodes2);
-            new_node_string = format!(
+            format!(
                 "({}:{}, {}:{})",
                 node_string1,
                 s.dissimilarity - height1,
@@ -266,7 +265,7 @@ fn main() -> Result<(), std::io::Error> {
         } else {
             nodes.extend(nodes2);
             nodes.extend(nodes1);
-            new_node_string = format!(
+            format!(
                 "({}:{}, {}:{})",
                 node_string2,
                 s.dissimilarity - height2,
