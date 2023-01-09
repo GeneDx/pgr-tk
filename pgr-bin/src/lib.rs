@@ -163,13 +163,13 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    pub fn write_frag_and_index_files(&self, file_prefix: String) -> () {
+    pub fn write_frag_and_index_files(&self, file_prefix: String) {
         if self.seq_db.is_some() {
             let internal = self.seq_db.as_ref().unwrap();
 
             internal.write_to_frag_files(file_prefix.clone());
             internal
-                .write_shmr_map_index(file_prefix.clone())
+                .write_shmr_map_index(file_prefix)
                 .expect("write mdb file fail");
         };
     }

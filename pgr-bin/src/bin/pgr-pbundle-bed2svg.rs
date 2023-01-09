@@ -199,7 +199,7 @@ fn main() -> Result<(), std::io::Error> {
                     let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
                     let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
-                    let end = 
+                    let end =
                         if direction == 0 {
                             if end as f32 - 5.0 < bgn {
                                 bgn
@@ -215,7 +215,7 @@ fn main() -> Result<(), std::io::Error> {
                     let top0 = 3_i32 + y_offset as i32;
                     let bottom1 = -4_i32 + y_offset as i32;
                     let top1 = 4_i32 + y_offset as i32;
-                    let center = y_offset as i32; 
+                    let center = y_offset as i32;
 
                     let path_str = format!(
 					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
@@ -231,7 +231,7 @@ fn main() -> Result<(), std::io::Error> {
                     .set("y", y_offset)
                     .set("font-size", "10px")
                     .set("font-family", "monospace")
-                    .add(node::Text::new(annotation.clone()));
+                    .add(node::Text::new(annotation));
                 y_offset += delta_y;
             (ctg, (paths, text))
         })
@@ -258,29 +258,26 @@ fn main() -> Result<(), std::io::Error> {
         .set("preserveAspectRatio", "none");
 
     if !internal_nodes.is_empty() {
-        let tree_paths = internal_nodes.into_iter().map(
+        internal_nodes.into_iter().for_each(
                 | (node_id, child_node0, child_node1,_, _) | {
             let (n_pos, n_height, _) = *node_position_map.get(&node_id).unwrap();
-            let (c0_pos, c0_height, _) = *node_position_map.get(&child_node0).unwrap(); 
-            let (c1_pos, c1_height, _) = *node_position_map.get(&child_node1).unwrap(); 
+            let (c0_pos, c0_height, _) = *node_position_map.get(&child_node0).unwrap();
+            let (c1_pos, c1_height, _) = *node_position_map.get(&child_node1).unwrap();
             let _n_pos = n_pos * delta_y;
             let c0_pos = c0_pos * delta_y;
             let c1_pos = c1_pos * delta_y;
-            let n_height = -0.8 * tree_width * n_height; 
-            let c0_height = -0.8 * tree_width * c0_height; 
-            let c1_height = -0.8 * tree_width * c1_height; 
+            let n_height = -0.8 * tree_width * n_height;
+            let c0_height = -0.8 * tree_width * c0_height;
+            let c1_height = -0.8 * tree_width * c1_height;
             let path_str = format!(
                 "M {c0_height} {c0_pos} L {n_height} {c0_pos} L {n_height} {c1_pos} L {c1_height} {c1_pos}");
-            element::Path::new()
+            let path = element::Path::new()
                     .set("fill", "none")
                     .set("stroke", "#000")
                     .set("stroke-width", "1")
-                    .set("d", path_str) 
-
-        }).collect::<Vec<_>>();
-        tree_paths
-            .into_iter()
-            .for_each(|path| document.append(path));
+                    .set("d", path_str);
+            document.append(path);
+        });
     }
 
     let right_end = args.track_range as f32 * scaling_factor + left_padding;
