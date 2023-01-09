@@ -240,32 +240,14 @@ fn main() -> Result<(), std::io::Error> {
     });
     let dend = linkage(&mut dist_mat, n_ctg, Method::Average);
 
-    let mut dend_file = BufWriter::new(
-        File::create(Path::new(&args.output_prefix).with_extension("ddg"))
-            .expect("can't create the ddg file"),
-    );
-
     let steps = dend.steps().to_vec();
     let mut node_data = FxHashMap::<usize, (String, Vec<usize>, f32)>::default();
     (0..n_ctg).for_each(|ctg_idx| {
-        writeln!(dend_file, "L {} {}", ctg_idx, ctg_data[ctg_idx].0)
-            .expect("can't write dendrogram file");
         node_data.insert(ctg_idx, (format!("{}", ctg_idx), vec![ctg_idx], 0.0_f32));
     });
 
     let mut last_node_id = 0_usize;
-    steps.into_iter().enumerate().for_each(|(c, s)| {
-        writeln!(
-            dend_file,
-            "I {} {} {} {} {}",
-            c + n_ctg,
-            s.cluster1,
-            s.cluster2,
-            s.dissimilarity,
-            s.size
-        )
-        .expect("can't write the dendrogram file");
-
+    steps.iter().enumerate().for_each(|(c, s)| {
         let (node_string1, nodes1, height1) = node_data.remove(&s.cluster1).unwrap();
         let (node_string2, nodes2, height2) = node_data.remove(&s.cluster2).unwrap();
         let new_node_id = c + n_ctg;
@@ -305,18 +287,45 @@ fn main() -> Result<(), std::io::Error> {
     let (tree_string, nodes, _) = node_data.get(&last_node_id).unwrap_or(&emptyp_string);
     writeln!(tree_file, "{};", tree_string).expect("can't write the nwk file");
 
-    let mut cls_order_file = BufWriter::new(
-        File::create(Path::new(&args.output_prefix).with_extension("hc.ord"))
-            .expect("can't create the hc.ord file"),
+    let mut dendrogram_file = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("ddg"))
+            .expect("can't create the dendrogram file"),
     );
-    nodes.into_iter().for_each(|&ctg_idx| {
-        writeln!(
-            cls_order_file,
-            "{}\t{}\t{}",
-            ctg_data[ctg_idx].0, ctg_data[ctg_idx].0, ctg_idx
-        )
-        .expect("can't write hc.orf file");
+    let mut node_position_size = FxHashMap::<usize, ((f32, f32), usize)>::default();
+    let mut position = 0.0_f32;
+    nodes.iter().for_each(|&ctg_idx| {
+        node_position_size.insert(ctg_idx, ((position, 0.0), 1));
+        writeln!(dendrogram_file, "L\t{}\t{}", ctg_idx, ctg_data[ctg_idx].0)
+            .expect("can't write the dendrogram file");
+        position += 1.0;
     });
+    steps.into_iter().enumerate().for_each(|(c, s)| {
+        let ((pos0, _), size0) = *node_position_size.get(&s.cluster1).unwrap();
+        let ((pos1, _), size1) = *node_position_size.get(&s.cluster2).unwrap();
 
+        let pos = ((size0 as f32) * pos0 + (size1 as f32) * pos1) / ((size0 + size1) as f32);
+        writeln!(
+            dendrogram_file,
+            "I\t{}\t{}\t{}\t{}\t{}",
+            c + n_ctg,
+            s.cluster1,
+            s.cluster2,
+            s.size,
+            s.dissimilarity,
+        )
+        .expect("can't write the dendrogram file");
+        node_position_size.insert(c + n_ctg, ((pos, s.dissimilarity), s.size));
+    });
+    let mut node_positions = node_position_size
+        .into_iter()
+        .collect::<Vec<(usize, ((f32, f32), usize))>>();
+    node_positions.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+    node_positions
+        .into_iter()
+        .for_each(|(vid, ((pos, h), size))| {
+            writeln!(dendrogram_file, "P\t{}\t{}\t{}\t{}", vid, pos, h, size)
+                .expect("can't write the dendrogram file");
+        });
     Ok(())
 }
