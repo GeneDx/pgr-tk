@@ -128,10 +128,7 @@ fn main() -> Result<(), std::io::Error> {
         let f = BufReader::new(
             File::open(Path::new(&args.include.unwrap())).expect("can't opne the inlude file"),
         );
-        let include_ctgs = f
-            .lines()
-            .map(|c| c.unwrap())
-            .collect::<FxHashSet<String>>();
+        let include_ctgs = f.lines().map(|c| c.unwrap()).collect::<FxHashSet<String>>();
         let seq_list = include_ctgs
             .into_iter()
             .map(|ctg| {

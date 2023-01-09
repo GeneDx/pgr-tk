@@ -7,7 +7,6 @@ use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use pgr_db::{agc_io, frag_file_io};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
@@ -36,10 +35,10 @@ pub struct SeqIndexDB {
     pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
-    pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>,
+    pub seq_index: Option<FxHashMap<(String, Option<String>), (u32, u32)>>,
     /// a dictionary maps id -> (ctg_name, source, len)
     #[allow(clippy::type_complexity)]
-    pub seq_info: Option<HashMap<u32, (String, Option<String>, u32)>>,
+    pub seq_info: Option<FxHashMap<u32, (String, Option<String>, u32)>>,
     pub backend: Backend,
 }
 
@@ -70,8 +69,8 @@ impl SeqIndexDB {
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
-        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
-        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
+        let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
 
         let midx_file = BufReader::new(File::open(prefix + ".midx")?);
         midx_file
@@ -133,8 +132,8 @@ impl SeqIndexDB {
         let mut sdb = seq_db::CompactSeqDB::new(spec.clone());
         sdb.load_seqs_from_fastx(filepath)?;
         self.shmmr_spec = Some(spec);
-        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
-        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
+        let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
         sdb.seqs.iter().for_each(|v| {
             seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
             seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
@@ -144,6 +143,35 @@ impl SeqIndexDB {
         self.seq_db = Some(sdb);
         self.backend = Backend::FASTX;
         Ok(())
+    }
+
+    pub fn append_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
+        assert!(
+            self.backend == Backend::FASTX,
+            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+        );
+        let sdb = self.seq_db.as_mut().unwrap();
+        sdb.load_seqs_from_fastx(filepath)?;
+        let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
+        let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
+        sdb.seqs.iter().for_each(|v| {
+            seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
+            seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
+        });
+        self.seq_index = Some(seq_index);
+        self.seq_info = Some(seq_info);
+        Ok(())
+    }
+
+    pub fn write_frag_and_index_files(&self, file_prefix: String) -> () {
+        if self.seq_db.is_some() {
+            let internal = self.seq_db.as_ref().unwrap();
+
+            internal.write_to_frag_files(file_prefix.clone());
+            internal
+                .write_shmr_map_index(file_prefix.clone())
+                .expect("write mdb file fail");
+        };
     }
 
     pub fn load_from_seq_list(
@@ -173,8 +201,8 @@ impl SeqIndexDB {
         sdb.load_seqs_from_seq_vec(&seq_vec);
 
         self.shmmr_spec = Some(spec);
-        let mut seq_index = HashMap::<(String, Option<String>), (u32, u32)>::new();
-        let mut seq_info = HashMap::<u32, (String, Option<String>, u32)>::new();
+        let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
+        let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
         sdb.seqs.iter().for_each(|v| {
             seq_index.insert((v.name.clone(), v.source.clone()), (v.id, v.len as u32));
             seq_info.insert(v.id, (v.name.clone(), v.source.clone(), v.len as u32));
@@ -509,9 +537,7 @@ impl SeqIndexDB {
                 let smps = smps
                     .iter()
                     .map(|v| {
-                        let seg_match = vertex_to_bundle_id_direction_pos
-                            .get(&(v.0, v.1))
-                            .copied();
+                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();

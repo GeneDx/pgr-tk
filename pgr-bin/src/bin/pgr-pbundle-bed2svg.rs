@@ -3,7 +3,7 @@ use clap::{self, CommandFactory, Parser};
 use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader};
 use std::{fs::File, path};
-use svg::node::{element, Node, self};
+use svg::node::{self, element, Node};
 use svg::Document;
 
 #[derive(Parser, Debug)]
@@ -13,6 +13,8 @@ use svg::Document;
 struct CmdOptions {
     bed_file_path: String,
     output_prefix: String,
+    #[clap(long)]
+    ddg_file: Option<String>,
     #[clap(long)]
     annotations: Option<String>,
     #[clap(long, default_value_t = 100000)]
@@ -49,14 +51,14 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
-    let bed_file_parse_err_msg ="bed file parsing error"; 
+    let bed_file_parse_err_msg = "bed file parsing error";
     bed_file.lines().into_iter().for_each(|line| {
-        let line = line.unwrap();
+        let line = line.unwrap().trim().to_string();
         if line.is_empty() {
-            return
+            return;
         }
         if &line[0..1] == "#" {
-            return
+            return;
         }
         let bed_fields = line.split('\t').collect::<Vec<&str>>();
         let ctg: String = bed_fields[0].to_string();
@@ -73,30 +75,99 @@ fn main() -> Result<(), std::io::Error> {
     });
 
     //let mut annotations = vec![];
-    let ctg_data = if args.annotations.is_some() {
+    let mut ctg_to_annotation = FxHashMap::<String, String>::default();
+    let ctg_data_vec = if args.annotations.is_some() {
         let filename = args.annotations.unwrap();
-        let path= path::Path::new(&filename);
+        let path = path::Path::new(&filename);
         let annotation_file = BufReader::new(File::open(path)?);
-        let ctg_data: Vec<_> =
-            annotation_file.lines().map(|line| {
+        let ctg_data_vec: Vec<_> = annotation_file
+            .lines()
+            .map(|line| {
                 let ctg_annotation = line.unwrap();
-                let mut ctg_annotation = ctg_annotation.split('\t'); 
-                let ctg = ctg_annotation.next().expect("error parsing annotation file").to_string();
+                let mut ctg_annotation = ctg_annotation.split('\t');
+                let ctg = ctg_annotation
+                    .next()
+                    .expect("error parsing annotation file")
+                    .to_string();
 
                 let data = ctg_data.get(&ctg).unwrap().to_owned();
                 if let Some(annotation) = ctg_annotation.next() {
-                //annotations.push( (ctg.clone(), annotation) );
-                    (annotation.to_string(), data)
+                    ctg_to_annotation.insert(ctg.clone(), annotation.to_string());
+                    //annotations.push( (ctg.clone(), annotation) );
+                    (ctg, annotation.to_string(), data)
                 } else {
-                    ("".to_string(), data)
+                    ctg_to_annotation.insert(ctg.clone(), "".to_string());
+                    (ctg, "".to_string(), data)
                 }
-
-            }).collect();
-            ctg_data
+            })
+            .collect();
+        ctg_data_vec
     } else {
-        let mut ctg_data = ctg_data.into_iter().map(|(k, v)| (k, v) ).collect::<Vec<_>>();
-        ctg_data.sort();
-        ctg_data
+        let mut ctg_data_vec = ctg_data.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
+        ctg_data.keys().into_iter().for_each(|ctg| {
+            ctg_to_annotation.insert(ctg.clone(), ctg.clone());
+        });
+        ctg_data_vec.sort();
+        ctg_data_vec
+            .into_iter()
+            .map(|(ctg, data)| (ctg.clone(), ctg.clone(), data.clone()))
+            .collect()
+    };
+
+    // TODO: change to use proper serilization
+    let mut leaves = Vec::<(usize, String)>::new();
+    let mut internal_nodes = Vec::<(usize, usize, usize, usize, f32)>::new();
+    let mut node_position_map = FxHashMap::<usize, (f32, f32, usize)>::default();
+
+    let ctg_data_vec = if args.ddg_file.is_some() {
+        let dendrogram_file = BufReader::new(File::open(args.ddg_file.unwrap())?);
+        let mut ctg_data_vec = vec![];
+        dendrogram_file.lines().into_iter().for_each(|line| {
+            let line = line.expect("can't read dendrogram file");
+            let fields = line.trim().split('\t').collect::<Vec<&str>>();
+            let parse_err_msg = "error on parsing the dendrogram file";
+            match fields[0] {
+                "L" => {
+                    let ctg_id = fields[1].parse::<usize>().expect(parse_err_msg);
+                    let ctg = fields[2].parse::<String>().expect(parse_err_msg);
+                    leaves.push((ctg_id, ctg.clone()));
+                    let data = ctg_data.get(&ctg).unwrap().to_owned();
+                    ctg_data_vec.push((
+                        ctg.clone(),
+                        ctg_to_annotation
+                            .get(&ctg)
+                            .unwrap_or(&"".to_string())
+                            .clone(),
+                        data,
+                    ))
+                }
+                "I" => {
+                    let node_id = fields[1].parse::<usize>().expect(parse_err_msg);
+                    let child_node0 = fields[2].parse::<usize>().expect(parse_err_msg);
+                    let child_node1 = fields[3].parse::<usize>().expect(parse_err_msg);
+                    let node_size = fields[4].parse::<usize>().expect(parse_err_msg);
+                    let node_height = fields[5].parse::<f32>().expect(parse_err_msg);
+                    internal_nodes.push((
+                        node_id,
+                        child_node0,
+                        child_node1,
+                        node_size,
+                        node_height,
+                    ));
+                }
+                "P" => {
+                    let node_id = fields[1].parse::<usize>().expect(parse_err_msg);
+                    let node_position = fields[2].parse::<f32>().expect(parse_err_msg);
+                    let node_height = fields[3].parse::<f32>().expect(parse_err_msg);
+                    let node_size = fields[4].parse::<usize>().expect(parse_err_msg);
+                    node_position_map.insert(node_id, (node_position, node_height, node_size));
+                }
+                _ => {}
+            }
+        });
+        ctg_data_vec
+    } else {
+        ctg_data_vec
     };
 
     let left_padding = if args.left_padding.is_some() {
@@ -108,12 +179,13 @@ fn main() -> Result<(), std::io::Error> {
     let scaling_factor = args.track_length as f32 / (args.track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32 * scaling_factor as f32;
     let stroke_width = args.stroke_width;
-    let mut y_offset = 0;
+    let mut y_offset = 0.0_f32;
+    let delta_y = 16.0_f32;
 
     #[allow(clippy::needless_collect)] // we do need to evaluate as we depend on the side effect to set y_offset right
-    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data
+    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data_vec
         .into_iter()
-        .map(|(ctg, bundle_segment)| {
+        .map(|(ctg, annotation,bundle_segment)| {
 
             let paths: Vec<element::Path> = bundle_segment
                 .into_iter()
@@ -159,20 +231,61 @@ fn main() -> Result<(), std::io::Error> {
                     .set("y", y_offset)
                     .set("font-size", "10px")
                     .set("font-family", "monospace")
-                    .add(node::Text::new(ctg.clone()));
-                y_offset += 16;
+                    .add(node::Text::new(annotation.clone()));
+                y_offset += delta_y;
             (ctg, (paths, text))
         })
         .collect();
 
+    let tree_width = if !internal_nodes.is_empty() {
+        0.15 * args.track_length as f32
+    } else {
+        0.0
+    };
+
     let mut document = Document::new()
-        .set("viewBox", (0, -32, args.track_length + 300, 24 + y_offset))
-        .set("width", args.track_length + 300)
-        .set("height", 56 + y_offset)
+        .set(
+            "viewBox",
+            (
+                -tree_width,
+                -32,
+                tree_width + args.track_length as f32 + 300.0,
+                24.0 + y_offset,
+            ),
+        )
+        .set("width", tree_width + args.track_length as f32 + 300.0)
+        .set("height", 56.0 + y_offset)
         .set("preserveAspectRatio", "none");
 
+    if !internal_nodes.is_empty() {
+        let tree_paths = internal_nodes.into_iter().map(
+                | (node_id, child_node0, child_node1,_, _) | {
+            let (n_pos, n_height, _) = *node_position_map.get(&node_id).unwrap();
+            let (c0_pos, c0_height, _) = *node_position_map.get(&child_node0).unwrap(); 
+            let (c1_pos, c1_height, _) = *node_position_map.get(&child_node1).unwrap(); 
+            let _n_pos = n_pos * delta_y;
+            let c0_pos = c0_pos * delta_y;
+            let c1_pos = c1_pos * delta_y;
+            let n_height = -0.8 * tree_width * n_height; 
+            let c0_height = -0.8 * tree_width * c0_height; 
+            let c1_height = -0.8 * tree_width * c1_height; 
+            let path_str = format!(
+                "M {c0_height} {c0_pos} L {n_height} {c0_pos} L {n_height} {c1_pos} L {c1_height} {c1_pos}");
+            element::Path::new()
+                    .set("fill", "none")
+                    .set("stroke", "#000")
+                    .set("stroke-width", "1")
+                    .set("d", path_str) 
+
+        }).collect::<Vec<_>>();
+        tree_paths
+            .into_iter()
+            .for_each(|path| document.append(path));
+    }
+
     let right_end = args.track_range as f32 * scaling_factor + left_padding;
-    let scale_path_str = format!("M {left_padding} -14 L {left_padding} -20 L {right_end} -20 L {right_end} -14 ");
+    let scale_path_str =
+        format!("M {left_padding} -14 L {left_padding} -20 L {right_end} -20 L {right_end} -14 ");
     let scale_path = element::Path::new()
         .set("stroke", "#000")
         .set("fill", "none")
@@ -186,7 +299,7 @@ fn main() -> Result<(), std::io::Error> {
         if tickx > args.track_range {
             break;
         }
-        let x = tickx as f32 * scaling_factor + left_padding; 
+        let x = tickx as f32 * scaling_factor + left_padding;
         let tick_path_str = format!("M {x} -16 L {x} -20");
         let tick_path = element::Path::new()
             .set("stroke", "#000")
@@ -194,22 +307,27 @@ fn main() -> Result<(), std::io::Error> {
             .set("stroke-width", 1)
             .set("d", tick_path_str);
         document.append(tick_path);
-        tickx += args.track_tick_interval; 
+        tickx += args.track_tick_interval;
     }
 
     let text = element::Text::new()
-                    .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
-                    .set("y", -14)
-                    .set("font-size", "10px")
-                    .set("font-family", "sans-serif")
-                    .add(node::Text::new(format!("{} bps", args.track_range)));
+        .set(
+            "x",
+            20.0 + left_padding + args.track_range as f32 * scaling_factor,
+        )
+        .set("y", -14)
+        .set("font-size", "10px")
+        .set("font-family", "sans-serif")
+        .add(node::Text::new(format!("{} bps", args.track_range)));
     document.append(text);
 
-    ctg_with_svg_paths.into_iter().for_each(|(_ctg, (paths, text))| {
-        // println!("{}", ctg);
-        document.append(text);
-        paths.into_iter().for_each(|path| document.append(path));
-    } ); 
+    ctg_with_svg_paths
+        .into_iter()
+        .for_each(|(_ctg, (paths, text))| {
+            // println!("{}", ctg);
+            document.append(text);
+            paths.into_iter().for_each(|path| document.append(path));
+        });
     let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
     svg::save(out_path, &document).unwrap();
     Ok(())

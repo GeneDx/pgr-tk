@@ -35,7 +35,7 @@ struct CmdOptions {
     /// set to use agc prefecting feature (more memory usage but faster, useful for agcfile with many small contigs)
     #[clap(short, long)]
     prefetching: bool,
-    /// number of parallel agc reader threads (more memory usage) 
+    /// number of parallel agc reader threads (more memory usage)
     #[clap(long, short, default_value_t = 4)]
     number_of_readers: usize,
 }
@@ -45,7 +45,7 @@ fn load_write_index_from_agcfile(
     prefix: String,
     shmmr_spec: &ShmmrSpec,
     prefetching: bool,
-    number_of_readers: usize
+    number_of_readers: usize,
 ) -> Result<(), std::io::Error> {
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let filelist = File::open(path)?;
