@@ -569,6 +569,7 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
 
     pbid, pdirection = None, None
     all_partitions = []
+    new_partition = []
     for smp, bundle_info in smps:
         if bundle_info is None:
             continue
@@ -594,9 +595,13 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
           
     if len(new_partition) != 0 and new_partition[-1][0][3] -  new_partition[0][0][2] > len_cutoff:
         all_partitions.append(new_partition)
-        
-    partition = all_partitions[0]
+
     rtn_partitions = []
+    if len(all_partitions) == 0:
+        return rtn_partitions 
+
+    partition = all_partitions[0]
+ 
     for p in all_partitions[1:]:
         
         p_end = partition[-1][0][3]
