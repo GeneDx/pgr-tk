@@ -19,15 +19,15 @@ struct CmdOptions {
     output_prefix: String,
     #[clap(long, short, default_value = None)]
     include: Option<String>,
-    #[clap(short, default_value_t = 80)]
+    #[clap(short, default_value_t = 48)]
     w: u32,
     #[clap(short, default_value_t = 56)]
     k: u32,
     #[clap(short, default_value_t = 4)]
     r: u32,
-    #[clap(long, default_value_t = 16)]
+    #[clap(long, default_value_t = 12)]
     min_span: u32,
-    #[clap(long, default_value_t = 2)]
+    #[clap(long, default_value_t = 0)]
     min_cov: usize,
     #[clap(long, default_value_t = 8)]
     min_branch_size: usize,

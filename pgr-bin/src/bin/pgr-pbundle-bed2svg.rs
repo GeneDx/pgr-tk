@@ -17,16 +17,22 @@ struct CmdOptions {
     ddg_file: Option<String>,
     #[clap(long)]
     annotations: Option<String>,
+    #[clap(long)]
+    annotation_region_bedfile: Option<String>,
     #[clap(long, default_value_t = 100000)]
     track_range: usize,
     #[clap(long, default_value_t = 10000)]
     track_tick_interval: usize,
     #[clap(long, default_value_t = 1600)]
-    track_length: usize,
+    track_panel_width: usize,
     #[clap(long)]
     left_padding: Option<usize>,
     #[clap(long, default_value_t = 0.5)]
     stroke_width: f32,
+    #[clap(long, default_value_t = 2.5)]
+    annotation_region_stroke_width: f32,
+    #[clap(long, default_value_t = 500.0)]
+    annotation_panel_width: f32,
 }
 
 static CMAP: [&str; 97] = [
@@ -48,6 +54,31 @@ static CMAP: [&str; 97] = [
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
+
+    let mut annotation_region_record = FxHashMap::<String, Vec<(u32, u32, String)>>::default();
+    if args.annotation_region_bedfile.is_some() {
+        let bed_file_path = &args.annotation_region_bedfile.unwrap();
+        let bed_file_path = path::Path::new(bed_file_path);
+        let bed_file = BufReader::new(File::open(bed_file_path)?);
+        let bed_file_parse_err_msg = "annotation bed file parsing error";
+        bed_file.lines().into_iter().for_each(|line| {
+            let line = line.unwrap().trim().to_string();
+            if line.is_empty() {
+                return;
+            }
+            if &line[0..1] == "#" {
+                return;
+            }
+            let bed_fields = line.split('\t').collect::<Vec<&str>>();
+            let ctg: String = bed_fields[0].to_string();
+            let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
+            let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
+            let color = bed_fields[3].to_string();
+            let e = annotation_region_record.entry(ctg).or_default();
+            e.push((bgn, end, color));
+        });
+    }
+
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
@@ -91,13 +122,17 @@ fn main() -> Result<(), std::io::Error> {
                     .to_string();
 
                 let data = ctg_data.get(&ctg).unwrap().to_owned();
+                let mut region_annotation = vec![];
+                if annotation_region_record.contains_key(&ctg) {
+                    region_annotation = annotation_region_record.get(&ctg).unwrap().clone();
+                }
                 if let Some(annotation) = ctg_annotation.next() {
                     ctg_to_annotation.insert(ctg.clone(), annotation.to_string());
                     //annotations.push( (ctg.clone(), annotation) );
-                    (ctg, annotation.to_string(), data)
+                    (ctg, annotation.to_string(), data, region_annotation)
                 } else {
                     ctg_to_annotation.insert(ctg.clone(), "".to_string());
-                    (ctg, "".to_string(), data)
+                    (ctg, "".to_string(), data, region_annotation)
                 }
             })
             .collect();
@@ -110,7 +145,13 @@ fn main() -> Result<(), std::io::Error> {
         ctg_data_vec.sort();
         ctg_data_vec
             .into_iter()
-            .map(|(ctg, data)| (ctg.clone(), ctg.clone(), data.clone()))
+            .map(|(ctg, data)| {
+                let mut region_annotation = vec![];
+                if annotation_region_record.contains_key(ctg) {
+                    region_annotation = annotation_region_record.get(ctg).unwrap().clone();
+                }
+                (ctg.clone(), ctg.clone(), data.clone(), region_annotation)
+            })
             .collect()
     };
 
@@ -132,6 +173,10 @@ fn main() -> Result<(), std::io::Error> {
                     let ctg = fields[2].parse::<String>().expect(parse_err_msg);
                     leaves.push((ctg_id, ctg.clone()));
                     let data = ctg_data.get(&ctg).unwrap().to_owned();
+                    let mut region_annotation = vec![];
+                    if annotation_region_record.contains_key(&ctg) {
+                        region_annotation = annotation_region_record.get(&ctg).unwrap().clone();
+                    }
                     ctg_data_vec.push((
                         ctg.clone(),
                         ctg_to_annotation
@@ -139,6 +184,7 @@ fn main() -> Result<(), std::io::Error> {
                             .unwrap_or(&"".to_string())
                             .clone(),
                         data,
+                        region_annotation,
                     ))
                 }
                 "I" => {
@@ -176,16 +222,21 @@ fn main() -> Result<(), std::io::Error> {
         10000
     };
 
-    let scaling_factor = args.track_length as f32 / (args.track_range + 2 * left_padding) as f32;
+    let scaling_factor =
+        args.track_panel_width as f32 / (args.track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32 * scaling_factor as f32;
     let stroke_width = args.stroke_width;
     let mut y_offset = 0.0_f32;
-    let delta_y = 16.0_f32;
+    let delta_y = if !annotation_region_record.is_empty() {
+        24.0_f32
+    } else {
+        16.0_f32
+    };
 
     #[allow(clippy::needless_collect)] // we do need to evaluate as we depend on the side effect to set y_offset right
-    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, element::Text))> = ctg_data_vec
+    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, Vec<element::Path>, element::Text))> = ctg_data_vec
         .into_iter()
-        .map(|(ctg, annotation,bundle_segment)| {
+        .map(|(ctg, annotation,bundle_segment, annotation_segments)| {
 
             let paths: Vec<element::Path> = bundle_segment
                 .into_iter()
@@ -226,19 +277,39 @@ fn main() -> Result<(), std::io::Error> {
                         .set("d", path_str)
                 })
                 .collect();
-                let text = element::Text::new()
-                    .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
-                    .set("y", y_offset)
-                    .set("font-size", "10px")
-                    .set("font-family", "monospace")
-                    .add(node::Text::new(annotation));
-                y_offset += delta_y;
-            (ctg, (paths, text))
+
+
+            let annotation_paths: Vec<element::Path> = annotation_segments
+                .into_iter()
+                .map(|(bgn, end, color)| {
+                    let bgn = bgn as f32 * scaling_factor + left_padding;
+                    let end = end as f32 * scaling_factor + left_padding;
+
+                    let stroke_color = color.as_str();
+                    let y = y_offset + 8.0;
+                    let path_str = format!(
+					"M {bgn} {y} L {end} {y}");
+                    element::Path::new()
+                        .set("stroke", stroke_color)
+                        .set("stroke-width", args.annotation_region_stroke_width)
+                        .set("d", path_str)
+                })
+                .collect();
+
+
+            let text = element::Text::new()
+                .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
+                .set("y", y_offset)
+                .set("font-size", "10px")
+                .set("font-family", "monospace")
+                .add(node::Text::new(annotation));
+            y_offset += delta_y;
+            (ctg, (paths, annotation_paths, text))
         })
         .collect();
 
     let tree_width = if !internal_nodes.is_empty() {
-        0.15 * args.track_length as f32
+        0.15 * args.track_panel_width as f32
     } else {
         0.0
     };
@@ -249,11 +320,14 @@ fn main() -> Result<(), std::io::Error> {
             (
                 -tree_width,
                 -32,
-                tree_width + args.track_length as f32 + 300.0,
+                tree_width + args.track_panel_width as f32 + args.annotation_panel_width as f32,
                 24.0 + y_offset,
             ),
         )
-        .set("width", tree_width + args.track_length as f32 + 300.0)
+        .set(
+            "width",
+            tree_width + args.track_panel_width as f32 + args.annotation_panel_width as f32,
+        )
         .set("height", 56.0 + y_offset)
         .set("preserveAspectRatio", "none");
 
@@ -320,10 +394,11 @@ fn main() -> Result<(), std::io::Error> {
 
     ctg_with_svg_paths
         .into_iter()
-        .for_each(|(_ctg, (paths, text))| {
+        .for_each(|(_ctg, (paths, annotation_paths, text))| {
             // println!("{}", ctg);
             document.append(text);
             paths.into_iter().for_each(|path| document.append(path));
+            annotation_paths.into_iter().for_each(|path| document.append(path));
         });
     let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
     svg::save(out_path, &document).unwrap();
