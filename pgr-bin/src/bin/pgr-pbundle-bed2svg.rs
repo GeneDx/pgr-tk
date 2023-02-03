@@ -33,6 +33,8 @@ struct CmdOptions {
     annotation_region_stroke_width: f32,
     #[clap(long, default_value_t = 500.0)]
     annotation_panel_width: f32,
+    #[clap(long, default_value_t = 1.0)]
+    highlight_repeats: f32,
 }
 
 static CMAP: [&str; 97] = [
@@ -237,6 +239,11 @@ fn main() -> Result<(), std::io::Error> {
     let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, Vec<element::Path>, element::Text))> = ctg_data_vec
         .into_iter()
         .map(|(ctg, annotation,bundle_segment, annotation_segments)| {
+            let mut bundle_segment_count = FxHashMap::<u32, usize>::default();
+            bundle_segment.iter().for_each(|&(_bgn, _end, bundle_id, _direction)| {
+                let e = bundle_segment_count.entry(bundle_id).or_insert_with(|| 0);
+                *e += 1;
+            });
 
             let paths: Vec<element::Path> = bundle_segment
                 .into_iter()
@@ -250,24 +257,26 @@ fn main() -> Result<(), std::io::Error> {
                     let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
                     let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
+                    let halfwidth = 5.0;
                     let end =
                         if direction == 0 {
-                            if end as f32 - 5.0 < bgn {
+                            if end as f32 - halfwidth < bgn {
                                 bgn
                             } else {
-                                end as f32 - 5.0
+                                end as f32 - halfwidth 
                             }
-                        } else if end as f32 + 5.0 > bgn {
+                        } else if end as f32 + halfwidth > bgn {
                             bgn
                         } else {
-                            end as f32 + 5.0
+                            end as f32 + halfwidth
                         };
-                    let bottom0 = -3_i32 + y_offset as i32;
-                    let top0 = 3_i32 + y_offset as i32;
-                    let bottom1 = -4_i32 + y_offset as i32;
-                    let top1 = 4_i32 + y_offset as i32;
-                    let center = y_offset as i32;
-
+                    let bottom0 = -halfwidth * 0.6 + y_offset as f32;
+                    let top0 = halfwidth * 0.6 + y_offset as f32;
+                    let bottom1 = -halfwidth * 0.8 + y_offset as f32;
+                    let top1 = halfwidth * 0.8 + y_offset as f32;
+                    let center = y_offset as f32;
+                    let stroke_width = stroke_width * ( if args.highlight_repeats > 1.0001 && 
+                        *bundle_segment_count.get(&bundle_id).unwrap_or(&0) > 1 {args.highlight_repeats} else {1.0});
                     let path_str = format!(
 					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
                     element::Path::new()
@@ -398,7 +407,9 @@ fn main() -> Result<(), std::io::Error> {
             // println!("{}", ctg);
             document.append(text);
             paths.into_iter().for_each(|path| document.append(path));
-            annotation_paths.into_iter().for_each(|path| document.append(path));
+            annotation_paths
+                .into_iter()
+                .for_each(|path| document.append(path));
         });
     let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
     svg::save(out_path, &document).unwrap();

@@ -191,6 +191,10 @@ fn main() -> Result<(), std::io::Error> {
     let mut outpu_bed_file =
         BufWriter::new(File::create(output_prefix_path.with_extension("bed"))?);
 
+    let mut output_ctg_summary_file = BufWriter::new(File::create(
+        output_prefix_path.with_extension("ctg.summary.tsv"),
+    )?);
+
     writeln!(outpu_bed_file, "# cmd: {}", cmd_string).expect("bed file write error");
 
     let mut seq_info = seq_index_db
@@ -202,7 +206,10 @@ fn main() -> Result<(), std::io::Error> {
 
     seq_info.sort_by_key(|k| k.1 .0.clone());
 
-    seq_info.into_iter().for_each(|(sid, sdata)| {
+    let mut repeat_count = FxHashMap::<u32, Vec<u32>>::default();
+    let mut non_repeat_count = FxHashMap::<u32, Vec<u32>>::default();
+
+    seq_info.iter().for_each(|(sid, sdata)| {
         let (ctg, _src, _len) = sdata;
         let smps = sid_smps.get(&sid).unwrap();
         let smp_partitions = group_smps_by_principle_bundle_id(
@@ -210,14 +217,33 @@ fn main() -> Result<(), std::io::Error> {
             args.bundle_length_cutoff,
             args.bundle_merge_distance,
         );
+        let mut ctg_bundle_count = FxHashMap::<usize, usize>::default();
+        smp_partitions.iter().for_each(|p| {
+            let bid = p[0].1;
+            *ctg_bundle_count.entry(bid).or_insert_with(|| 0) += 1;
+        });
         smp_partitions.into_iter().for_each(|p| {
             let b = p[0].0 .2;
             let e = p[p.len() - 1].0 .3 + args.k;
             let bid = p[0].1;
             let direction = p[0].2;
+            let is_repeat ;
+            if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
+                repeat_count
+                    .entry(*sid)
+                    .or_insert_with(|| vec![])
+                    .push(e - b - args.k);
+                    is_repeat = "R";
+            } else {
+                non_repeat_count
+                    .entry(*sid)
+                    .or_insert_with(|| vec![])
+                    .push(e - b - args.k);
+                    is_repeat = "U";
+            }
             let _ = writeln!(
                 outpu_bed_file,
-                "{}\t{}\t{}\t{}:{}:{}:{}:{}",
+                "{}\t{}\t{}\t{}:{}:{}:{}:{}:{}",
                 ctg,
                 b,
                 e,
@@ -225,9 +251,116 @@ fn main() -> Result<(), std::io::Error> {
                 bid_to_size[&bid],
                 direction,
                 p[0].3,
-                p[p.len() - 1].3
+                p[p.len() - 1].3,
+                is_repeat
             );
         });
+    });
+    let _ = writeln!(
+        output_ctg_summary_file,
+        "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        "ctg",
+        "length",
+        "repeat_bundle_count",
+        "repeat_bundle_sum",
+        "repeat_bunlde_percentage",
+        "repeat_bundle_mean",
+        "repeat_bundle_min",
+        "repeat_bundle_max",
+        "non_repeat_bundle_count",
+        "non_repeat_bundle_sum",
+        "non_repeat_bunlde_percentage",
+        "non_repeat_bundle_mean",
+        "non_repeat_bundle_min",
+        "non_repeat_bundle_max",
+        "total_bundle_count",
+        "total_bundle_coverage_percentage"
+    );
+    seq_info.into_iter().for_each(|(sid, sdata)| {
+        let (ctg, _src, len) = sdata;
+        let repeat_bundle_count = repeat_count.get(&sid).unwrap_or(&vec![]).len();
+        let non_repeat_bundle_count = non_repeat_count.get(&sid).unwrap_or(&vec![]).len();
+        let repeat_sum = repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .iter()
+            .fold(0, |acc, x| acc + x);
+        let repeat_bundle_max = repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .into_iter()
+            .fold(0, |x, &y| if x > y { x } else { y });
+        let repeat_bundle_min = repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .into_iter()
+            .fold(len, |x, &y| if x < y { x } else { y });
+        let non_repeat_sum = non_repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .into_iter()
+            .fold(0, |acc, x| acc + x);
+        let non_repeat_bundle_max = non_repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .into_iter()
+            .fold(0, |x, &y| if x > y { x } else { y });
+        let non_repeat_bundle_min = non_repeat_count
+            .get(&sid)
+            .unwrap_or(&vec![])
+            .into_iter()
+            .fold(len,  |x, &y| if x < y { x } else { y });
+        let repeat_bundle_mean = if repeat_bundle_count > 0 {
+            format!("{}", repeat_sum as f32 / repeat_bundle_count as f32)
+        } else {
+            "NA".to_string()
+        };
+        let non_repeat_bundle_mean = if non_repeat_bundle_count > 0 {
+            format!("{}", non_repeat_sum as f32 / non_repeat_bundle_count as f32)
+        } else {
+            "NA".to_string()
+        };
+        let repeat_bundle_min = if repeat_bundle_count > 0 {
+            format!("{}", repeat_bundle_min)
+        } else {
+            "NA".to_string()
+        };
+        let repeat_bundle_max = if repeat_bundle_count > 0 {
+            format!("{}", repeat_bundle_max)
+        } else {
+            "NA".to_string()
+        };
+        let non_repeat_bundle_min = if non_repeat_bundle_count > 0 {
+            format!("{}", non_repeat_bundle_min)
+        } else {
+            "NA".to_string()
+        };
+        let non_repeat_bundle_max = if non_repeat_bundle_count > 0 {
+            format!("{}", non_repeat_bundle_max)
+        } else {
+            "NA".to_string()
+        };
+
+        let _ = writeln!(
+            output_ctg_summary_file,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            ctg,
+            len,
+            repeat_bundle_count,
+            repeat_sum,
+            100.0 * repeat_sum as f32 / len as f32,
+            repeat_bundle_mean,
+            repeat_bundle_min,
+            repeat_bundle_max,
+            non_repeat_bundle_count,
+            non_repeat_sum,
+            100.0 * non_repeat_sum as f32 / len as f32,
+            non_repeat_bundle_mean,
+            non_repeat_bundle_min,
+            non_repeat_bundle_max,
+            repeat_bundle_count + non_repeat_bundle_count,
+            100.0 * (repeat_sum + non_repeat_sum) as f32 / len as f32,
+        );
     });
     Ok(())
 }
