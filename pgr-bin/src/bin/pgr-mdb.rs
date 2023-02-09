@@ -10,10 +10,11 @@ use std::io::{BufRead, BufReader};
 
 use pgr_db::seq_db;
 
+/// Create pgr minimizer database with AGC backend
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-mdb")]
 #[clap(author, version)]
-#[clap(about = "create pgr minimizer db", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
     filepath: String,
     prefix: String,

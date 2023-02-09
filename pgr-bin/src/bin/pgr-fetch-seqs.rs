@@ -6,22 +6,28 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
+/// List or fetch sequences from a PGR-TK database
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-fetch-seqs")]
 #[clap(author, version)]
-#[clap(about = "list or fetch sequences from a pgr database", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
+    /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,
 
+    /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
 
+    /// the regions file path
     #[clap(short, long, default_value=None)]
     region_file: Option<String>,
 
+    /// output file name
     #[clap(short, long, default_value=None)]
     output_file: Option<String>,
 
+    /// list all sequence source, contig names in the database
     #[clap(long, default_value_t = false)]
     list: bool,
 }

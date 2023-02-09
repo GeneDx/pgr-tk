@@ -5,12 +5,15 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs::File, path};
 
+/// Generate annotation file with a sorting order from the principal bundle decomposition
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-bed2sorted")]
 #[clap(author, version)]
-#[clap(about = "sort the contig by bunldes", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
+    /// the path to the pricipal bundle bed file
     bed_file_path: String,
+    /// the prefix of the output file
     output_prefix: String,
 }
 

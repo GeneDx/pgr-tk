@@ -8,12 +8,13 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+/// Create PGR-TK fragment minimizer database with frg format backend
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-mdb")]
+#[clap(name = "pgr-make-frgdb")]
 #[clap(author, version)]
-#[clap(about = "create pgr fragment minimizer db", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
-    // file contains the paths to the fastx files to load
+    /// the path to the file contains the paths to the fastx files to load
     filepath: String,
     prefix: String,
     /// minimizer window size
