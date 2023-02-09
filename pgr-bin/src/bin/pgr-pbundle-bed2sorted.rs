@@ -10,7 +10,9 @@ use std::{fs::File, path};
 #[clap(author, version)]
 #[clap(about = "sort the contig by bunldes", long_about = None)]
 struct CmdOptions {
+    /// the path to the pricipal bundle bed file
     bed_file_path: String,
+    /// the prefix of the output file
     output_prefix: String,
 }
 

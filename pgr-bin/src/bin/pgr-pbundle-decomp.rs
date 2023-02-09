@@ -15,24 +15,35 @@ use std::{
 #[clap(author, version)]
 #[clap(about = "take a fasta file and output the principal bundle decomposition though MAP Graph", long_about = None)]
 struct CmdOptions {
+    /// the path to the input fasta file
     fastx_path: String,
+    /// the prefix of the output files
     output_prefix: String,
+    /// the path to the file that contains a list of contig name to be analyzed
     #[clap(long, short, default_value = None)]
     include: Option<String>,
+    /// the SHIMMER parameter w
     #[clap(short, default_value_t = 48)]
     w: u32,
+    /// the SHIMMER parameter k
     #[clap(short, default_value_t = 56)]
     k: u32,
+    /// the SHIMMER parameter r
     #[clap(short, default_value_t = 4)]
     r: u32,
+    /// the SHIMMER parameter minimum span length
     #[clap(long, default_value_t = 12)]
     min_span: u32,
+    /// minimum coverage to be included in principal bundles
     #[clap(long, default_value_t = 0)]
     min_cov: usize,
+    /// the minimum branch length to be included in the principal bundles
     #[clap(long, default_value_t = 8)]
     min_branch_size: usize,
+    /// the minimum local project bundle size to includes 
     #[clap(long, default_value_t = 2500)]
     bundle_length_cutoff: usize,
+    /// merge two bundles with the same id with the specified length
     #[clap(long, default_value_t = 10000)]
     bundle_merge_distance: usize,
 }
