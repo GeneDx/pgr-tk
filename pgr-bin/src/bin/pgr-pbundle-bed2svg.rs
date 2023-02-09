@@ -6,10 +6,11 @@ use std::{fs::File, path};
 use svg::node::{self, element, Node};
 use svg::Document;
 
+/// Generate SVG from a principal bundle bed file
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-bed2svg")]
 #[clap(author, version)]
-#[clap(about = "generate SVG from a principal bundle bed file", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
     /// the path to the pricipal bundle bed file
     bed_file_path: String,

@@ -21,6 +21,25 @@ With the MAP graph, we can use the "principal bundle decomposition" to study com
 
 ## Documentation, Usage and Examples
 
+Command Line Tools:
+
+PGR-TK provides the following tool to 
+
+- create the PGR-TK sequence and index database
+	-  `pgr-mdb`: create pgr minimizer database with AGC backend
+	-  `pgr-make-frgdb`: create PGR-TK fragment minimizer database with frg format backend
+- query the database to fetch sequences
+	- `pgr-query`: query a PGR-TK pangenome sequence database, ouput the hit summary and generate fasta files from the target sequences
+- generate MAP-graph in GFA format and principal bundle decomposition bed file
+	- `pgr-pbundle-decomp`: generat the principal bundle decomposition though MAP Graph from a fasta file
+- generate SVG from the principal bundle decomposition bed file
+	- `pgr-pbundle-bed2svg`: generate SVG from a principal bundle bed file
+- auxiliary tools
+	- `pgr-pbundle-bed2sorted`: generate annotation file with a sorting order from the principal bundle decomposition
+	- `pgr-pbundle-bed2dist`: generate alignment scores between sequences using bundle decomposition from a principal bundle bed file
+
+For each comannd, `command --help` provides the detail usage information. 
+
 The API documentation is at https://sema4-research.github.io/pgr-tk/
 
 A collection of Jupyter Notebooks are at https://github.com/sema4-Research/pgr-tk-notebooks/

@@ -7,10 +7,12 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
+/// Query a PGR-TK pangenome sequence database, 
+/// ouput the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-query")]
 #[clap(author, version)]
-#[clap(about = "query a pgr pangenome database and ouput the hits", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
     /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,

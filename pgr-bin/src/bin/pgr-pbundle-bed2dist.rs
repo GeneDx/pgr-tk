@@ -6,12 +6,15 @@ use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs::File, path};
 
+/// Generate alignment scores between sequences using bundle decomposition from a principal bundle bed file
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-bed2dist")]
 #[clap(author, version)]
-#[clap(about = "generate alignment scores between contigs using bundle decomposition from a principal bundle bed file", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
+    /// the path to the pricipal bundle bed file
     bed_file_path: String,
+    /// the prefix of the output file
     output_prefix: String,
 }
 

@@ -10,10 +10,11 @@ use std::{
     path::Path,
 };
 
+/// Generat the principal bundle decomposition though MAP Graph from a fasta file
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-decomp")]
 #[clap(author, version)]
-#[clap(about = "take a fasta file and output the principal bundle decomposition though MAP Graph", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
     /// the path to the input fasta file
     fastx_path: String,

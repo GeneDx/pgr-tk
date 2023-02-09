@@ -6,10 +6,11 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
+/// List or fetch sequences from a PGR-TK database
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-fetch-seqs")]
 #[clap(author, version)]
-#[clap(about = "list or fetch sequences from a pgr database", long_about = None)]
+#[clap(about, long_about = None)]
 struct CmdOptions {
     /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,
