@@ -21,7 +21,7 @@ struct CmdOptions {
     /// the prefix of the output files
     output_prefix: String,
     #[clap(long, short, default_value = None)]
-    /// the path to the fasta file for principal bundle decomposition. if not specified, using the same one from from "fastx_path"
+    /// the path to the fasta file for principal bundle decomposition. if not specified, using the same one from from "<FASTX_PATH>"
     decomp_fastx_path: Option<String>,
     /// the path to the file that contains a list of contig name to be analyzed
     #[clap(long, short, default_value = None)]
