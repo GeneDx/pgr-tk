@@ -1079,8 +1079,9 @@ pub fn get_principal_bundles_from_adj_list(
     }
     // if the whole graph is a loop
     if starts.is_empty() {
-        let v = g1.nodes().next().unwrap();
-        starts.push(v);
+        if let Some(v) = g1.nodes().next() {
+            starts.push(v);
+        }
     };
 
     let mut principal_bundles = Vec::<Vec<ShmmrGraphNode>>::new();
