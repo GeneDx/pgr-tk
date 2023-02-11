@@ -16,7 +16,7 @@ use std::{
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// the path to the input fasta file for building the principle bundles
+    /// the path to the input fasta file for building the principal bundles
     fastx_path: String,
     /// the prefix of the output files
     output_prefix: String,
