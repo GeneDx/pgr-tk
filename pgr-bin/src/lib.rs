@@ -540,7 +540,7 @@ impl SeqIndexDB {
             .map(|(sid, data)| {
                 let (ctg_name, source, _) = data;
                 let source = source.clone().unwrap();
-                let seq = self.get_seq(source, ctg_name.clone()).unwrap();
+                let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
                 (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
             })
             .collect();
