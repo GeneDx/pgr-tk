@@ -16,10 +16,13 @@ use std::{
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// the path to the input fasta file
+    /// the path to the input fasta file for building the principle bundles
     fastx_path: String,
     /// the prefix of the output files
     output_prefix: String,
+    #[clap(long, short, default_value = None)]
+    /// the path to the fasta file for principal bundle decomposition. if not specified, using the same one from from "fastx_path"
+    decomp_fastx_path: Option<String>,
     /// the path to the file that contains a list of contig name to be analyzed
     #[clap(long, short, default_value = None)]
     include: Option<String>,
@@ -41,7 +44,7 @@ struct CmdOptions {
     /// the minimum branch length to be included in the principal bundles
     #[clap(long, default_value_t = 8)]
     min_branch_size: usize,
-    /// the minimum local project bundle size to includes 
+    /// the minimum local project bundle size to includes
     #[clap(long, default_value_t = 2500)]
     bundle_length_cutoff: usize,
     /// merge two bundles with the same id with the specified length
@@ -164,8 +167,29 @@ fn main() -> Result<(), std::io::Error> {
         seq_index_db = new_seq_index_db;
     };
 
-    let (principal_bundles, sid_smps) =
-        seq_index_db.get_principal_bundle_decomposition(args.min_cov, args.min_branch_size, None);
+    let decomp_seq_index_db = if let Some(decomp_fastx_path) = args.decomp_fastx_path {
+        let decomp_fastx_path = decomp_fastx_path.clone();
+        let mut decomp_seq_index_db = SeqIndexDB::new();
+        decomp_seq_index_db
+            .load_from_fastx(decomp_fastx_path, args.w, args.k, args.r, args.min_span)
+            .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
+        decomp_seq_index_db
+    } else {
+        //The file is read using a Mmap which is not clonable, need to rebuild the database. TODO: fix this.
+        let decomp_fastx_path = fastx_path.clone();
+        let mut decomp_seq_index_db = SeqIndexDB::new();
+        decomp_seq_index_db
+            .load_from_fastx(decomp_fastx_path, args.w, args.k, args.r, args.min_span)
+            .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
+        decomp_seq_index_db
+    };
+
+    let (principal_bundles, sid_smps) = seq_index_db.get_principal_bundle_decomposition(
+        args.min_cov,
+        args.min_branch_size,
+        Some(&decomp_seq_index_db),
+        None,
+    );
 
     let bid_to_size = principal_bundles
         .iter()
@@ -209,7 +233,7 @@ fn main() -> Result<(), std::io::Error> {
 
     writeln!(outpu_bed_file, "# cmd: {}", cmd_string).expect("bed file write error");
 
-    let mut seq_info = seq_index_db
+    let mut seq_info = decomp_seq_index_db
         .seq_info
         .unwrap()
         .into_iter()
@@ -239,19 +263,19 @@ fn main() -> Result<(), std::io::Error> {
             let e = p[p.len() - 1].0 .3 + args.k;
             let bid = p[0].1;
             let direction = p[0].2;
-            let is_repeat ;
+            let is_repeat;
             if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
                 repeat_count
                     .entry(*sid)
                     .or_insert_with(|| vec![])
                     .push(e - b - args.k);
-                    is_repeat = "R";
+                is_repeat = "R";
             } else {
                 non_repeat_count
                     .entry(*sid)
                     .or_insert_with(|| vec![])
                     .push(e - b - args.k);
-                    is_repeat = "U";
+                is_repeat = "U";
             }
             let _ = writeln!(
                 outpu_bed_file,
@@ -321,7 +345,7 @@ fn main() -> Result<(), std::io::Error> {
             .get(&sid)
             .unwrap_or(&vec![])
             .into_iter()
-            .fold(len,  |x, &y| if x < y { x } else { y });
+            .fold(len, |x, &y| if x < y { x } else { y });
         let repeat_bundle_mean = if repeat_bundle_count > 0 {
             format!("{}", repeat_sum as f32 / repeat_bundle_count as f32)
         } else {

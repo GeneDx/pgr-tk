@@ -410,6 +410,7 @@ impl SeqIndexDB {
         &self,
         min_count: usize,
         path_len_cutoff: usize,
+        decomp_fasta_db: Option<&SeqIndexDB>,
         keeps: Option<Vec<u32>>,
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
@@ -442,7 +443,7 @@ impl SeqIndexDB {
         let mut vertex_to_bundle_id_direction_pos =
             self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
-        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
+        let mut seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
             .seq_info
             .clone()
             .unwrap_or_default()
@@ -529,6 +530,22 @@ impl SeqIndexDB {
                 (*bid, *ord, bundle)
             })
             .collect::<Vec<(usize, usize, Vec<(u64, u64, u8)>)>>();
+
+        if let Some(seq_db) = decomp_fasta_db {
+            seqid_smps = seq_db
+            .seq_info
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|(sid, data)| {
+                let (ctg_name, source, _) = data;
+                let source = source.clone().unwrap();
+                let seq = self.get_seq(source, ctg_name.clone()).unwrap();
+                (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
+            })
+            .collect();
+
+        }
 
         // loop through each sequnece and generate the decomposition for the sequence
         let seqid_smps_with_bundle_id_seg_direction = seqid_smps
