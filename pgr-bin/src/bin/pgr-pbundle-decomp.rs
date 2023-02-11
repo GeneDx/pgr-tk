@@ -21,9 +21,9 @@ struct CmdOptions {
     /// the prefix of the output files
     output_prefix: String,
     #[clap(long, short, default_value = None)]
-    /// the path to the fasta file for principal bundle decomposition. if not specified, using the same one from from "<FASTX_PATH>"
+    /// the path to the fasta file for principal bundle decomposition. if not specified, using the same one from from <FASTX_PATH>
     decomp_fastx_path: Option<String>,
-    /// the path to the file that contains a list of contig name to be analyzed
+    /// the path to the file that contains a list of contig name in the <FASTX_PATH> to be analyzed
     #[clap(long, short, default_value = None)]
     include: Option<String>,
     /// the SHIMMER parameter w
@@ -38,10 +38,10 @@ struct CmdOptions {
     /// the SHIMMER parameter minimum span length
     #[clap(long, default_value_t = 12)]
     min_span: u32,
-    /// minimum coverage to be included in principal bundles
+    /// vertex minimum coverage in MAP-graph to be included in principal bundles
     #[clap(long, default_value_t = 0)]
     min_cov: usize,
-    /// the minimum branch length to be included in the principal bundles
+    /// the minimum branch length in MAP-graph to be included in the principal bundles
     #[clap(long, default_value_t = 8)]
     min_branch_size: usize,
     /// the minimum local project bundle size to includes
