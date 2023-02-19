@@ -106,7 +106,7 @@ fn main() {
     );
 
     let frag_map0 = &sdb0.seq_db.as_ref().unwrap().frag_map;
-    let frag_map1 = &sdb0.seq_db.as_ref().unwrap().frag_map;
+    let frag_map1 = &sdb1.seq_db.as_ref().unwrap().frag_map;
     sdb0.seq_info.as_ref().unwrap().iter().for_each(|(sid, v)| {
         let seq = sdb0.get_sub_seq_by_id(*sid, 0, v.2 as usize).unwrap();
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
