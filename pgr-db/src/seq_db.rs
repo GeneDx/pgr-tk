@@ -109,10 +109,11 @@ pub fn deltas_to_aln_segs(
     deltas: &Vec<DeltaPoint>,
     endx: usize,
     endy: usize,
+    base_frg: &Vec<u8>,
     frg: &Vec<u8>,
 ) -> Vec<AlnSegment> {
     let mut aln_segs = Vec::<AlnSegment>::new();
-    if deltas.is_empty() {
+    if deltas.is_empty() && base_frg.len() == frg.len() {
         aln_segs.push(AlnSegment::FullMatch);
         //println!("aln_segs: {:?}", aln_segs);
         return aln_segs;
@@ -195,13 +196,14 @@ impl CompactSeqDB {
         let frags: &mut Vec<Fragment> = self.frags.as_mut().unwrap();
 
         let mut frg_id = frags.len() as u32;
+        let mut seq_len = 0_usize;
 
         //assert!(shmmrs.len() > 0);
         if shmmrs.is_empty() {
             let frg = seq[..].to_vec();
             frags.push(Fragment::Prefix(frg));
             seq_frags.push(frg_id);
-            frg_id += 1;
+            // frg_id += 1;
 
             let frg = Vec::<u8>::new();
             frags.push(Fragment::Suffix(frg));
@@ -218,6 +220,7 @@ impl CompactSeqDB {
         // prefix
         let end = (shmmrs[0].pos() + 1) as usize;
         let frg = seq[..end].to_vec();
+        seq_len += frg.len();
         frags.push(Fragment::Prefix(frg));
         seq_frags.push(frg_id);
         frg_id += 1;
@@ -267,8 +270,19 @@ impl CompactSeqDB {
                                     &deltas,
                                     m.end0 as usize,
                                     m.end1 as usize,
+                                    &base_frg,
                                     &frg,
                                 );
+
+                                /*  // For debugging 
+                                let out = reconstruct_seq_from_aln_segs(base_frg, &aln_segs);
+                                if out != frg {
+                                    println!("DBG: {:?} {} {}", deltas, m.end0, m.end1);
+                                    println!("DBG: {:?} {:?} {:?} {} {}", String::from_utf8_lossy(base_frg), aln_segs, 
+                                    String::from_utf8_lossy(&frg), base_frg.len(), frg.len());
+                                };
+                                assert_eq!(out, frg);
+                                */
 
                                 if std::mem::align_of_val(&aln_segs) > (frg.len() >> 2) {
                                     continue;
@@ -312,6 +326,7 @@ impl CompactSeqDB {
                 }
                 let e = self.frag_map.get_mut(shmmr).unwrap();
                 e.push((frg_id, id, *bgn, *end, *orientation));
+                seq_len += (*end - *bgn) as usize;
                 frags.push(frg.clone());
                 seq_frags.push(frg_id);
                 frg_id += 1;
@@ -322,9 +337,11 @@ impl CompactSeqDB {
         // suffix
         let bgn = (shmmrs[shmmrs.len() - 1].pos() + 1) as usize;
         let frg = seq[bgn..].to_vec();
+        seq_len += frg.len();
         frags.push(Fragment::Suffix(frg));
         seq_frags.push(frg_id);
 
+        assert_eq!(seq_len, seq.len());
         CompactSeq {
             source,
             name,
@@ -663,34 +680,41 @@ impl CompactSeqDB {
     fn reconstruct_seq_from_frags<I: Iterator<Item = u32>>(&self, frag_ids: I) -> Vec<u8> {
         let mut reconstructed_seq = <Vec<u8>>::new();
         let frags: &Vec<Fragment> = self.frags.as_ref().unwrap();
-        let mut _p = 0;
+        // let mut _p = 0;
         frag_ids.for_each(|frag_id| {
             //println!("{}:{}", frg_id, sdb.frags[*frg_id as usize]);
             match frags.get(frag_id as usize).unwrap() {
                 Fragment::Prefix(b) => {
                     reconstructed_seq.extend_from_slice(&b[..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
+                    //println!("P p: {} {} {}", frag_id, _p, _p + b.len());
+                    //_p += b.len();
                 }
                 Fragment::Suffix(b) => {
                     reconstructed_seq.extend_from_slice(&b[..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
+                    //println!("S p: {} {} {}", frag_id, _p, _p + b.len());
+                    //_p += b.len();
                 }
                 Fragment::Internal(b) => {
                     reconstructed_seq.extend_from_slice(&b[self.shmmr_spec.k as usize..]);
-                    //println!("p: {} {}", p, p + b.len());
-                    _p += b.len();
+                    //println!("I p: {} {} {}", frag_id, _p, _p + b.len()-self.shmmr_spec.k as usize);
+                    //_p += b.len()-self.shmmr_spec.k as usize;
                 }
                 Fragment::AlnSegments((frg_id, reversed, _length, a)) => {
                     if let Fragment::Internal(base_seq) = frags.get(*frg_id as usize).unwrap() {
                         let mut seq = reconstruct_seq_from_aln_segs(base_seq, a);
+                        /*  // for debugging
+                        if *_length as usize != seq.len() {
+                            println!("DBG X: {:?} {:?}", String::from_utf8_lossy(base_seq), a);
+                        }
+                        */
+                        
+                        assert_eq!(*_length as usize, seq.len());
                         if *reversed {
                             seq = reverse_complement(&seq);
                         }
                         reconstructed_seq.extend_from_slice(&seq[self.shmmr_spec.k as usize..]);
-                        //println!("p: {} {}", p, p + seq.len());
-                        _p += seq.len();
+                        // println!("A p: {} {} {}", frag_id, _p, _p + seq.len()-self.shmmr_spec.k as usize);
+                        // _p += seq.len()-self.shmmr_spec.k as usize;
                     }
                 }
             }
@@ -747,8 +771,11 @@ impl GetSeq for CompactSeqDB {
             base_offset += frag_len;
         }
 
+        // println!("DBG0: {} {}" , sid,  sub_seq_frag.len() );
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
 
+        // println!("DBG: {} {} {} {} {}", sid, frag_range.1, sub_seq_frag.len(), end, reconstructed_seq.len() );
+        
         let offset = bgn - sub_seq_frag[0].1;
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
     }
