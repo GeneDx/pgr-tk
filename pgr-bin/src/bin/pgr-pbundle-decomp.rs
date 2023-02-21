@@ -5,7 +5,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 //use std::fs::File;
 use std::{
     fs::File,
-    io::{BufWriter, BufRead, BufReader, Write},
+    io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
 

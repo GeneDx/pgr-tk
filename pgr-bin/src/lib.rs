@@ -2,9 +2,9 @@ use flate2::bufread::MultiGzDecoder;
 use pgr_db::aln;
 use pgr_db::fasta_io::FastaReader;
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
+pub use pgr_db::seq_db::pair_shmmrs;
 use pgr_db::seq_db::{self, GetSeq};
 pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
-pub use pgr_db::seq_db::pair_shmmrs;
 use pgr_db::{agc_io, frag_file_io};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -534,18 +534,17 @@ impl SeqIndexDB {
 
         if let Some(seq_db) = decomp_fasta_db {
             seqid_smps = seq_db
-            .seq_info
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|(sid, data)| {
-                let (ctg_name, source, _) = data;
-                let source = source.clone().unwrap();
-                let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
-                (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
-            })
-            .collect();
-
+                .seq_info
+                .clone()
+                .unwrap_or_default()
+                .iter()
+                .map(|(sid, data)| {
+                    let (ctg_name, source, _) = data;
+                    let source = source.clone().unwrap();
+                    let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
+                    (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
+                })
+                .collect();
         }
 
         // loop through each sequnece and generate the decomposition for the sequence

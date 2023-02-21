@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-/// Query a PGR-TK pangenome sequence database, 
+/// Query a PGR-TK pangenome sequence database,
 /// ouput the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-query")]
@@ -18,7 +18,7 @@ struct CmdOptions {
     pgr_db_prefix: String,
     /// the path to the query fasta file
     query_fastx_path: String,
-    /// the prefix of the output file 
+    /// the prefix of the output file
     output_prfix: String,
 
     /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
@@ -33,19 +33,19 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 100000)]
     merge_range_tol: usize,
 
-    /// the max count of SHIMMER used for the sparse alignemnt 
+    /// the max count of SHIMMER used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_count: u32,
 
-    /// the max count of SHIMMER in the query sequences used for the sparse alignemnt 
+    /// the max count of SHIMMER in the query sequences used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_query_count: u32,
 
-    /// the max count of SHIMMER in the targets sequences used for the sparse alignemnt 
+    /// the max count of SHIMMER in the targets sequences used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_target_count: u32,
 
-    /// the span of the chain for building the sparse alignment directed acyclic graph 
+    /// the span of the chain for building the sparse alignment directed acyclic graph
     #[clap(long, default_value_t = 8)]
     max_aln_chain_span: u32,
 }

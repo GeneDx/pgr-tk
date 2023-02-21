@@ -10,7 +10,7 @@ use std::{
     path::Path,
 };
 
-/// Compare SHIMMER pair count in two input sequence files 
+/// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-make-frgdb")]
 #[clap(author, version)]
@@ -131,7 +131,7 @@ fn main() {
             } else {
                 0
             };
-            assert!(c0> 0); 
+            assert!(c0 > 0);
             let ctg = v.0.clone();
             let r = c1 as f32 / c0 as f32;
             let _ = writeln!(
