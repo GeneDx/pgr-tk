@@ -18,8 +18,10 @@ use std::{
 #[clap(about, long_about = None)]
 struct CmdOptions {
     /// option to process data from pre-build AGC backed index
+    #[clap(long, short)]
     agc_idx_prefix: Option<String>,
     /// option to process data from pre-build frg backed index
+    #[clap(long, short)]
     frg_idx_prefix: Option<String>,
     /// the path to the file contains the paths to the first set of sequence
     filepath0: String,
@@ -189,13 +191,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         panic!("input type has to be specified  AGC or FRG backends")
     };
 
-    let shmmr_spec = ShmmrSpec {
-        w: args.w,
-        k: args.k,
-        r: args.r,
-        min_span: args.min_span,
-        sketch: false,
-    };
+    let shmmr_spec = seq_index_db.shmmr_spec.clone().unwrap();
 
     let mut sample_set0 = FxHashSet::<String>::default();
     let input_files = BufReader::new(
@@ -340,9 +336,9 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
 fn main() {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
-    if let Some(_agc_idx_prefix) = Some(args.agc_idx_prefix.clone()) {
+    if let Some(_agc_idx_prefix) = args.agc_idx_prefix.clone() {
         generate_bed_graph_from_sdb(&args, "AGC");
-    } else if let Some(_frg_idx_prefix) = Some(args.frg_idx_prefix.clone()) {
+    } else if let Some(_frg_idx_prefix) = args.frg_idx_prefix.clone() {
         generate_bed_graph_from_sdb(&args, "FRG");
     } else {
         generate_bed_graph_from_fastx_files(&args);
