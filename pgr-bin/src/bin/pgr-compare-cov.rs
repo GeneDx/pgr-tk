@@ -96,12 +96,12 @@ fn main() {
         });
 
     let mut output_file0 = BufWriter::new(
-        File::create(Path::new(&args.prefix).with_extension("0.bed"))
+        File::create(Path::new(&args.prefix).with_extension("0.bedgraph"))
             .expect("can't create the output file"),
     );
 
     let mut output_file1 = BufWriter::new(
-        File::create(Path::new(&args.prefix).with_extension("1.bed"))
+        File::create(Path::new(&args.prefix).with_extension("1.bedgraph"))
             .expect("can't create the output file"),
     );
 
