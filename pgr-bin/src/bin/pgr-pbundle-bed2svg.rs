@@ -25,6 +25,9 @@ struct CmdOptions {
     /// the path the annotation track file
     #[clap(long)]
     annotation_region_bedfile: Option<String>,
+    /// the path the annotation track file
+    #[clap(long)]
+    offsets: Option<String>,
     /// the track range in base pair count
     #[clap(long, default_value_t = 100000)]
     track_range: usize,
@@ -95,6 +98,29 @@ fn main() -> Result<(), std::io::Error> {
         });
     }
 
+
+    let mut ctg_to_offset = FxHashMap::<String, i64>::default();
+    if args.offsets.is_some() {
+        let offset_file_path = &args.offsets.unwrap();
+        let offset_file_path = path::Path::new(offset_file_path);
+        let offset_file = BufReader::new(File::open(offset_file_path)?);
+        let offset_file_parse_err_msg = "offset file parsing error";
+        offset_file.lines().into_iter().for_each(|line| {
+            let line = line.unwrap().trim().to_string();
+            if line.is_empty() {
+                return;
+            }
+            if &line[0..1] == "#" {
+                return;
+            }
+            let offset_fields = line.split('\t').collect::<Vec<&str>>();
+            let ctg: String = offset_fields[0].to_string();
+            let offset: i64 = offset_fields[1].parse().expect(offset_file_parse_err_msg);
+            let e = ctg_to_offset.entry(ctg).or_default();
+            *e = offset;
+        });
+    }
+
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
@@ -130,8 +156,14 @@ fn main() -> Result<(), std::io::Error> {
         let ctg_data_vec: Vec<_> = annotation_file
             .lines()
             .map(|line| {
-                let ctg_annotation = line.unwrap();
-                let mut ctg_annotation = ctg_annotation.split('\t');
+                let line = line.unwrap().trim().to_string();
+                if line.is_empty() {
+                    return None;
+                }
+                if &line[0..1] == "#" {
+                    return None;
+                }
+                let mut ctg_annotation = line.split('\t');
                 let ctg = ctg_annotation
                     .next()
                     .expect("error parsing annotation file")
@@ -145,12 +177,12 @@ fn main() -> Result<(), std::io::Error> {
                 if let Some(annotation) = ctg_annotation.next() {
                     ctg_to_annotation.insert(ctg.clone(), annotation.to_string());
                     //annotations.push( (ctg.clone(), annotation) );
-                    (ctg, annotation.to_string(), data, region_annotation)
+                    Some((ctg, annotation.to_string(), data, region_annotation))
                 } else {
                     ctg_to_annotation.insert(ctg.clone(), "".to_string());
-                    (ctg, "".to_string(), data, region_annotation)
+                    Some((ctg, "".to_string(), data, region_annotation))
                 }
-            })
+            }).flatten()
             .collect();
         ctg_data_vec
     } else {
@@ -259,11 +291,12 @@ fn main() -> Result<(), std::io::Error> {
                 *e += 1;
             });
 
+            let offset = *ctg_to_offset.get(&ctg).unwrap_or(&0);
             let paths: Vec<element::Path> = bundle_segment
                 .into_iter()
                 .map(|(bgn, end, bundle_id, direction)| {
-                    let mut bgn = bgn as f32 * scaling_factor + left_padding;
-                    let mut end = end as f32 * scaling_factor + left_padding;
+                    let mut bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
+                    let mut end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
                     if direction == 1 {
                         (bgn, end) = (end, bgn);
                     }
