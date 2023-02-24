@@ -4,7 +4,6 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 
 use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
-use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use std::{
     fs::File,
