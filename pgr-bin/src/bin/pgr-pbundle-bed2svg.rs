@@ -98,7 +98,6 @@ fn main() -> Result<(), std::io::Error> {
         });
     }
 
-
     let mut ctg_to_offset = FxHashMap::<String, i64>::default();
     if args.offsets.is_some() {
         let offset_file_path = &args.offsets.unwrap();
@@ -182,7 +181,8 @@ fn main() -> Result<(), std::io::Error> {
                     ctg_to_annotation.insert(ctg.clone(), "".to_string());
                     Some((ctg, "".to_string(), data, region_annotation))
                 }
-            }).flatten()
+            })
+            .flatten()
             .collect();
         ctg_data_vec
     } else {
@@ -267,12 +267,12 @@ fn main() -> Result<(), std::io::Error> {
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
     } else {
-        10000
+        30
     };
 
     let scaling_factor =
         args.track_panel_width as f32 / (args.track_range + 2 * left_padding) as f32;
-    let left_padding = left_padding as f32 * scaling_factor as f32;
+    let left_padding = left_padding as f32;
     let stroke_width = args.stroke_width;
     let mut y_offset = 0.0_f32;
     let delta_y = if !annotation_region_record.is_empty() {
@@ -338,8 +338,8 @@ fn main() -> Result<(), std::io::Error> {
             let annotation_paths: Vec<element::Path> = annotation_segments
                 .into_iter()
                 .map(|(bgn, end, color)| {
-                    let bgn = bgn as f32 * scaling_factor + left_padding;
-                    let end = end as f32 * scaling_factor + left_padding;
+                    let bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
+                    let end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
 
                     let stroke_color = color.as_str();
                     let y = y_offset + 8.0;
