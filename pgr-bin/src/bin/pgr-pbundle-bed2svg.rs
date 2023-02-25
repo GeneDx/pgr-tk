@@ -1,8 +1,11 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use rustc_hash::FxHashMap;
-use std::io::{BufRead, BufReader};
-use std::{fs::File, path};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+    path,
+};
 use svg::node::{self, element, Node};
 use svg::Document;
 
@@ -52,6 +55,9 @@ struct CmdOptions {
     /// the factor to increase the bounder width for highlighting repeatitive bundles
     #[clap(long, default_value_t = 1.0)]
     highlight_repeats: f32,
+    /// the factor to increase the bounder width for highlighting repeatitive bundles
+    #[clap(long, default_value_t = false)]
+    html: bool,
 }
 
 static CMAP: [&str; 97] = [
@@ -385,7 +391,8 @@ fn main() -> Result<(), std::io::Error> {
             tree_width + args.track_panel_width as f32 + args.annotation_panel_width as f32,
         )
         .set("height", 56.0 + y_offset)
-        .set("preserveAspectRatio", "none");
+        .set("preserveAspectRatio", "none")
+        .set("id", "bundleViwer");
 
     if !internal_nodes.is_empty() {
         internal_nodes.into_iter().for_each(
@@ -458,7 +465,25 @@ fn main() -> Result<(), std::io::Error> {
                 .into_iter()
                 .for_each(|path| document.append(path));
         });
-    let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
-    svg::save(out_path, &document).unwrap();
+    if args.html {
+        let mut out_file = BufWriter::new(
+            File::create(path::Path::new(&args.output_prefix).with_extension("html"))
+                .expect("can't create the HTML output file"),
+        );
+        let msg = "can't write the HTML doc";
+        writeln!(out_file, "<html><body>").expect(msg);
+        let mut svg_elment = BufWriter::new(Vec::new());
+        svg::write(&mut svg_elment, &document).unwrap();
+        writeln!(
+            out_file,
+            "{}",
+            String::from_utf8_lossy(&svg_elment.into_inner().unwrap())
+        )
+        .expect(msg);
+        writeln!(out_file, "</body></html>").expect(msg);
+    } else {
+        let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
+        svg::save(out_path, &document).unwrap();
+    }
     Ok(())
 }
