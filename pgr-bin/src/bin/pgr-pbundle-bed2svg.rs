@@ -58,6 +58,9 @@ struct CmdOptions {
     /// the factor to increase the bounder width for highlighting repeatitive bundles
     #[clap(long, default_value_t = false)]
     html: bool,
+    /// disable tooltips
+    #[clap(long, default_value_t = false)]
+    no_tooltips: bool,
     /// the factor to increase the width for highlighting bundle when clicked
     #[clap(long, default_value_t = 1.5)]
     h_factor: f32,
@@ -307,7 +310,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut y_offset = 0.0_f32;
     let delta_y = if !annotation_region_record.is_empty() {
-        24.0_f32
+        22.0_f32 + args.annotation_region_stroke_width * 0.5
     } else {
         16.0_f32
     };
@@ -376,7 +379,9 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
                         .set("d", path_str)
                         .set("class", "bundle ".to_string() + bundle_class.as_str());
                     let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
-                    p.append(element::Title::new().add(node::Text::new(format!("{}:{}-{}:{}", ctg, bgn0, end0, bundle_id ))));
+                    if !args.no_tooltips { // it may be good idea to disable it for every large region visualization
+                        p.append(element::Title::new().add(node::Text::new(format!("{}:{}-{}:{}", ctg, bgn0, end0, bundle_id ))));
+                    };
                     g.append(p);
                     g
                 })
@@ -394,12 +399,15 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
                     let path_str = format!(
 					"M {bgn} {y} L {end} {y}");
                     let mut p = element::Path::new()
+                        .set("class", "region")
                         .set("stroke", stroke_color)
                         .set("stroke-width", args.annotation_region_stroke_width)
                         .set("d", path_str);
                     let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
-                    let title = element::Title::new().add(node::Text::new(title.clone()));
-                    p.append(title);
+                    if !args.no_tooltips { // it may be good idea to disable it for every large region visualization
+                        let title = element::Title::new().add(node::Text::new(title.clone()));
+                        p.append(title);
+                    };
                     g.append(p);
                     g
                 })
@@ -450,6 +458,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         format!(".repeat {{stroke-width:{stroke_width_rep};}}"),
         format!(".bundle:hover {{ stroke-width:{stroke_width_hover};}}"),
         format!(".repeat:hover {{ stroke-width:{stroke_width_hover_rep};}}"),
+        format!(".region {{ stroke-opacity: 0.5 }};"),
     ];
     css_strings.extend(bundle_class_styles.values().cloned());
     let h_factor = args.h_factor;
