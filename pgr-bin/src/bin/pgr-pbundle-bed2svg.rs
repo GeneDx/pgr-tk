@@ -84,7 +84,8 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
 
     // parsing the bed file for the aux track
-    let mut annotation_region_record = FxHashMap::<String, Vec<(u32, u32, String)>>::default();
+    let mut annotation_region_record =
+        FxHashMap::<String, Vec<(u32, u32, String, String)>>::default();
     if args.annotation_region_bedfile.is_some() {
         let bed_file_path = &args.annotation_region_bedfile.unwrap();
         let bed_file_path = path::Path::new(bed_file_path);
@@ -102,9 +103,10 @@ fn main() -> Result<(), std::io::Error> {
             let ctg: String = bed_fields[0].to_string();
             let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
             let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
-            let color = bed_fields[3].to_string();
+            let title = bed_fields[3].to_string();
+            let color = bed_fields[4].to_string();
             let e = annotation_region_record.entry(ctg).or_default();
-            e.push((bgn, end, color));
+            e.push((bgn, end, title, color));
         });
     }
 
@@ -325,9 +327,9 @@ fn main() -> Result<(), std::io::Error> {
             let offset = *ctg_to_offset.get(&ctg).unwrap_or(&0);
             let paths: Vec<element::Group> = bundle_segment
                 .into_iter()
-                .map(|(bgn, end, bundle_id, direction)| {
-                    let mut bgn = (bgn as i64 + offset) as f32 * scaling_factor;
-                    let mut end = (end as i64 + offset) as f32 * scaling_factor;
+                .map(|(bgn0, end0, bundle_id, direction)| {
+                    let mut bgn = (bgn0 as i64 + offset) as f32 * scaling_factor;
+                    let mut end = (end0 as i64 + offset) as f32 * scaling_factor;
                     if direction == 1 {
                         (bgn, end) = (end, bgn);
                     }
@@ -359,8 +361,7 @@ fn main() -> Result<(), std::io::Error> {
                     let bundle_color = CMAP[((bundle_id * 57) % 59) as usize];
                     let stroke_color = CMAP[93 - ((bundle_id * 31) % 47) as usize];
                     let css_string = format!(
-r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}; fill-opacity:0.5}}
-"#);
+r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}; fill-opacity:0.5}}"#);
                     bundle_class_styles.entry(bundle_class.clone()).or_insert(css_string);
 
                     let bundle_class = if *bundle_segment_count.get(&bundle_id).unwrap_or(&0) > 1 && args.highlight_repeats > 1.0001 {
@@ -371,10 +372,11 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
 
                     let path_str = format!(
 					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
-                    let p = element::Path::new()
+                    let mut p = element::Path::new()
                         .set("d", path_str)
                         .set("class", "bundle ".to_string() + bundle_class.as_str());
                     let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
+                    p.append(element::Title::new().add(node::Text::new(format!("{}:{}-{}:{}", ctg, bgn0, end0, bundle_id ))));
                     g.append(p);
                     g
                 })
@@ -383,7 +385,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
 
             let annotation_paths: Vec<element::Group> = annotation_segments
                 .into_iter()
-                .map(|(bgn, end, color)| {
+                .map(|(bgn, end, title, color)| {
                     let bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
                     let end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
 
@@ -391,11 +393,13 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
                     let y = 8.0;
                     let path_str = format!(
 					"M {bgn} {y} L {end} {y}");
-                    let p = element::Path::new()
+                    let mut p = element::Path::new()
                         .set("stroke", stroke_color)
                         .set("stroke-width", args.annotation_region_stroke_width)
                         .set("d", path_str);
                     let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
+                    let title = element::Title::new().add(node::Text::new(title.clone()));
+                    p.append(title);
                     g.append(p);
                     g
                 })
@@ -592,7 +596,7 @@ document.addEventListener('readystatechange', event => {
         )
         .expect(msg);
         writeln!(out_file, "</body></html>").expect(msg);
-    } 
+    }
     let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
     svg::save(out_path, &document).unwrap();
     Ok(())
