@@ -175,11 +175,27 @@ fn main() -> Result<(), std::io::Error> {
         decomp_seq_index_db
     } else {
         //The file is read using a Mmap which is not clonable, need to rebuild the database. TODO: fix this.
-        let decomp_fastx_path = fastx_path.clone();
+        let seq_list = seq_index_db
+            .seq_info
+            .as_ref()
+            .unwrap()
+            .values()
+            .map(|(ctg, _src, _len)| {
+                let seq = seq_index_db
+                    .get_seq(fastx_path.clone(), ctg.clone())
+                    .expect("fail to fetch sequence");
+                (ctg.clone(), seq)
+            })
+            .collect::<Vec<_>>();
         let mut decomp_seq_index_db = SeqIndexDB::new();
-        decomp_seq_index_db
-            .load_from_fastx(decomp_fastx_path, args.w, args.k, args.r, args.min_span)
-            .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
+        let _ = decomp_seq_index_db.load_from_seq_list(
+            seq_list,
+            Some(fastx_path.as_str()),
+            args.w,
+            args.k,
+            args.r,
+            args.min_span,
+        );
         decomp_seq_index_db
     };
 
