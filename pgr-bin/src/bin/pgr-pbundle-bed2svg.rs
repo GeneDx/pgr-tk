@@ -32,11 +32,11 @@ struct CmdOptions {
     #[clap(long)]
     offsets: Option<String>,
     /// the track range in base pair count
-    #[clap(long, default_value_t = 100000)]
-    track_range: usize,
+    #[clap(long)]
+    track_range: Option<usize>,
     /// the track tick interval
-    #[clap(long, default_value_t = 10000)]
-    track_tick_interval: usize,
+    #[clap(long)]
+    track_tick_interval: Option<usize>,
     /// the track panel size in pixel
     #[clap(long, default_value_t = 1600)]
     track_panel_width: usize,
@@ -80,6 +80,7 @@ fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
 
+    // parsing the bed file for the aux track
     let mut annotation_region_record = FxHashMap::<String, Vec<(u32, u32, String)>>::default();
     if args.annotation_region_bedfile.is_some() {
         let bed_file_path = &args.annotation_region_bedfile.unwrap();
@@ -104,6 +105,7 @@ fn main() -> Result<(), std::io::Error> {
         });
     }
 
+    // parsing the offset file if provided
     let mut ctg_to_offset = FxHashMap::<String, i64>::default();
     if args.offsets.is_some() {
         let offset_file_path = &args.offsets.unwrap();
@@ -126,6 +128,8 @@ fn main() -> Result<(), std::io::Error> {
         });
     }
 
+    // parsing the bundle bed file
+    let mut max_range = 0_usize;
     let bed_file_path = path::Path::new(&args.bed_file_path);
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
@@ -142,6 +146,9 @@ fn main() -> Result<(), std::io::Error> {
         let ctg: String = bed_fields[0].to_string();
         let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
         let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
+        if end as usize > max_range {
+            max_range = end as usize;
+        };
         let pbundle_fields = bed_fields[3].split(':').collect::<Vec<&str>>();
         let bundle_id: u32 = pbundle_fields[0].parse().expect(bed_file_parse_err_msg);
         //let bundle_v_count: u32 = pbundle_fields[1].parse().expect(bed_file_parse_err_msg);
@@ -152,7 +159,7 @@ fn main() -> Result<(), std::io::Error> {
         e.push((bgn, end, bundle_id, bundle_dir));
     });
 
-    //let mut annotations = vec![];
+    // parsing the file for the annotation text on the right panel
     let mut ctg_to_annotation = FxHashMap::<String, String>::default();
     let ctg_data_vec = if args.annotations.is_some() {
         let filename = args.annotations.unwrap();
@@ -209,6 +216,7 @@ fn main() -> Result<(), std::io::Error> {
             .collect()
     };
 
+    // Parsing the tree dendrogram
     // TODO: change to use proper serilization
     let mut leaves = Vec::<(usize, String)>::new();
     let mut internal_nodes = Vec::<(usize, usize, usize, usize, f32)>::new();
@@ -270,14 +278,27 @@ fn main() -> Result<(), std::io::Error> {
         ctg_data_vec
     };
 
+
+    // set up the layout factors
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
     } else {
         30
     };
 
+    let track_range = if let Some(range) = args.track_range {
+        range
+    } else {
+        let r = ((max_range as f32 / 10000.0).ceil() * 10000.0) as usize;
+        if r < 10000 {
+            10000
+        } else {
+            r
+        }
+    };
+
     let scaling_factor =
-        args.track_panel_width as f32 / (args.track_range + 2 * left_padding) as f32;
+        args.track_panel_width as f32 / (track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32;
     let stroke_width = args.stroke_width;
     let mut y_offset = 0.0_f32;
@@ -287,8 +308,10 @@ fn main() -> Result<(), std::io::Error> {
         16.0_f32
     };
 
+    // generate the bundle path elements
+    let mut bundle_class_styles = FxHashMap::<String, String>::default();
     #[allow(clippy::needless_collect)] // we do need to evaluate as we depend on the side effect to set y_offset right
-    let ctg_with_svg_paths: Vec<(String, (Vec<element::Path>, Vec<element::Path>, element::Text))> = ctg_data_vec
+    let ctg_with_svg_paths: Vec<(String, (Vec<element::Group>, Vec<element::Group>, element::Text))> = ctg_data_vec
         .into_iter()
         .map(|(ctg, annotation,bundle_segment, annotation_segments)| {
             let mut bundle_segment_count = FxHashMap::<u32, usize>::default();
@@ -298,17 +321,15 @@ fn main() -> Result<(), std::io::Error> {
             });
 
             let offset = *ctg_to_offset.get(&ctg).unwrap_or(&0);
-            let paths: Vec<element::Path> = bundle_segment
+            let paths: Vec<element::Group> = bundle_segment
                 .into_iter()
                 .map(|(bgn, end, bundle_id, direction)| {
-                    let mut bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
-                    let mut end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
+                    let mut bgn = (bgn as i64 + offset) as f32 * scaling_factor;
+                    let mut end = (end as i64 + offset) as f32 * scaling_factor;
                     if direction == 1 {
                         (bgn, end) = (end, bgn);
                     }
 
-                    let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
-                    let stroke_color = CMAP[((bundle_id * 47) % 43) as usize];
                     let arror_end = end as f32;
                     let halfwidth = 5.0;
                     let end =
@@ -323,45 +344,72 @@ fn main() -> Result<(), std::io::Error> {
                         } else {
                             end as f32 + halfwidth
                         };
-                    let bottom0 = -halfwidth * 0.6 + y_offset as f32;
-                    let top0 = halfwidth * 0.6 + y_offset as f32;
-                    let bottom1 = -halfwidth * 0.8 + y_offset as f32;
-                    let top1 = halfwidth * 0.8 + y_offset as f32;
-                    let center = y_offset as f32;
-                    let stroke_width = stroke_width * ( if args.highlight_repeats > 1.0001 &&
-                        *bundle_segment_count.get(&bundle_id).unwrap_or(&0) > 1 {args.highlight_repeats} else {1.0});
+
+                    let bottom0 = -halfwidth * 0.6;
+                    let top0 = halfwidth * 0.6;
+                    let bottom1 = -halfwidth * 0.8;
+                    let top1 = halfwidth * 0.8;
+                    let center = 0 as f32;
+
+                    let stroke_width_rep = stroke_width * args.highlight_repeats; 
+                    let stroke_width_hover = stroke_width * 5.0; 
+                    let stroke_width_hover_rep = stroke_width_rep * 2.0; 
+                        
+                    let bundle_class = format!("bundle_{bundle_id:05}");
+                    let bundle_rep_class = format!("bundle_{bundle_id:05} repeat");
+
+                    let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
+                    let stroke_color = CMAP[(((bundle_id + 23) * 47) % 43) as usize];
+                    let css_string = format!(
+r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}}}
+.repeat {{stroke-width:{stroke_width_rep};}}
+.bundle:hover {{ stroke-width:{stroke_width_hover};}}
+.repeat:hover {{ stroke-width:{stroke_width_hover_rep};}}
+"#);
+                    bundle_class_styles.entry(bundle_class.clone()).or_insert(css_string);
+
+                    let bundle_class = if *bundle_segment_count.get(&bundle_id).unwrap_or(&0) > 1 && args.highlight_repeats > 1.0001 {
+                        bundle_rep_class
+                    } else {
+                        bundle_class
+                    };
+
                     let path_str = format!(
 					"M {bgn} {bottom0} L {bgn} {top0} L {end} {top0} L {end} {top1} L {arror_end} {center} L {end} {bottom1} L {end} {bottom0} Z");
-                    element::Path::new()
-                        .set("fill", bundle_color)
-                        .set("stroke", stroke_color)
-                        .set("stroke-width", stroke_width)
+                    let p = element::Path::new()
                         .set("d", path_str)
+                        .set("class", "bundle ".to_string() + bundle_class.as_str());
+                    let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
+                    g.append(p);
+                    g
                 })
                 .collect();
 
 
-            let annotation_paths: Vec<element::Path> = annotation_segments
+            let annotation_paths: Vec<element::Group> = annotation_segments
                 .into_iter()
                 .map(|(bgn, end, color)| {
                     let bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
                     let end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
 
                     let stroke_color = color.as_str();
-                    let y = y_offset + 8.0;
+                    let y = 8.0;
                     let path_str = format!(
 					"M {bgn} {y} L {end} {y}");
-                    element::Path::new()
+                    let p = element::Path::new()
                         .set("stroke", stroke_color)
                         .set("stroke-width", args.annotation_region_stroke_width)
-                        .set("d", path_str)
+                        .set("d", path_str);
+                    let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
+                    g.append(p);
+                    g
                 })
                 .collect();
 
 
             let text = element::Text::new()
-                .set("x", 20.0 + left_padding + args.track_range as f32 * scaling_factor)
-                .set("y", y_offset)
+                .set("x", 20.0 + left_padding + track_range as f32 * scaling_factor)
+                .set("y", y_offset + 2.0)
                 .set("font-size", "10px")
                 .set("font-family", "monospace")
                 .add(node::Text::new(annotation));
@@ -376,6 +424,7 @@ fn main() -> Result<(), std::io::Error> {
         0.0
     };
 
+    // start to construct the SVG element
     let mut document = Document::new()
         .set(
             "viewBox",
@@ -394,6 +443,13 @@ fn main() -> Result<(), std::io::Error> {
         .set("preserveAspectRatio", "none")
         .set("id", "bundleViwer");
 
+    // insert CSS
+    let mut css_strings = bundle_class_styles.values().cloned().collect::<Vec<String>>();
+    css_strings.push("path.highlighted {transform: scaleY(2);}".to_string());
+    let style = element::Style::new(css_strings.join("\n")).set("type", "text/css");
+    document.append(style);
+
+    // plot the hierarchical clustering tree
     if !internal_nodes.is_empty() {
         internal_nodes.into_iter().for_each(
                 | (node_id, child_node0, child_node1,_, _) | {
@@ -417,7 +473,8 @@ fn main() -> Result<(), std::io::Error> {
         });
     }
 
-    let right_end = args.track_range as f32 * scaling_factor + left_padding;
+    // plot the scale bar
+    let right_end = track_range as f32 * scaling_factor + left_padding;
     let scale_path_str =
         format!("M {left_padding} -14 L {left_padding} -20 L {right_end} -20 L {right_end} -14 ");
     let scale_path = element::Path::new()
@@ -427,10 +484,22 @@ fn main() -> Result<(), std::io::Error> {
         .set("d", scale_path_str);
     document.append(scale_path);
 
-    assert!(args.track_tick_interval > 0);
-    let mut tickx = args.track_tick_interval;
+    let track_tick_interval = if let Some(tick_interval) = args.track_tick_interval {
+        tick_interval
+    } else {
+        let mut tick_interval = 1_usize;
+        let mut tmp = track_range as f32;
+        tmp = tmp * 0.1;
+        while tmp > 1.01 {
+            tick_interval *= 10;
+            tmp = tmp * 0.1;
+        }
+        tick_interval 
+    };
+
+    let mut tickx = track_tick_interval;
     loop {
-        if tickx > args.track_range {
+        if tickx > track_range {
             break;
         }
         let x = tickx as f32 * scaling_factor + left_padding;
@@ -441,20 +510,22 @@ fn main() -> Result<(), std::io::Error> {
             .set("stroke-width", 1)
             .set("d", tick_path_str);
         document.append(tick_path);
-        tickx += args.track_tick_interval;
+        tickx += track_tick_interval;
     }
 
     let text = element::Text::new()
         .set(
             "x",
-            20.0 + left_padding + args.track_range as f32 * scaling_factor,
+            20.0 + left_padding + track_range as f32 * scaling_factor,
         )
         .set("y", -14)
         .set("font-size", "10px")
         .set("font-family", "sans-serif")
-        .add(node::Text::new(format!("{} bps", args.track_range)));
+        .add(node::Text::new(format!("{} bps", track_range)));
     document.append(text);
 
+
+    // insert the bundle paths
     ctg_with_svg_paths
         .into_iter()
         .for_each(|(_ctg, (paths, annotation_paths, text))| {
@@ -465,6 +536,8 @@ fn main() -> Result<(), std::io::Error> {
                 .into_iter()
                 .for_each(|path| document.append(path));
         });
+
+    // final output
     if args.html {
         let mut out_file = BufWriter::new(
             File::create(path::Path::new(&args.output_prefix).with_extension("html"))
@@ -472,6 +545,40 @@ fn main() -> Result<(), std::io::Error> {
         );
         let msg = "can't write the HTML doc";
         writeln!(out_file, "<html><body>").expect(msg);
+        let jscript = 
+r#"
+<script>
+document.addEventListener('readystatechange', event => {
+    if (event.target.readyState === "complete") {
+        var bundles = document.getElementsByClassName("bundle");
+        for (let i = 0; i < bundles.length; i++) {
+            bundles[i].onclick = function (e) {
+                // alert(e.target.classList);
+                let is_highlighted = false;
+                let bundle_id = "";
+                for (let cidx = 0; cidx < e.target.classList.length; cidx++) {
+                    if (e.target.classList[cidx] == "highlighted") {
+                        is_highlighted = true;
+                    }
+                    if (e.target.classList[cidx].match("bundle_")) {
+                        bundle_id = e.target.classList[cidx]
+                    }
+                };
+                var bundles2 = document.getElementsByClassName(bundle_id);
+                for (let j = 0; j < bundles2.length; j++) {
+                    if (is_highlighted) {
+                        bundles2[j].classList.remove("highlighted");
+                    } else {
+                        bundles2[j].classList.add("highlighted");
+                    }
+                }
+            };
+        }
+    }
+});
+</script>
+"#;
+        writeln!(out_file, "{}", jscript).expect(msg);
         let mut svg_elment = BufWriter::new(Vec::new());
         svg::write(&mut svg_elment, &document).unwrap();
         writeln!(
