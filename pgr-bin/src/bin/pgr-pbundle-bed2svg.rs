@@ -592,9 +592,8 @@ document.addEventListener('readystatechange', event => {
         )
         .expect(msg);
         writeln!(out_file, "</body></html>").expect(msg);
-    } else {
-        let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
-        svg::save(out_path, &document).unwrap();
-    }
+    } 
+    let out_path = path::Path::new(&args.output_prefix).with_extension("svg");
+    svg::save(out_path, &document).unwrap();
     Ok(())
 }
