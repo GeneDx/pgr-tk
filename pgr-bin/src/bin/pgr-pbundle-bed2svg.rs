@@ -58,6 +58,9 @@ struct CmdOptions {
     /// the factor to increase the bounder width for highlighting repeatitive bundles
     #[clap(long, default_value_t = false)]
     html: bool,
+    /// the factor to increase the width for highlighting bundle when clicked
+    #[clap(long, default_value_t = 1.5)]
+    h_factor: f32,
 }
 
 static CMAP: [&str; 97] = [
@@ -299,6 +302,7 @@ fn main() -> Result<(), std::io::Error> {
     let scaling_factor = args.track_panel_width as f32 / (track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32;
     let stroke_width = args.stroke_width;
+
     let mut y_offset = 0.0_f32;
     let delta_y = if !annotation_region_record.is_empty() {
         24.0_f32
@@ -349,20 +353,13 @@ fn main() -> Result<(), std::io::Error> {
                     let top1 = halfwidth * 0.8;
                     let center = 0 as f32;
 
-                    let stroke_width_rep = stroke_width * args.highlight_repeats; 
-                    let stroke_width_hover = stroke_width * 5.0; 
-                    let stroke_width_hover_rep = stroke_width_rep * 2.0; 
-                        
                     let bundle_class = format!("bundle_{bundle_id:05}");
                     let bundle_rep_class = format!("bundle_{bundle_id:05} repeat");
 
-                    let bundle_color = CMAP[((bundle_id * 17) % 97) as usize];
-                    let stroke_color = CMAP[(((bundle_id + 23) * 47) % 43) as usize];
+                    let bundle_color = CMAP[((bundle_id * 57) % 59) as usize];
+                    let stroke_color = CMAP[93 - ((bundle_id * 31) % 47) as usize];
                     let css_string = format!(
 r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}}}
-.repeat {{stroke-width:{stroke_width_rep};}}
-.bundle:hover {{ stroke-width:{stroke_width_hover};}}
-.repeat:hover {{ stroke-width:{stroke_width_hover_rep};}}
 "#);
                     bundle_class_styles.entry(bundle_class.clone()).or_insert(css_string);
 
@@ -442,11 +439,19 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         .set("id", "bundleViwer");
 
     // insert CSS
-    let mut css_strings = bundle_class_styles
-        .values()
-        .cloned()
-        .collect::<Vec<String>>();
-    css_strings.push("path.highlighted {transform: scaleY(2);}".to_string());
+    let stroke_width_rep = stroke_width * args.highlight_repeats;
+    let stroke_width_hover = stroke_width * 2.0;
+    let stroke_width_hover_rep = stroke_width_rep * 2.0;
+    let mut css_strings = vec![
+        format!(".repeat {{stroke-width:{stroke_width_rep};}}"),
+        format!(".bundle:hover {{ stroke-width:{stroke_width_hover};}}"),
+        format!(".repeat:hover {{ stroke-width:{stroke_width_hover_rep};}}"),
+    ];
+    css_strings.extend(bundle_class_styles.values().cloned());
+    let h_factor = args.h_factor;
+    css_strings.push(format!(
+        "path.highlighted {{transform: scaleY({h_factor});}}"
+    ));
     let style = element::Style::new(css_strings.join("\n")).set("type", "text/css");
     document.append(style);
 
