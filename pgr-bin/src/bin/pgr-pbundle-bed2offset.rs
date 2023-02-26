@@ -269,8 +269,8 @@ fn main() -> Result<(), std::io::Error> {
         let mut current_score = 0_i64;
         let mut best_score = 0_i64;
         let mut best_anchor_point = (0, 0);
-        alns.into_iter()
-            .for_each(|(qq_idx, tt_idx, _aln_type, _q_bid, _t_bid, global_score)| {
+        alns.into_iter().for_each(
+            |(qq_idx, tt_idx, _aln_type, _q_bid, _t_bid, global_score)| {
                 score = global_score - last_global_score;
                 current_score += score;
                 if current_score < 0 {
@@ -287,7 +287,8 @@ fn main() -> Result<(), std::io::Error> {
                 );
                 */
                 last_global_score = global_score;
-            });
+            },
+        );
         let b0 = bundles0[best_anchor_point.0];
         let b1 = bundles1[best_anchor_point.1];
         let offset = b1.bgn as i64 - b0.bgn as i64;

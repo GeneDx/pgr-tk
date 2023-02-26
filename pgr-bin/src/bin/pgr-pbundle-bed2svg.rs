@@ -278,7 +278,6 @@ fn main() -> Result<(), std::io::Error> {
         ctg_data_vec
     };
 
-
     // set up the layout factors
     let left_padding = if args.left_padding.is_some() {
         args.left_padding.unwrap()
@@ -297,8 +296,7 @@ fn main() -> Result<(), std::io::Error> {
         }
     };
 
-    let scaling_factor =
-        args.track_panel_width as f32 / (track_range + 2 * left_padding) as f32;
+    let scaling_factor = args.track_panel_width as f32 / (track_range + 2 * left_padding) as f32;
     let left_padding = left_padding as f32;
     let stroke_width = args.stroke_width;
     let mut y_offset = 0.0_f32;
@@ -444,7 +442,10 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         .set("id", "bundleViwer");
 
     // insert CSS
-    let mut css_strings = bundle_class_styles.values().cloned().collect::<Vec<String>>();
+    let mut css_strings = bundle_class_styles
+        .values()
+        .cloned()
+        .collect::<Vec<String>>();
     css_strings.push("path.highlighted {transform: scaleY(2);}".to_string());
     let style = element::Style::new(css_strings.join("\n")).set("type", "text/css");
     document.append(style);
@@ -494,7 +495,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
             tick_interval *= 10;
             tmp = tmp * 0.1;
         }
-        tick_interval 
+        tick_interval
     };
 
     let mut tickx = track_tick_interval;
@@ -524,7 +525,6 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         .add(node::Text::new(format!("{} bps", track_range)));
     document.append(text);
 
-
     // insert the bundle paths
     ctg_with_svg_paths
         .into_iter()
@@ -545,8 +545,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         );
         let msg = "can't write the HTML doc";
         writeln!(out_file, "<html><body>").expect(msg);
-        let jscript = 
-r#"
+        let jscript = r#"
 <script>
 document.addEventListener('readystatechange', event => {
     if (event.target.readyState === "complete") {

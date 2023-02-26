@@ -328,28 +328,23 @@ impl SeqIndexDB {
         }
     }
 
-    pub fn get_seq_by_id(
-        &self,
-        sid: u32
-    ) -> Result<Vec<u8>, std::io::Error> {
+    pub fn get_seq_by_id(&self, sid: u32) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
-            Backend::AGC =>  {
+            Backend::AGC => {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
                 let sample_name = sample_name.as_ref().unwrap().clone();
                 Ok(self
-                .agc_db
-                .as_ref()
-                .unwrap()
-                .0
-                .get_seq(sample_name, ctg_name))
-            },
+                    .agc_db
+                    .as_ref()
+                    .unwrap()
+                    .0
+                    .get_seq(sample_name, ctg_name))
+            }
             Backend::MEMORY | Backend::FASTX => {
                 Ok(self.seq_db.as_ref().unwrap().get_seq_by_id(sid))
             }
-            Backend::FRG => {
-                Ok(self.frg_db.as_ref().unwrap().get_seq_by_id(sid))
-            }
+            Backend::FRG => Ok(self.frg_db.as_ref().unwrap().get_seq_by_id(sid)),
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "feteching sequnece fail, database type in not determined",
