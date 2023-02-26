@@ -359,7 +359,7 @@ fn main() -> Result<(), std::io::Error> {
                     let bundle_color = CMAP[((bundle_id * 57) % 59) as usize];
                     let stroke_color = CMAP[93 - ((bundle_id * 31) % 47) as usize];
                     let css_string = format!(
-r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}}}
+r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{stroke_width}; fill-opacity:0.5}}
 "#);
                     bundle_class_styles.entry(bundle_class.clone()).or_insert(css_string);
 
@@ -450,7 +450,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
     css_strings.extend(bundle_class_styles.values().cloned());
     let h_factor = args.h_factor;
     css_strings.push(format!(
-        "path.highlighted {{transform: scaleY({h_factor});}}"
+        r#"path.highlighted {{transform: scaleY({h_factor}); fill-opacity:1}}"#
     ));
     let style = element::Style::new(css_strings.join("\n")).set("type", "text/css");
     document.append(style);
