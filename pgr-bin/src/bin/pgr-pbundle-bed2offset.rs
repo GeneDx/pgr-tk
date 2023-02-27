@@ -18,6 +18,9 @@ struct CmdOptions {
     /// the path the annotation files
     #[clap(long)]
     ctgs_of_interest: Option<String>,
+    /// specify the bundle to anchor on
+    #[clap(long, default_value_t = false)]
+    alt_anchoring_mode: bool,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
@@ -264,14 +267,21 @@ fn main() -> Result<(), std::io::Error> {
     (1..n_ctg).for_each(|ctg_idx| {
         let (ctg0, _annotation, bundles0) = &ctg_data_vec[ctg_idx];
         let (_dist0, _diff_len0, _max_len0, alns) = align_bundles(bundles0, bundles1);
+        let mut best_anchor_point = (0, 0);
+        let mut best_single_match_anchor_point = (0, 0);
+
         let mut score = 0_i64;
         let mut last_global_score = 0_i64;
         let mut current_score = 0_i64;
         let mut best_score = 0_i64;
-        let mut best_anchor_point = (0, 0);
+        let mut best_single_bundle_score = 0_i64;
         alns.into_iter().for_each(
             |(qq_idx, tt_idx, _aln_type, _q_bid, _t_bid, global_score)| {
                 score = global_score - last_global_score;
+                if score > best_single_bundle_score {
+                    best_single_bundle_score = score;
+                    best_single_match_anchor_point = (qq_idx, tt_idx);
+                };
                 current_score += score;
                 if current_score < 0 {
                     current_score = 0;
@@ -289,8 +299,17 @@ fn main() -> Result<(), std::io::Error> {
                 last_global_score = global_score;
             },
         );
-        let b0 = bundles0[best_anchor_point.0];
-        let b1 = bundles1[best_anchor_point.1];
+
+        let b0 = if args.alt_anchoring_mode {
+            bundles0[best_single_match_anchor_point.0]
+        } else {
+            bundles0[best_anchor_point.0]
+        };
+        let b1 =  if args.alt_anchoring_mode {
+            bundles1[best_single_match_anchor_point.1]
+        } else {
+            bundles1[best_anchor_point.1]
+        };
         let offset = b1.bgn as i64 - b0.bgn as i64;
         //println!("XXX {} {} {} {:?} {:?}", best_score, best_anchor_point.0, best_anchor_point.1, bundles0[best_anchor_point.0], bundles1[best_anchor_point.1]);
         let _ = writeln!(out_file, "{}\t{}", ctg0, offset);
