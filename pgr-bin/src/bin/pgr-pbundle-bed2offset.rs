@@ -83,13 +83,13 @@ fn align_bundles(
                 )
             };
             if t_idx > 0 {
-                let insert_score = -2 * q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
+                let insert_score = -q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
                 if insert_score > best.1 {
                     best = (AlnType::Insertion, insert_score)
                 };
             };
             if q_idx > 0 {
-                let delete_score = -2 * t_len + s_map.get(&(q_idx - 1, t_idx)).unwrap();
+                let delete_score = -t_len + s_map.get(&(q_idx - 1, t_idx)).unwrap();
                 if delete_score > best.1 {
                     best = (AlnType::Deletion, delete_score)
                 }
@@ -267,8 +267,8 @@ fn main() -> Result<(), std::io::Error> {
     (1..n_ctg).for_each(|ctg_idx| {
         let (ctg0, _annotation, bundles0) = &ctg_data_vec[ctg_idx];
         let (_dist0, _diff_len0, _max_len0, alns) = align_bundles(bundles0, bundles1);
-        let mut best_anchor_point = (0, 0);
-        let mut best_single_match_anchor_point = (0, 0);
+        let mut best_anchor_point = None;
+        let mut best_single_match_anchor_point = None;
 
         let mut score = 0_i64;
         let mut last_global_score = 0_i64;
@@ -280,7 +280,7 @@ fn main() -> Result<(), std::io::Error> {
                 score = global_score - last_global_score;
                 if score > best_single_bundle_score {
                     best_single_bundle_score = score;
-                    best_single_match_anchor_point = (qq_idx, tt_idx);
+                    best_single_match_anchor_point = Some((qq_idx, tt_idx));
                 };
                 current_score += score;
                 if current_score < 0 {
@@ -288,7 +288,7 @@ fn main() -> Result<(), std::io::Error> {
                 }
                 if current_score > best_score {
                     best_score = current_score;
-                    best_anchor_point = (qq_idx, tt_idx);
+                    best_anchor_point = Some((qq_idx, tt_idx));
                 }
                 /*
                 println!(
@@ -301,16 +301,32 @@ fn main() -> Result<(), std::io::Error> {
         );
 
         let b0 = if args.alt_anchoring_mode {
-            bundles0[best_single_match_anchor_point.0]
+            if let Some(anchor_point) = best_single_match_anchor_point {
+                bundles0[anchor_point.0].bgn
+            } else {
+                0
+            }
         } else {
-            bundles0[best_anchor_point.0]
+            if let Some(anchor_point) = best_anchor_point {
+                bundles0[anchor_point.0].bgn
+            } else {
+                0
+            }
         };
-        let b1 =  if args.alt_anchoring_mode {
-            bundles1[best_single_match_anchor_point.1]
+        let b1 = if args.alt_anchoring_mode {
+            if let Some(anchor_point) = best_single_match_anchor_point {
+                bundles1[anchor_point.1].bgn
+            } else {
+                0
+            }
         } else {
-            bundles1[best_anchor_point.1]
+            if let Some(anchor_point) = best_anchor_point {
+                bundles1[anchor_point.1].bgn
+            } else {
+                0
+            }
         };
-        let offset = b1.bgn as i64 - b0.bgn as i64;
+        let offset = b1 as i64 - b0 as i64;
         //println!("XXX {} {} {} {:?} {:?}", best_score, best_anchor_point.0, best_anchor_point.1, bundles0[best_anchor_point.0], bundles1[best_anchor_point.1]);
         let _ = writeln!(out_file, "{}\t{}", ctg0, offset);
     });
