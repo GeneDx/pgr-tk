@@ -391,8 +391,8 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
             let annotation_paths: Vec<element::Group> = annotation_segments
                 .into_iter()
                 .map(|(bgn, end, title, color)| {
-                    let bgn = (bgn as i64 + offset) as f32 * scaling_factor + left_padding;
-                    let end = (end as i64 + offset) as f32 * scaling_factor + left_padding;
+                    let bgn = (bgn as i64 + offset) as f32 * scaling_factor;
+                    let end = (end as i64 + offset) as f32 * scaling_factor;
 
                     let stroke_color = color.as_str();
                     let y = 8.0;
