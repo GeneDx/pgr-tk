@@ -116,16 +116,15 @@ fn main() -> Result<(), std::io::Error> {
             "#{}",
             [
                 "target",
-                "ben",
+                "bgn",
                 "end",
+                "color",
                 "query",
-                "#FFFFFF",
                 "orientation",
-                "q_idx",
                 "q_len",
                 "aln_anchor_count",
+                "q_idx",
                 "src",
-                "ctg",
                 "ctg_bgn",
                 "ctg_end",
             ]
@@ -313,21 +312,23 @@ fn main() -> Result<(), std::io::Error> {
                             } else {
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)
                             };
+
                             if args.bed_summary {
                                 let _ = writeln!(
                                     hit_file,
-                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                     target_seq_name,
                                     b,
                                     e,
                                     "#AAAAAA",
                                     q_name,
                                     orientation,
-                                    idx,
-                                    q_bgn,
-                                    q_end,
                                     q_len,
                                     aln.len(),
+                                    idx,
+                                    src,
+                                    q_bgn,
+                                    q_end,
                                 );
                             } else {
                                 let _ = writeln!(
