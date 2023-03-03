@@ -68,10 +68,19 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let region_file = args.region_file.expect("region file not specific");
+    let region_file = args.region_file.expect("region file not specified");
     let region_file =
         BufReader::new(File::open(Path::new(&region_file)).expect("can't open the region file"));
 
+    let mut out = if args.output_file.is_some() {
+        let f = BufWriter::new(
+            File::create(args.output_file.clone().unwrap()).expect("can't open the ouptfile"),
+        );
+        Box::new(f) as Box<dyn Write>
+    } else {
+        Box::new(io::stdout())
+    };
+    
     region_file.lines().into_iter().for_each(|line| {
         let line = line.expect("fail to get a line in the region file");
         let fields = line.split('\t').collect::<Vec<&str>>();
@@ -88,14 +97,6 @@ fn main() -> Result<(), std::io::Error> {
             seq = fasta_io::reverse_complement(&seq);
         }
 
-        let mut out = if args.output_file.is_some() {
-            let f = BufWriter::new(
-                File::open(args.output_file.clone().unwrap()).expect("can't open the ouptfile"),
-            );
-            Box::new(f) as Box<dyn Write>
-        } else {
-            Box::new(io::stdout())
-        };
         writeln!(out, ">{}", label).expect("fail to write the sequences");
         writeln!(out, "{}", String::from_utf8_lossy(&seq[..]))
             .expect("fail to write the sequences");

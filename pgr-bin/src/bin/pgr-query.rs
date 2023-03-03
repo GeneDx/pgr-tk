@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-/// Query a PGR-TK pangenome sequence database, 
+/// Query a PGR-TK pangenome sequence database,
 /// ouput the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-query")]
@@ -18,12 +18,27 @@ struct CmdOptions {
     pgr_db_prefix: String,
     /// the path to the query fasta file
     query_fastx_path: String,
-    /// the prefix of the output file 
+    /// the prefix of the output file
     output_prfix: String,
 
     /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
+
+    #[clap(long, default_value_t = false)]
+    fastx_file: bool,
+
+    #[clap(long, short, default_value_t = 80)]
+    w: u32,
+    /// minimizer k-mer size
+    #[clap(long, short, default_value_t = 56)]
+    k: u32,
+    /// sparse minimizer (shimmer) reduction factor
+    #[clap(long, short, default_value_t = 4)]
+    r: u32,
+    /// min span for neighboring minimiers
+    #[clap(long, short, default_value_t = 64)]
+    min_span: u32,
 
     /// the gap penality factor for sparse alignments in the SHIMMER space
     #[clap(long, short, default_value_t = 0.025)]
@@ -33,21 +48,29 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 100000)]
     merge_range_tol: usize,
 
-    /// the max count of SHIMMER used for the sparse alignemnt 
+    /// the max count of SHIMMER used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_count: u32,
 
-    /// the max count of SHIMMER in the query sequences used for the sparse alignemnt 
+    /// the max count of SHIMMER in the query sequences used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_query_count: u32,
 
-    /// the max count of SHIMMER in the targets sequences used for the sparse alignemnt 
+    /// the max count of SHIMMER in the targets sequences used for the sparse alignemnt
     #[clap(long, default_value_t = 128)]
     max_target_count: u32,
 
-    /// the span of the chain for building the sparse alignment directed acyclic graph 
+    /// the span of the chain for building the sparse alignment directed acyclic graph
     #[clap(long, default_value_t = 8)]
     max_aln_chain_span: u32,
+
+    /// option only to output summaries
+    #[clap(long, default_value_t = false)]
+    only_summary: bool,
+
+    /// output summaries in the bed foramt
+    #[clap(long, default_value_t = false)]
+    bed_summary: bool,
 }
 
 fn main() -> Result<(), std::io::Error> {
@@ -74,31 +97,60 @@ fn main() -> Result<(), std::io::Error> {
     let mut seq_index_db = SeqIndexDB::new();
     if args.frg_file {
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
+    } else if args.fastx_file {
+        let _ =
+            seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
     }
     let prefix = Path::new(&args.output_prfix);
-    let mut hit_file = BufWriter::new(File::create(prefix.with_extension("hit")).unwrap());
-    writeln!(
-        hit_file,
-        "#{}",
-        [
-            "q_idx",
-            "q_name",
-            "query_bgn",
-            "query_end",
-            "q_len",
-            "aln_anchor_count",
-            "src",
-            "ctg",
-            "ctg_bgn",
-            "ctg_end",
-            "orientation",
-            "out_seq_name"
-        ]
-        .join("\t")
-    )?;
 
+    let mut hit_file = if args.bed_summary {
+        BufWriter::new(File::create(prefix.with_extension("hit.bed")).unwrap())
+    } else {
+        BufWriter::new(File::create(prefix.with_extension("hit")).unwrap())
+    };
+    if args.bed_summary {
+        writeln!(
+            hit_file,
+            "#{}",
+            [
+                "target",
+                "bgn",
+                "end",
+                "query",
+                "color",
+                "orientation",
+                "q_len",
+                "aln_anchor_count",
+                "q_idx",
+                "src",
+                "ctg_bgn",
+                "ctg_end",
+            ]
+            .join("\t")
+        )?;
+    } else {
+        writeln!(
+            hit_file,
+            "#{}",
+            [
+                "out_seq_name",
+                "ctg_bgn",
+                "ctg_end",
+                "color",
+                "q_name",
+                "orientation",
+                "idx",
+                "q_idx",
+                "query_bgn",
+                "query_end",
+                "q_len",
+                "aln_anchor_count",
+            ]
+            .join("\t")
+        )?;
+    };
     query_seqs
         .into_iter()
         .enumerate()
@@ -236,10 +288,13 @@ fn main() -> Result<(), std::io::Error> {
                     })
                     .collect::<FxHashMap<_, _>>();
 
-                let ext = format!("{:03}.fa", idx);
-                let mut fasta_out =
-                    BufWriter::new(File::create(prefix.with_extension(ext)).unwrap());
-
+                let mut fasta_out = None;
+                let mut fasta_buf: BufWriter<File>;
+                if !args.only_summary {
+                    let ext = format!("{:03}.fa", idx);
+                    fasta_buf = BufWriter::new(File::create(prefix.with_extension(ext)).unwrap());
+                    fasta_out = Some(&mut fasta_buf);
+                };
                 aln_range.into_iter().for_each(|(sid, rgns)| {
                     let (ctg, src, _ctg_len) =
                         seq_index_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
@@ -251,36 +306,62 @@ fn main() -> Result<(), std::io::Error> {
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
-
                             let target_seq_name =
-                                format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
-                            let _ = writeln!(
-                                hit_file,
-                                "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                idx,
-                                q_name,
-                                q_bgn,
-                                q_end,
-                                q_len,
-                                aln.len(),
-                                src,
-                                ctg,
-                                b,
-                                e,
-                                orientation,
-                                target_seq_name
-                            );
-                            //println!("DBG: {}", seq_id);
-                            let target_seq = seq_index_db
-                                .get_sub_seq_by_id(sid, b as usize, e as usize)
-                                .unwrap();
-                            let target_seq = if orientation == 1 {
-                                pgr_db::fasta_io::reverse_complement(&target_seq)
+                            if args.fastx_file && args.bed_summary {
+                                format!("{}", ctg)
                             } else {
-                                target_seq
+                                format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)
                             };
-                            let _ = writeln!(fasta_out, ">{}", target_seq_name);
-                            let _ = writeln!(fasta_out, "{}", String::from_utf8_lossy(&target_seq));
+
+                            if args.bed_summary {
+                                let _ = writeln!(
+                                    hit_file,
+                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                    target_seq_name,
+                                    b,
+                                    e,
+                                    q_name,
+                                    "#AAAAAA",
+                                    orientation,
+                                    q_len,
+                                    aln.len(),
+                                    idx,
+                                    src,
+                                    q_bgn,
+                                    q_end,
+                                );
+                            } else {
+                                let _ = writeln!(
+                                    hit_file,
+                                    "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                    idx,
+                                    q_name,
+                                    q_bgn,
+                                    q_end,
+                                    q_len,
+                                    aln.len(),
+                                    src,
+                                    ctg,
+                                    b,
+                                    e,
+                                    orientation,
+                                    target_seq_name
+                                );
+                            }
+                            //println!("DBG: {}", seq_id);
+                            if let Some(fasta_out) = fasta_out.as_mut() {
+                                let target_seq = seq_index_db
+                                    .get_sub_seq_by_id(sid, b as usize, e as usize)
+                                    .unwrap();
+                                let target_seq = if orientation == 1 {
+                                    pgr_db::fasta_io::reverse_complement(&target_seq)
+                                } else {
+                                    target_seq
+                                };
+                                let _ = writeln!(fasta_out, ">{}", target_seq_name);
+                                let _ =
+                                    writeln!(fasta_out, "{}", String::from_utf8_lossy(&target_seq));
+                            };
                         });
                 });
             };

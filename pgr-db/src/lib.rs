@@ -113,7 +113,7 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
+            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
             if frg != re_seq || true {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
@@ -142,7 +142,7 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &frg);
+            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
             if frg != re_seq || true {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
