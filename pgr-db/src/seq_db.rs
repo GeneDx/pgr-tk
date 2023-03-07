@@ -900,9 +900,11 @@ pub fn frag_map_to_adj_list(
     };
 
     (0..out.len() - 1)
-        .into_par_iter()
+        //.into_par_iter()
+        .into_iter()
         .flat_map(|i| {
             if let (Some(v), Some(w)) = (out[i], out[i + 1]) {
+                // println!("DBG v: {} {} {} {:?} w: {} {} {} {:?}", v.0, v.1, v.2, v.3, w.0, w.1, w.2, w.3); // XXX
                 if v.0 != w.0 || v.2 != w.1 {
                     vec![None]
                 } else {
@@ -1004,7 +1006,7 @@ pub fn sort_adj_list_by_weighted_dfs(
         let w = ShmmrGraphNode(w.0, w.1, w.2);
         g.add_edge(v, w, ());
 
-        //println!("DBG: add_edge {:?} {:?}", v, w);
+        // println!("DBG: add_edge {:?} {:?}", v, w);
         score
             .entry(v)
             .or_insert_with(|| frag_map.get(&vv).unwrap().len() as u32);
@@ -1013,7 +1015,7 @@ pub fn sort_adj_list_by_weighted_dfs(
             .or_insert_with(|| frag_map.get(&ww).unwrap().len() as u32);
     });
 
-    //println!("DBG: {} {}", g.node_count(), g.edge_count());
+    // println!("DBG: # node: {}, # edgg: {}", g.node_count(), g.edge_count());
 
     let start = ShmmrGraphNode(start.0, start.1, start.2);
 
@@ -1031,7 +1033,7 @@ pub fn sort_adj_list_by_weighted_dfs(
             branch_id,
             branch_rank,
         ));
-        //println!("{:?}", node);
+        //println!("DBG, next node: {:?}", node);
     }
     out
 }
@@ -1045,8 +1047,11 @@ pub fn get_principal_bundles_from_adj_list(
     AdjList,
 ) {
     assert!(!adj_list.is_empty());
+    // println!("DBG: adj_list[0]: {:?}", adj_list[0]);
     let s = adj_list[0].1;
     let sorted_adj_list = sort_adj_list_by_weighted_dfs(frag_map, adj_list, s);
+
+    // println!("DGB: sorted_adj_list len: {}", sorted_adj_list.len());
 
     let mut paths: Vec<Vec<ShmmrGraphNode>> = vec![];
     let mut path: Vec<ShmmrGraphNode> = vec![];
