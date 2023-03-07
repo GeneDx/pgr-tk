@@ -10,7 +10,6 @@ use std::hash::Hash;
 #[derive(Copy, Clone)]
 pub struct WeightedNode<N>(pub u32, pub N);
 
-
 impl<N> Ord for WeightedNode<N> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.cmp(&other.0)
@@ -177,7 +176,8 @@ where
         let mut branch = self.current_branch;
         loop {
             let node;
-            if let Some(n) = self.next_node { // the next_node is the prioritized node 
+            if let Some(n) = self.next_node {
+                // the next_node is the prioritized node
                 node = n;
                 branch_rank = self.branch_rank;
             } else {
@@ -198,13 +198,16 @@ where
                 self.discovered.visit(rnode);
                 //println!("DBG, visited: {:?}, {:?}", node, rnode);
 
-                let mut out_count = 0_usize;
+                let mut f_out_count = 0_usize;
                 let mut succ_list_f = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors_directed(node.1, Outgoing) {
+                    if node.1 == succ || node.1 == succ.reverse() {
+                        continue;
+                    }; // Not walk through self-loop
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
                         //println!("DBG: pushing0: {:?}", succ);
-                        out_count += 1;
+                        f_out_count += 1;
                         let s = self.node_score.unwrap().get(&succ).unwrap();
                         succ_list_f.push(WeightedNode(*s, succ));
                     }
@@ -212,6 +215,9 @@ where
 
                 let mut succ_list_r = Vec::<WeightedNode<N>>::new();
                 for succ in graph.neighbors_directed(node.1.reverse(), Outgoing) {
+                    if node.1 == succ || node.1 == succ.reverse() {
+                        continue;
+                    }; // Not walk through self-loop
                     //println!("DBG: succ: {:?} {:?}", node.1, succ);
                     if !self.discovered.is_visited(&succ) {
                         //println!("DBG: pushing0: {:?}", succ);
@@ -221,26 +227,29 @@ where
                 }
 
                 let mut is_leaf = false;
-                if out_count == 0 {
+                if f_out_count == 0 {
                     is_leaf = true;
                     self.next_node = None;
-                } else {
-                    if !succ_list_f.is_empty() {
-                        // we prefer the same direction first
-                        succ_list_f.sort();
-                        self.next_node = succ_list_f.pop();
-                        succ_list_f.iter().for_each(|s| {
-                            //println!("DBG, pushing1: {:?}", s);
-                            self.priority_queue.push(*s);
-                        });
-                    } 
+                };
 
+                if !succ_list_f.is_empty() {
+                    // we prefer the same direction first
+                    succ_list_f.sort();
+                    self.next_node = succ_list_f.pop();
+                    succ_list_f.iter().for_each(|s| {
+                        //println!("DBG, pushing1: {:?}", s);
+                        self.priority_queue.push(*s);
+                    });
+                };
+
+                if !succ_list_r.is_empty() {
                     succ_list_r.sort();
                     succ_list_r.iter().for_each(|s| {
                         //println!("DBG, pushing1: {:?}", s);
                         self.priority_queue.push(*s);
                     });
-                }
+                };
+
                 //println!("DBG: next node: {:?}", self.next_node);
 
                 let mut node_rank = u32::MAX;
@@ -264,7 +273,7 @@ where
                             }
                         }
                     });
-                
+
                 if node_rank == u32::MAX {
                     node_rank = 0;
                 }
@@ -273,7 +282,7 @@ where
                 global_rank.insert(node.1.reverse(), node_rank);
 
                 self.branch_rank += 1;
-                //println!("DBG: out {:?}", node.1);
+                // println!("DBG: out {:?}", node.1);
                 return Some((node.1, p_node, is_leaf, node_rank, branch, branch_rank));
             } // else continue the loop
         }

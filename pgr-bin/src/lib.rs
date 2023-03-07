@@ -805,12 +805,17 @@ impl SeqIndexDB {
         };
         let frag_map = frag_map.unwrap();
         let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
+
+        // println!("DBG: adj_list len {:?}", adj_list.len());
+
         let mut overlaps =
             FxHashMap::<(ShmmrGraphNode, ShmmrGraphNode), Vec<(u32, u8, u8)>>::default();
         let mut frag_id = FxHashMap::<(u64, u64), usize>::default();
         let mut id = 0_usize;
         let (pb, filtered_adj_list) =
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff);
+
+        // println!("DBG: pb len {:?}, filtered_adj_list len: {:?} ", pb.len(), filtered_adj_list.len());
 
         // TODO: we will remove this redundant converion in the future
         let pb = pb
