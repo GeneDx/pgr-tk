@@ -13,7 +13,7 @@ use std::{
 
 /// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-make-frgdb")]
+#[clap(name = "pgr-compare-cov")]
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
