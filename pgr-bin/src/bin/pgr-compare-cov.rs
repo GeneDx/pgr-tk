@@ -10,6 +10,7 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
+use rayon::prelude::*;
 
 /// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
@@ -213,7 +214,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -263,7 +264,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -391,7 +392,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -446,7 +447,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
