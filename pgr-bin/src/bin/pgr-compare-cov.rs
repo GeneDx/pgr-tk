@@ -420,8 +420,8 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c0 > 0);
-                let r = c0 as f32 / c1 as f32;
-                (k.2, k.3, r, c1, c0)
+                let r = c1 as f32 / c0 as f32;
+                (k.2, k.3, r, c0, c1)
             })
             .collect::<Vec<_>>();
         output_cov_bed(
@@ -475,7 +475,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c1 > 0);
-                let r = c1 as f32 / c0 as f32;
+                let r = c0 as f32 / c1 as f32;
                 (k.2, k.3, r, c1, c0)
             })
             .collect::<Vec<_>>();
