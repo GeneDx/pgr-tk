@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
+
 /// Query a PGR-TK pangenome sequence database,
 /// ouput the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
@@ -96,11 +97,20 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut seq_index_db = SeqIndexDB::new();
     if args.frg_file {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(b"the optione `--frg_file` is specified, read the input file as a AGC backed index database files.");
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else if args.fastx_file {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(b"the optione `--fastx_file` is specified, read the input file as a file file.");
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(b"Read the input as a AGC backed index database files.");
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
     }
     let prefix = Path::new(&args.output_prfix);

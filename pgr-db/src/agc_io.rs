@@ -35,7 +35,7 @@ pub struct AGCFile {
     pub ctg_lens: FxHashMap<(String, String), usize>,
     sample_ctg: Vec<(String, String)>,
     pub prefetching: bool,
-    pub number_iter_thread: usize
+    pub number_iter_thread: usize,
 }
 
 pub struct AGCFileIter<'a> {
@@ -60,7 +60,11 @@ impl AGCFile {
         let mut ctg_lens = vec![];
         //let mut ctg_lens = HashMap::new();
         let mut sample_ctg = vec![];
-
+        let stderr = io::stderr();
+        let mut handle = stderr.lock();
+        let _ = io::Write::write_all(&mut handle, b"Reading AGC file using the AGC library writting \
+ in C which can cause segementation fault for wrong file type or corrupted AGC file. If you see segenmentation fault, please make sure you have \
+ proper AGC files specifed in the input file.");
         unsafe {
             let agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
@@ -112,7 +116,7 @@ impl AGCFile {
             ctg_lens,
             sample_ctg,
             prefetching,
-            number_iter_thread 
+            number_iter_thread,
         })
     }
 
@@ -188,7 +192,10 @@ impl<'a> IntoIterator for &'a AGCFile {
 
 impl<'a> AGCFileIter<'a> {
     pub fn new(agc_file: &'a AGCFile) -> Self {
-        let agc_thread_pool = ThreadPoolBuilder::new().num_threads(agc_file.number_iter_thread).build().unwrap();
+        let agc_thread_pool = ThreadPoolBuilder::new()
+            .num_threads(agc_file.number_iter_thread)
+            .build()
+            .unwrap();
         //let number_of_reader_threads = agc_file.number_iter_thread;
         let prefetching = agc_file.prefetching;
         AGCFileIter {
@@ -250,7 +257,6 @@ impl<'a> Iterator for AGCFileIter<'a> {
 
             let mut seq_buf: (usize, usize, Vec<SeqRec>) = self.seq_buf.take().unwrap();
 
-
             let v_seq_rec = self.agc_thread_pool.install(|| {
                 let seq_buf: Vec<SeqRec> = next_batch
                     .par_iter()
@@ -260,28 +266,35 @@ impl<'a> Iterator for AGCFileIter<'a> {
                                 *tl_agc_handle.borrow_mut() = Some(unsafe {
                                     AGCHandle(agc_open(
                                         CString::new(filepath.clone()).unwrap().into_raw(),
-                                         self.prefetching as i32,
+                                        self.prefetching as i32,
                                     ))
                                 });
                             }
                             let t = tl_agc_handle.borrow_mut();
                             let agc_handle = (t.as_ref()).unwrap();
 
-                            let c_sample_name: *mut i8 = CString::new(s.clone()).unwrap().into_raw();
+                            let c_sample_name: *mut i8 =
+                                CString::new(s.clone()).unwrap().into_raw();
                             let c_ctg_name: *mut i8 = CString::new(c.clone()).unwrap().into_raw();
                             let seq;
                             let ctg_len = *end - *bgn + 1;
                             unsafe {
-                                let seq_buf: *mut i8 = libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
+                                let seq_buf: *mut i8 =
+                                    libc::malloc(mem::size_of::<i8>() * ctg_len as usize)
+                                        as *mut i8;
                                 agc_get_ctg_seq(
                                     agc_handle.0,
                                     c_sample_name,
                                     c_ctg_name,
                                     *bgn as i32,
-                                    *end as i32, 
+                                    *end as i32,
                                     seq_buf,
                                 );
-                                seq = <Vec<u8>>::from_raw_parts(seq_buf as *mut u8, ctg_len - 1, ctg_len);
+                                seq = <Vec<u8>>::from_raw_parts(
+                                    seq_buf as *mut u8,
+                                    ctg_len - 1,
+                                    ctg_len,
+                                );
                                 //check this, it takes over the pointer? we don't need to free the point manually?
                             }
 
