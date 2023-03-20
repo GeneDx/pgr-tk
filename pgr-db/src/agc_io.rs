@@ -63,8 +63,8 @@ impl AGCFile {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
         let _ = io::Write::write_all(&mut handle, b"Reading AGC file using the AGC library writting \
- in C which can cause segementation fault for wrong file type or corrupted AGC file. If you see segenmentation fault, please make sure you have \
- proper AGC files specifed in the input file.");
+ in C can cause segementation fault if wrong file type or corrupted AGC file is provided. If you see segenmentation \
+ fault, please make sure you have proper AGC files specifed as the input file.");
         unsafe {
             let agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
