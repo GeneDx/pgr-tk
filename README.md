@@ -1,6 +1,6 @@
 # PGR-tk: A PanGenomic Research Took Kit
 
-[![test_and_build](https://github.com/Sema4-Research/pgr-tk/actions/workflows/test_and_build.yml/badge.svg)](https://github.com/cschin/Sema4-Research/actions/workflows/test_and_build.yml)
+[![test_and_build](https://github.com/genedx/pgr-tk/actions/workflows/test_and_build.yml/badge.svg)](https://github.com/cschin/genedx/actions/workflows/test_and_build.yml)
 
 This repository is a project to provide Python and Rust libraries to facilitate pangenomics analysis. Several algorithms and data structures used for the Peregrine Genome Assembler are useful for Pangenomics analysis as well. This repo takes those algorithms and data structure, combining other handy 3rd party tools to expose them as a library in Python (with Rust code for those computing parts that need performance.) 
 
@@ -46,7 +46,7 @@ A collection of Jupyter Notebooks are at https://github.com/sema4-Research/pgr-t
 
 ## Built Binaries
 
-Check https://github.com/Sema4-Research/pgr-tk/releases
+Check https://github.com/genedx/pgr-tk/releases
 
 
 ## Build

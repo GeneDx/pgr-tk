@@ -18,7 +18,8 @@ Here is a brief example using PGR-TK to generate a local MAP Graph of the MHC Cl
 
     import pgrtk
 
-    ref_db = pgrtk.AGCFile("/data/pgr-tk-HGRP-y1-evaluation-set-v0.agc") # lazy load an agc file of the reference without any SHIMMER index 
+    # lazy load an agc file of the reference without any SHIMMER index 
+    ref_db = pgrtk.AGCFile("/data/pgr-tk-HGRP-y1-evaluation-set-v0.agc")
 
     sdb = pgrtk.SeqIndexDB()
     sdb.load_from_agc_index("/data/pgr-tk-HGRP-y1-evaluation-set-v0")
@@ -26,7 +27,7 @@ Here is a brief example using PGR-TK to generate a local MAP Graph of the MHC Cl
     ref_file_name, roi_chr, roi_b, roi_e = 'hg19_tagged.fa', "chr6_hg19", 32130918, 32959917
     padding = 0
 
-    #get a segment of a reference
+    # get a segment of a reference
     roi_seq = ref_db.get_sub_seq(ref_file_name, roi_chr, roi_b-padding, roi_e+padding)
 
 

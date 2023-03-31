@@ -46,7 +46,8 @@
 <p>Here is a brief example using PGR-TK to generate a local MAP Graph of the MHC Class II locus:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pgrtk</span>
 
-<span class="n">ref_db</span> <span class="o">=</span> <span class="n">pgrtk</span><span class="o">.</span><span class="n">AGCFile</span><span class="p">(</span><span class="s2">&quot;/data/pgr-tk-HGRP-y1-evaluation-set-v0.agc&quot;</span><span class="p">)</span> <span class="c1"># lazy load an agc file of the reference without any SHIMMER index</span>
+<span class="c1"># lazy load an agc file of the reference without any SHIMMER index</span>
+<span class="n">ref_db</span> <span class="o">=</span> <span class="n">pgrtk</span><span class="o">.</span><span class="n">AGCFile</span><span class="p">(</span><span class="s2">&quot;/data/pgr-tk-HGRP-y1-evaluation-set-v0.agc&quot;</span><span class="p">)</span>
 
 <span class="n">sdb</span> <span class="o">=</span> <span class="n">pgrtk</span><span class="o">.</span><span class="n">SeqIndexDB</span><span class="p">()</span>
 <span class="n">sdb</span><span class="o">.</span><span class="n">load_from_agc_index</span><span class="p">(</span><span class="s2">&quot;/data/pgr-tk-HGRP-y1-evaluation-set-v0&quot;</span><span class="p">)</span>
@@ -54,7 +55,7 @@
 <span class="n">ref_file_name</span><span class="p">,</span> <span class="n">roi_chr</span><span class="p">,</span> <span class="n">roi_b</span><span class="p">,</span> <span class="n">roi_e</span> <span class="o">=</span> <span class="s1">&#39;hg19_tagged.fa&#39;</span><span class="p">,</span> <span class="s2">&quot;chr6_hg19&quot;</span><span class="p">,</span> <span class="mi">32130918</span><span class="p">,</span> <span class="mi">32959917</span>
 <span class="n">padding</span> <span class="o">=</span> <span class="mi">0</span>
 
-<span class="c1">#get a segment of a reference</span>
+<span class="c1"># get a segment of a reference</span>
 <span class="n">roi_seq</span> <span class="o">=</span> <span class="n">ref_db</span><span class="o">.</span><span class="n">get_sub_seq</span><span class="p">(</span><span class="n">ref_file_name</span><span class="p">,</span> <span class="n">roi_chr</span><span class="p">,</span> <span class="n">roi_b</span><span class="o">-</span><span class="n">padding</span><span class="p">,</span> <span class="n">roi_e</span><span class="o">+</span><span class="n">padding</span><span class="p">)</span>
 
 
