@@ -40,9 +40,9 @@ PGR-TK provides the following tool to
 
 For each comannd, `command --help` provides the detail usage information. 
 
-The API documentation is at https://sema4-research.github.io/pgr-tk/
+The API documentation is at https://genedx.github.io/pgr-tk/
 
-A collection of Jupyter Notebooks are at https://github.com/sema4-Research/pgr-tk-notebooks/
+A collection of Jupyter Notebooks are at https://github.com/genedx/pgr-tk-notebooks/
 
 ## Built Binaries
 
