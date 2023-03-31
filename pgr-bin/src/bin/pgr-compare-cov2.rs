@@ -3,7 +3,7 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};
 
-use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
+use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use std::{
@@ -142,12 +142,11 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         .for_each(|filename| {
             let mut sample_set0 = FxHashSet::<String>::default();
             let mut sample_set1 = FxHashSet::<String>::default();
-            let mut prefix = "prefix".to_string();
             let files = filename.expect("can't get fastx file name");
             let files = files.trim();
             let files = files.to_string();
             let mut files = files.split("\t");
-            prefix = files.next().unwrap().to_string();
+            let prefix = files.next().unwrap().to_string();
             let refrenece = files.next().unwrap().to_string();
             println!("reference: {}", refrenece);
             sample_set0.insert(refrenece.clone());
