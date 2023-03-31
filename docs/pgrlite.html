@@ -1,0 +1,1041 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>pgrlite package &#8212; pgr-tk  documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Welcome to pgr-tk’s documentation!" href="index.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to pgr-tk’s documentation!"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pgr-tk  documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pgrlite package</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="pgrlite-package">
+<h1>pgrlite package<a class="headerlink" href="#pgrlite-package" title="Permalink to this headline">¶</a></h1>
+<section id="module-contents">
+<h2>Module contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+<section id="module-pgrtk">
+<span id="pgrlite"></span><h3>pgrlite<a class="headerlink" href="#module-pgrtk" title="Permalink to this headline">¶</a></h3>
+<p>This module is used to extract and compare sequences in a set of pan genome assemblies.
+It includes a number modules for access the sequence data and query the sequence index.</p>
+<p class="rubric">Example</p>
+<p>This shows a simple example to query the pangenomics database:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pgrtk</span>
+
+<span class="c1">## The AGCFile class is used to access the sequence data stored in a AGC file.</span>
+<span class="n">ref_db</span> <span class="o">=</span><span class="n">pgrtk</span><span class="o">.</span><span class="n">AGCFile</span><span class="p">(</span><span class="s2">&quot;hg19.agc&quot;</span><span class="p">)</span>
+
+<span class="c1">## Load a pre-build index and sequence data from all humane genome assemblies</span>
+<span class="c1">## of the HPRC year one release.</span>
+<span class="n">sdb</span> <span class="o">=</span> <span class="n">pgrtk</span><span class="o">.</span><span class="n">SeqIndexDB</span><span class="p">()</span>
+<span class="n">sdb</span><span class="o">.</span><span class="n">load_from_agc_index</span><span class="p">(</span><span class="s2">&quot;HPRC-y1-rebuild-04252022&quot;</span><span class="p">)</span>
+
+<span class="c1">## Extract a sequence from the hg19 AGC file.</span>
+<span class="n">gene_seq</span> <span class="o">=</span> <span class="n">ref_db</span><span class="o">.</span><span class="n">get_sub_seq</span><span class="p">(</span><span class="s1">&#39;hg19.fasta&#39;</span><span class="p">,</span> <span class="s1">&#39;chr6&#39;</span><span class="p">,</span>
+                              <span class="mi">160952514</span><span class="p">,</span> <span class="mi">161087407</span><span class="p">)</span>
+
+<span class="c1">## find hits in the pangenomic reference</span>
+<span class="n">alignment_ranges</span> <span class="o">=</span> <span class="n">pgrtk</span><span class="o">.</span><span class="n">query_sdb</span><span class="p">(</span><span class="n">sdb</span><span class="p">,</span> <span class="n">gene_seq</span><span class="p">,</span>
+                                     <span class="n">merge_range_tol</span><span class="o">=</span><span class="mi">100000</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.get_variant_calls">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_variant_calls</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">aln_segs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_bgn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctg_bgn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rs0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cs0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strand</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.get_variant_calls" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a variant call internal representation from the alignment segments.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list of tuples</em>) – <ul>
+<li><p>a list of tuples of “alignment segments” generate by <code class="docutils literal notranslate"><span class="pre">pgrtk.pgrtk.get_aln_segements()</span></code></p></li>
+<li><p>the “alignment segments” are a list of <code class="docutils literal notranslate"><span class="pre">(ref_loc:</span> <span class="pre">SeqLocus,</span> <span class="pre">tgt_loc:</span> <span class="pre">SeqLocus,</span> <span class="pre">align_type:</span> <span class="pre">AlnSegType)</span></code>. The data structures
+is defined as following Rust structs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pub</span> <span class="n">struct</span> <span class="n">SeqLocus</span> <span class="p">{</span>
+    <span class="n">pub</span> <span class="nb">id</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">bgn</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="nb">len</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">pub</span> <span class="n">enum</span> <span class="n">AlnSegType</span> <span class="p">{</span>
+    <span class="n">Match</span><span class="p">,</span>
+    <span class="n">Mismatch</span><span class="p">,</span>
+    <span class="n">Insertion</span><span class="p">,</span>
+    <span class="n">Deletion</span><span class="p">,</span>
+    <span class="n">Unspecified</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">pub</span> <span class="n">struct</span> <span class="n">AlnSegment</span> <span class="p">{</span>
+    <span class="n">pub</span> <span class="n">ref_loc</span><span class="p">:</span> <span class="n">SeqLocus</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">tgt_loc</span><span class="p">:</span> <span class="n">SeqLocus</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">t</span><span class="p">:</span> <span class="n">AlnSegType</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</p></li>
+<li><p><strong>ref_bgn</strong> (<em>int</em>) – the reference sequence start position</p></li>
+<li><p><strong>ctg_bgn</strong> (<em>int</em>) – the contig start position</p></li>
+<li><p><strong>rs0</strong> (<em>string</em>) – the reference sequence</p></li>
+<li><p><strong>cs0</strong> (<em>string</em>) – the contig sequence</p></li>
+<li><p><strong>strand</strong> (<em>int</em>) – the contig strand</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a dictionary mapping the key (ref_id, reference_position) to a set of variant
+calls in the form of a dictionary mapping from (target_location, strand) to
+a variant call record.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.merge_regions">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">merge_regions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rgns</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1000</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.merge_regions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take a list of ranges and merge them if two regions are within <code class="docutils literal notranslate"><span class="pre">tol</span></code>.
+:param rgns: a list of tuples of (<code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, <code class="docutils literal notranslate"><span class="pre">length</span></code>, <code class="docutils literal notranslate"><span class="pre">orientation</span></code>, …)
+:type rgns: list of tuples</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>a list of tuples of (<code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, <code class="docutils literal notranslate"><span class="pre">length</span></code>, <code class="docutils literal notranslate"><span class="pre">orientation</span></code>, …)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>list of tuples</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.output_variants_to_vcf_records">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">output_variants_to_vcf_records</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">variant_calls</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.output_variants_to_vcf_records" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert the variant calls to VCF records.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>variant_calls</strong> (<em>dict</em>) – the variant calls generated by <code class="docutils literal notranslate"><span class="pre">get_variant_calls()</span></code></p></li>
+<li><p><strong>ref_name</strong> (<em>string</em>) – reference sequence name</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list of VCF records</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.query_sdb">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">query_sdb</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq_index_db</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">query_seq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gap_penality_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.25</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">merge_range_tol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">12</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_query_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_target_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">128</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_aln_span</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.query_sdb" title="Permalink to this definition">¶</a></dt>
+<dd><p>Query a sequence index database for a query sequence.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq_index_db</strong> (<em>SeqIndexDB object</em>) – a sequence index database object</p></li>
+<li><p><strong>query_seq</strong> (<em>list of bytes</em>) – a list of bytes representing the DNA sequence</p></li>
+<li><p><strong>gap_penality_factor</strong> (<em>float</em>) – the gap penalty factor used in sparse dyanmic programming for finding the hits</p></li>
+<li><p><strong>merge_range_tol</strong> (<em>int</em>) – a parameter used to merge the alignment ranges</p></li>
+<li><p><strong>max_count</strong> (<em>int</em>) – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> for sparse dynamic programming</p></li>
+<li><p><strong>max_query_count</strong> (<em>int</em>) – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> in the query sequence for sparse dynamic programming</p></li>
+<li><p><strong>max_query_count</strong> – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> in the target sequence for sparse dynamic programming</p></li>
+<li><p><strong>max_aln_span</strong> (<em>int</em>) – the size of span used in the sparse dynamic alignment for finding the hits</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>a python dictionary with the key as the target sequence id and the value as a list of alignment ranges</p></li>
+<li><p>each alignment ranges is a list of tuples, each tuple is (<code class="docutils literal notranslate"><span class="pre">start</span></code>, <code class="docutils literal notranslate"><span class="pre">end</span></code>, <code class="docutils literal notranslate"><span class="pre">length</span></code>,
+<code class="docutils literal notranslate"><span class="pre">orientation</span></code>, <code class="docutils literal notranslate"><span class="pre">aln_records</span></code>)</p></li>
+<li><p>the <code class="docutils literal notranslate"><span class="pre">aln_records</span></code> is a list of tuples of
+(<code class="docutils literal notranslate"><span class="pre">target_sequence_id</span></code>, (<code class="docutils literal notranslate"><span class="pre">score</span></code>, <code class="docutils literal notranslate"><span class="pre">list_of_the_hit_pairs</span></code>)), where
+the <code class="docutils literal notranslate"><span class="pre">list_of_the_hit_pairs</span></code> is a list of tuples of
+((<code class="docutils literal notranslate"><span class="pre">query_start</span></code>, <code class="docutils literal notranslate"><span class="pre">query_end</span></code>, <code class="docutils literal notranslate"><span class="pre">query_orientation</span></code>),
+(<code class="docutils literal notranslate"><span class="pre">target_start</span></code>, <code class="docutils literal notranslate"><span class="pre">target_end</span></code>, <code class="docutils literal notranslate"><span class="pre">target_orientation</span></code>))</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.rc">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">rc</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.rc" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reverse complement a sequence as a Python String.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>string</em>) – a DNA sequence as a Python String</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the reverse complement DNA sequence as a Python String</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.rc_byte_seq">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">rc_byte_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.rc_byte_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reverse complement a sequence as a list of bytes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>list of bytes</em>) – ascii code of the DNA sequence</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the list of bytes of the reverse complement DNA sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list of bytes</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.string_to_u8">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">string_to_u8</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">s</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.string_to_u8" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a Python String to a list of bytes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>s</strong> (<em>string</em>) – a Python String of a DNA sequence</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the DNA sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list of bytes</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.u8_to_string">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.</span></span><span class="sig-name descname"><span class="pre">u8_to_string</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">u8</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.u8_to_string" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert DNA sequene in a list of bytes to a Python String.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>u8</strong> (<em>list of bytes</em>) – a list of bytes representing the DNA sequence</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a Python String of a DNA sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>string</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-pgrtk.pgrtk">
+<span id="pgrlite-pgrlite"></span><h3>pgrlite.pgrlite<a class="headerlink" href="#module-pgrtk.pgrtk" title="Permalink to this headline">¶</a></h3>
+<p>The internal <cite>pgrtk</cite> modules implemented with Rust.
+These classes and fucntion are re-exported as <cite>pgrtk.*</cite>
+so <cite>import pgrtk</cite> will bring these classes and function
+into <cite>pgrtk.*</cite> scope to avoid using the verbose
+<cite>pgrtk.pgrtk.*</cite>.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.AGCFile">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">AGCFile</span></span><a class="headerlink" href="#pgrtk.pgrtk.AGCFile" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A PyO3 class wrapping an exising AGC file for reading</p>
+<p>Examaple:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">agc_file</span> <span class="o">=</span> <span class="n">AGCFile</span><span class="p">(</span><span class="s2">&quot;/path/to/genomes.agc&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.AGCFile.ctg_lens">
+<span class="sig-name descname"><span class="pre">ctg_lens</span></span><a class="headerlink" href="#pgrtk.pgrtk.AGCFile.ctg_lens" title="Permalink to this definition">¶</a></dt>
+<dd><p>A hashmap mapping (source, ctg_name) to sequence length.
+It is more efficient to make a copy in Python to access it to avoid
+expensive Rust struct ot Python object conversion than using it directly. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">agc_file</span> <span class="o">=</span> <span class="n">AGCFile</span><span class="p">(</span><span class="s2">&quot;genomes.agc&quot;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">agc_ctg_lens</span> <span class="o">=</span> <span class="n">agc_file</span><span class="o">.</span><span class="n">ctg_lens</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.AGCFile.get_seq">
+<span class="sig-name descname"><span class="pre">get_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctg_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.AGCFile.get_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>fetch a full contig sequence from an AGC file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_name</strong> (<em>string</em>) – the sample name stored in the AGC file</p></li>
+<li><p><strong>ctg_name</strong> (<em>string</em>) – the contig name stored in the AGC file</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.AGCFile.get_sub_seq">
+<span class="sig-name descname"><span class="pre">get_sub_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctg_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bgn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.AGCFile.get_sub_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>fetch a contiguous sub-sequence from an AGC file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_name</strong> (<em>string</em>) – the sample name stored in the AGC file</p></li>
+<li><p><strong>ctg_name</strong> (<em>string</em>) – the contig name stored in the AGC file</p></li>
+<li><p><strong>bgn</strong> (<em>int</em>) – the starting coordinate (0-based)</p></li>
+<li><p><strong>end</strong> (<em>int</em>) – the ending coordinate (exclusive)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">SeqIndexDB</span></span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A class that stores pangenomics indices and seqeunces with multiple backend storage options (AGC, fasta file, memory)
+Large set of genomic sequenes, a user should use AGC backend. A binary file provides the command <code class="docutils literal notranslate"><span class="pre">pgr-mdb</span></code>
+which can read an AGC to create the index file. For example, we can create the index files from an AGC file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span># create a file that contains a list of file that contains a set of files from which we want to build the indices
+
+$ echo HPRC-y1-rebuild-04252022.agc &gt; filelist
+
+# using pgr-mdb to create the index files, for 97 haplotyed genome assembly from HPRC year one release,
+# it takes about 30 to 40 min to create the index files
+
+$ pgr-mdb filelist HPRC-y1-rebuild-04252022
+
+# two index files will be created by the pgr-mdb command
+# one with a suffix .mdb and another one with a suffix .midx
+# when we use the load_from_agc_index() method, all three files, e.g., genomes.agc, genomes.mdb and
+# genomes.midx should have the same prefix as the parameter used to call  load_from_agc_index() method
+</pre></div>
+</div>
+<p>One can also create index and load the seqeunces from a fasta file using <code class="docutils literal notranslate"><span class="pre">`load_from_fastx()`</span></code> methods.
+Curretnly, this might be a good option for mid-size dataset (up to a couple of hundred magebases).</p>
+<p>Or, a user can load the sequnece from memory using a Python list. This is convinient when one needs to
+rebuild the SHIMMER index with different parameters for a different resolution.</p>
+<p>Once the index is built, the database can be queried quickly by using the <code class="docutils literal notranslate"><span class="pre">query_fragment()</span></code> or
+the <code class="docutils literal notranslate"><span class="pre">query_fragment_to_hps()</span></code> method.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.generate_smp_gfa">
+<span class="sig-name descname"><span class="pre">generate_smp_gfa</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.generate_smp_gfa" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert the adjecent list of the shimmer graph shimmer_pair -&gt; GFA</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>min_count</strong> (<em>int</em>) – the minimum number of times a pair of shimmers must be observed to be included in the graph</p></li>
+<li><p><strong>filenpath</strong> (<em>string</em>) – the path to the output file</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>the adj_list is written to a file in GFA v.1 format</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_seq">
+<span class="sig-name descname"><span class="pre">get_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctg_name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>fetch a sequence</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_name</strong> (<em>string</em>) – the sample name stored in the AGC file</p></li>
+<li><p><strong>ctg_name</strong> (<em>string</em>) – the contig name stored in the AGC file</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_shmmr_map">
+<span class="sig-name descname"><span class="pre">get_shmmr_map</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_shmmr_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>get the <code class="docutils literal notranslate"><span class="pre">shmmer_pair</span></code> to <code class="docutils literal notranslate"><span class="pre">fragment_id</span></code> map in Python</p>
+<p>this can be very expensive to generate the Python objects of a large hashmap in Rust</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p><p>the <code class="docutils literal notranslate"><span class="pre">shmmer_pair</span></code> to <code class="docutils literal notranslate"><span class="pre">fragments</span></code> map</p>
+<p>fragments: a list of <code class="docutils literal notranslate"><span class="pre">FragmentSignature</span></code>: (frg_id, seq_id, bgn, end,
+orientation(to the shimmer pair)) defined as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pub</span> <span class="nb">type</span> <span class="n">FragmentSignature</span> <span class="o">=</span> <span class="p">(</span><span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u8</span><span class="p">);</span>
+</pre></div>
+</div>
+</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_count">
+<span class="sig-name descname"><span class="pre">get_shmmr_pair_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shmmr_pair</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>count the number of shimmer hits in the database</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>shmmr_pair</strong> (<em>tuple</em>) – a shimmer pair used for query</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>number of hits</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_list">
+<span class="sig-name descname"><span class="pre">get_shmmr_pair_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>get the <code class="docutils literal notranslate"><span class="pre">shmmer_pair</span></code> to <code class="docutils literal notranslate"><span class="pre">fragment_id</span></code> map in Python as a list</p>
+<p>this can be very expensive to generate the Python objects of a large hashmap in Rust</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>list of the tuple (shmmr0, shmmr1, seq_id, position0, position1, orientation)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_source_count">
+<span class="sig-name descname"><span class="pre">get_shmmr_pair_source_count</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shmmr_pair</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_unique_count</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_shmmr_pair_source_count" title="Permalink to this definition">¶</a></dt>
+<dd><p>count the number of shimmer hits paritioned by the source file in the database</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>shmmr_pair</strong> (<em>tuple</em>) – a shimmer pair used for query</p></li>
+<li><p><strong>max_unique_count</strong> (<em>int</em>) – a interger to filter out shimmer pairs with count that are greater
+than the <cite>max_unique_count</cite></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of the tuple (soure_name : string, count : int)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_shmmr_spec">
+<span class="sig-name descname"><span class="pre">get_shmmr_spec</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_shmmr_spec" title="Permalink to this definition">¶</a></dt>
+<dd><p>Output the specific of the shimmer used to build the index</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>(window_size, k_mer_size, reduction_factor, min_space, use_sketch)</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_smp_adj_list">
+<span class="sig-name descname"><span class="pre">get_smp_adj_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_smp_adj_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get adjecent list of the shimmer graph shimmer_pair -&gt; shimmer_pair</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>min_count</strong> (<em>int</em>) – the minimum number of times a pair of shimmers must be observed to be included in the graph</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.get_sub_seq">
+<span class="sig-name descname"><span class="pre">get_sub_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sample_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctg_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bgn</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.get_sub_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>fetch a contiguous sub-sequence</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sample_name</strong> (<em>string</em>) – the sample name stored in the AGC file</p></li>
+<li><p><strong>ctg_name</strong> (<em>string</em>) – the contig name stored in the AGC file</p></li>
+<li><p><strong>bgn</strong> (<em>int</em>) – the starting coordinate (0-based)</p></li>
+<li><p><strong>end</strong> (<em>int</em>) – the ending coordinate (exclusive)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.load_from_agc_index">
+<span class="sig-name descname"><span class="pre">load_from_agc_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.load_from_agc_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>use AGC file for sequences and the index created from an AGC file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>prefix</strong> (<em>string</em>) – the prefix to the <cite>.agc</cite>, <cite>.mdb</cite> and <cite>.midx</cite> files</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None or I/O Error</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.load_from_fastx">
+<span class="sig-name descname"><span class="pre">load_from_fastx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.load_from_fastx" title="Permalink to this definition">¶</a></dt>
+<dd><p>load and create the index created from a fasta / fastq file</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>filepath</strong> (<em>string</em>) – the path the fasta or fastq file</p></li>
+<li><p><strong>w</strong> (<em>int</em>) – the window size of the shimmer index, default to 80</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – the k-mer size of the shimmer index, default to 56</p></li>
+<li><p><strong>r</strong> (<em>int</em>) – the reduction factor of the shimmer index, default to 4</p></li>
+<li><p><strong>min_span</strong> (<em>int</em>) – the min_span ofr the shimmer index, default to 8</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None or I/O Error</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.load_from_seq_list">
+<span class="sig-name descname"><span class="pre">load_from_seq_list</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">source</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.load_from_seq_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>load and create the index created from a python list</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq_list</strong> (<em>list</em>) – a list of tuple of the form (squence_id : int, sequence_name : string, sequence: list of bytes)</p></li>
+<li><p><strong>source</strong> (<em>string</em>) – a string indicating the source of the sequence, default to “Memory”</p></li>
+<li><p><strong>w</strong> (<em>int</em>) – the window size of the shimmer index, default to 80</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – the k-mer size of the shimmer index, default to 56</p></li>
+<li><p><strong>r</strong> (<em>int</em>) – the reduction factor of the shimmer index, default to 4</p></li>
+<li><p><strong>min_span</strong> (<em>int</em>) – the min_span ofr the shimmer index, default to 8</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>None or I/O Error</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.query_fragment">
+<span class="sig-name descname"><span class="pre">query_fragment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.query_fragment" title="Permalink to this definition">¶</a></dt>
+<dd><p>use a fragement of sequence to query the database to get all hits</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>seq</strong> (<em>list</em>) – the sequnece in bytes used for query</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><dl>
+<dt>a list of hits in the format (shimmer_pair, query_fragement, target_fragments), where</dt><dd><ul>
+<li><p>shimmer_pair: (int, int), tuple of the shimmer_pair</p></li>
+<li><p>query_fragment: (int, int, int) = (start_coordinate, end_coordinate, orientation)</p></li>
+<li><p>target_fragments: a list of <code class="docutils literal notranslate"><span class="pre">FragmentSignature</span></code>: (frg_id, seq_id, bgn, end,
+orientation(to the shimmer pair)) defined as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pub</span> <span class="nb">type</span> <span class="n">FragmentSignature</span> <span class="o">=</span> <span class="p">(</span><span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u32</span><span class="p">,</span> <span class="n">u8</span><span class="p">);</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.query_fragment_to_hps">
+<span class="sig-name descname"><span class="pre">query_fragment_to_hps</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">penality</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_query_count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_target_count</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_aln_span</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.query_fragment_to_hps" title="Permalink to this definition">¶</a></dt>
+<dd><p>use a fragement of sequence to query the database to get all hits</p>
+<p>sparese dynamic programming is performed to long chain of alignment</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq</strong> (<em>list of bytes</em>) – a list of bytes representing the DNA sequence</p></li>
+<li><p><strong>penality</strong> (<em>float</em>) – the gap penalty factor used in sparse dyanmic programming for finding the hits</p></li>
+<li><p><strong>merge_range_tol</strong> (<em>int</em>) – a parameter used to merge the alignment ranges</p></li>
+<li><p><strong>max_count</strong> (<em>int</em>) – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> for sparse dynamic programming</p></li>
+<li><p><strong>max_query_count</strong> (<em>int</em>) – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> in the query sequence for sparse dynamic programming</p></li>
+<li><p><strong>max_query_count</strong> – only use the shimmer pairs that less than the <code class="docutils literal notranslate"><span class="pre">max_count</span></code> in the target sequence for sparse dynamic programming</p></li>
+<li><p><strong>max_aln_span</strong> (<em>int</em>) – the size of span used in the sparse dynamic alignment for finding the hits</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of tuples of
+(<code class="docutils literal notranslate"><span class="pre">target_sequence_id</span></code>, (<code class="docutils literal notranslate"><span class="pre">score</span></code>, <code class="docutils literal notranslate"><span class="pre">list_of_the_hit_pairs</span></code>)), where
+the <code class="docutils literal notranslate"><span class="pre">list_of_the_hit_pairs</span></code> is a list of tuples of
+((<code class="docutils literal notranslate"><span class="pre">query_start</span></code>, <code class="docutils literal notranslate"><span class="pre">query_end</span></code>, <code class="docutils literal notranslate"><span class="pre">query_orientation</span></code>),
+(<code class="docutils literal notranslate"><span class="pre">target_start</span></code>, <code class="docutils literal notranslate"><span class="pre">target_end</span></code>, <code class="docutils literal notranslate"><span class="pre">target_orientation</span></code>))</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.seq_index">
+<span class="sig-name descname"><span class="pre">seq_index</span></span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.seq_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>a dictionary maps (ctg_name, source) -&gt; (id, len)</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.seq_info">
+<span class="sig-name descname"><span class="pre">seq_info</span></span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.seq_info" title="Permalink to this definition">¶</a></dt>
+<dd><p>a dictionary maps id -&gt; (ctg_name, source, len)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.sort_adj_list_by_weighted_dfs">
+<span class="sig-name descname"><span class="pre">sort_adj_list_by_weighted_dfs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.sort_adj_list_by_weighted_dfs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Sort the adjecent list of the shimmer graph</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>adj_list</strong> (<em>list</em>) – the list from the output from <code class="docutils literal notranslate"><span class="pre">get_smp_adj_list</span></code></p></li>
+<li><p><strong>sort_by</strong> (<em>(</em><em>u64</em><em>, </em><em>u64</em><em>)</em>) – the starting node signature</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>list of node (node.0, node.1, node_count, is_leaf)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.SeqIndexDB.write_midx_to_text_file">
+<span class="sig-name descname"><span class="pre">write_midx_to_text_file</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.SeqIndexDB.write_midx_to_text_file" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.get_aln_map">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_aln_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">aln_segs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">s1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.get_aln_map" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get alignement map from a list of alignment segments</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list</em>) – a list of the <code class="docutils literal notranslate"><span class="pre">AlnSegment</span></code></p></li>
+<li><p><strong>s0</strong> (<em>string</em>) – a python string of the reference sequence</p></li>
+<li><p><strong>s1</strong> (<em>int</em>) – a interger id for the target sequnece</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of <code class="docutils literal notranslate"><span class="pre">AlnSegement</span></code></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.get_aln_segements">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_aln_segements</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ref_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ref_seq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tgt_id</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tgt_seq</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.get_aln_segements" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get alignement segments from two sequences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>ref_id</strong> (<em>int</em>) – a interger id for the reference sequence</p></li>
+<li><p><strong>ref_seq</strong> (<em>string</em>) – a python string of the reference sequence</p></li>
+<li><p><strong>tgt_id</strong> (<em>int</em>) – a interger id for the target sequnece</p></li>
+<li><p><strong>tgt_seq</strong> (<em>string</em>) – a python string of the target sequence</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>a list of <code class="docutils literal notranslate"><span class="pre">AlnSegement</span></code></p>
+<p>the <code class="docutils literal notranslate"><span class="pre">AlnSegment</span></code> is a Rust struct defined as:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pub</span> <span class="n">struct</span> <span class="n">SeqLocus</span> <span class="p">{</span>
+    <span class="n">pub</span> <span class="nb">id</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">bgn</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="nb">len</span><span class="p">:</span> <span class="n">u32</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">pub</span> <span class="n">enum</span> <span class="n">AlnSegType</span> <span class="p">{</span>
+    <span class="n">Match</span><span class="p">,</span>
+    <span class="n">Mismatch</span><span class="p">,</span>
+    <span class="n">Insertion</span><span class="p">,</span>
+    <span class="n">Deletion</span><span class="p">,</span>
+    <span class="n">Unspecified</span><span class="p">,</span>
+<span class="p">}</span>
+
+<span class="n">pub</span> <span class="n">struct</span> <span class="n">AlnSegment</span> <span class="p">{</span>
+    <span class="n">pub</span> <span class="n">ref_loc</span><span class="p">:</span> <span class="n">SeqLocus</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">tgt_loc</span><span class="p">:</span> <span class="n">SeqLocus</span><span class="p">,</span>
+    <span class="n">pub</span> <span class="n">t</span><span class="p">:</span> <span class="n">AlnSegType</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.get_cigar">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_cigar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seq1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.get_cigar" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate the CIGAR string from two sequences with WFA</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq0</strong> (<em>string</em>) – a string representing the first sequence</p></li>
+<li><p><strong>seq1</strong> (<em>string</em>) – a string representing the second sequence</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>tuple of (alignment_score, CIGAR_string, CIGAR_list)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.get_shmmr_dots">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_shmmr_dots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seq0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seq1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.get_shmmr_dots" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a list of shimmer matches for creating a dot plot between two sequences</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>seq0</strong> (<em>list</em>) – a list of bytes representing the first sequences</p></li>
+<li><p><strong>seq1</strong> (<em>list</em>) – a list of bytes representing the second sequences</p></li>
+<li><p><strong>w</strong> (<em>int</em>) – window size, default to 80, max allowed is 128</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – k-mer size, default to 56, max allowed is 56</p></li>
+<li><p><strong>r</strong> (<em>int</em>) – reduction factor for generate sparse hierarchical minimiers (shimmer),
+default to 4, max allowed is 12</p></li>
+<li><p><strong>min_span</strong> (<em>int</em>) – <ul>
+<li><p>a parameter to remove close-by shimmer pairs</p></li>
+<li><p>if not zero, shimmer pairs whic the distance between them are less
+than <code class="docutils literal notranslate"><span class="pre">the</span> <span class="pre">min_span</span></code> will be removed</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p><code class="docutils literal notranslate"><span class="pre">(x,</span> <span class="pre">y)</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">x</span></code>: the matched shimmer positions in sequence 0</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">y</span></code>: the matched shimmer positions in sequence 1</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>tuple of two lists</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.get_shmmr_pairs_from_seq">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">get_shmmr_pairs_from_seq</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.get_shmmr_pairs_from_seq" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a list of shimmer pair from a sequence</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>w</strong> (<em>int</em>) – window size, default to 80, max allowed is 128</p></li>
+<li><p><strong>k</strong> (<em>int</em>) – k-mer size, default to 56, max allowed is 56</p></li>
+<li><p><strong>r</strong> (<em>int</em>) – reduction factor for generate sparse hierarchical minimiers (shimmer),
+default to 4, max allowed is 12</p></li>
+<li><p><strong>min_span</strong> (<em>int</em>) – <ul>
+<li><p>a parameter to remove close-by shimmer pairs</p></li>
+<li><p>if not zero, shimmer pairs whic the distance between them are less
+than <code class="docutils literal notranslate"><span class="pre">the</span> <span class="pre">min_span</span></code> will be removed</p></li>
+<li><p>default to 16</p></li>
+</ul>
+</p></li>
+<li><p><strong>padding</strong> (<em>bool</em>) – <ul>
+<li><p>for short fragment that segemented by using shimmer, set <code class="docutils literal notranslate"><span class="pre">padding</span></code> to true
+to preserve the first and last shimmers</p></li>
+<li><p>default to false</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list fo tuple of <code class="docutils literal notranslate"><span class="pre">(shimmr0,</span> <span class="pre">shimmr1,</span> <span class="pre">position0,</span> <span class="pre">position1,</span> <span class="pre">orientation)</span></code></p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list of tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.guided_shmmr_dbg_consensus">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">guided_shmmr_dbg_consensus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seqs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_cov</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.guided_shmmr_dbg_consensus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a guided shimmer de Bruijn graph consensus</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list</em>) – a list of the list of bytes representing the bases of each sequence</p></li>
+<li><p><strong>min_span</strong> (<em>k</em><em>, </em><em>w</em><em>, </em><em>r</em><em>,</em>) – specification of the shimmers for construting graph</p></li>
+<li><p><strong>min_cov</strong> (<em>int</em>) – to keep hyplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of a set of bytes representing the consensus sequences of all branches in the graph</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.naive_dbg_consensus">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">naive_dbg_consensus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seqs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kmer_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_cov</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.naive_dbg_consensus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a navie de Bruijn graph consensus</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list</em>) – a list of the list of bytes representing the bases of each sequence</p></li>
+<li><p><strong>kmer_size</strong> (<em>int</em>) – the size of kmers used for constructing the de Bruijn graph</p></li>
+<li><p><strong>min_cov</strong> (<em>int</em>) – to keep hyplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of bytes representing the consensus sequence</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.pgr_lib_version">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">pgr_lib_version</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.pgr_lib_version" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the revision (git-hashtag) of the build</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.shmmr_dbg_consensus">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">shmmr_dbg_consensus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seqs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.shmmr_dbg_consensus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a shimmer de Bruijn graph consensus</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list</em>) – a list of the list of bytes representing the bases of each sequence</p></li>
+<li><p><strong>min_span</strong> (<em>k</em><em>, </em><em>w</em><em>, </em><em>r</em><em>,</em>) – specification of the shimmers for construting graph</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of a set of bytes representing the consensus sequences of all branches in the graph</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.shmmr_sparse_aln_consensus">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">shmmr_sparse_aln_consensus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seqs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">w</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">r</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_span</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_cov</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.shmmr_sparse_aln_consensus" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform a shimmer de Bruijn graph consensus</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aln_segs</strong> (<em>list</em>) – a list of the list of bytes representing the bases of each sequence</p></li>
+<li><p><strong>min_span</strong> (<em>k</em><em>, </em><em>w</em><em>, </em><em>r</em><em>,</em>) – specification of the shimmers for construting graph</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>a list of a set of bytes representing the consensus sequences of all branches in the graph</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>list</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="pgrtk.pgrtk.sparse_aln">
+<span class="sig-prename descclassname"><span class="pre">pgrtk.pgrtk.</span></span><span class="sig-name descname"><span class="pre">sparse_aln</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sp_hits</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_span</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">penality</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#pgrtk.pgrtk.sparse_aln" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform sparse dynamic programming to identify alignment between sequence
+using matched shimmer pairs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sp_hits</strong> (<em>list</em>) – a list of tuple of <code class="docutils literal notranslate"><span class="pre">HitPair</span></code> defined as
+<code class="docutils literal notranslate"><span class="pre">pub</span> <span class="pre">type</span> <span class="pre">HitPair</span> <span class="pre">=</span> <span class="pre">((u32,</span> <span class="pre">u32,</span> <span class="pre">u8),</span> <span class="pre">(u32,</span> <span class="pre">u32,</span> <span class="pre">u8))</span></code>
+This represents the hits as the position of matched Shimmer Pairs from
+the two sequence. For example, if there two shimmers at positiong 2342
+and 4322 of the query sequence that matches the shimmers at positions
+6125465 and 6127445, them the HitPair will be <code class="docutils literal notranslate"><span class="pre">(2342,</span> <span class="pre">4322,</span> <span class="pre">0)</span></code> and
+<code class="docutils literal notranslate"><span class="pre">(6125465,</span> <span class="pre">6127445,</span> <span class="pre">0)</span></code>. The third number would be 1 if shimmer paired
+are reversed matched to the sequence orientation and 0 otherwise.</p></li>
+<li><p><strong>max_span</strong> (<em>int</em>) – For a give hit, the max_span defines how many other following hits are
+considered for the next aligned position. This will limit the search
+space for the best alignment. If the two sequences are very repetitive,
+then one needs to use larger <code class="docutils literal notranslate"><span class="pre">max_span</span></code> to ensure capturing the right
+alignment path</p></li>
+<li><p><strong>penality</strong> (<em>float</em>) – this parameter will determine when to break the alignment if there are big
+gaps between the alignment segement. One can set it to zero to catch large
+chunk alignment ignoring the gaps. Typically, a number between 0.1 to 0.5 should
+be used.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">pgrlite package</a><ul>
+<li><a class="reference internal" href="#module-contents">Module contents</a><ul>
+<li><a class="reference internal" href="#module-pgrtk">pgrlite</a></li>
+<li><a class="reference internal" href="#module-pgrtk.pgrtk">pgrlite.pgrlite</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="index.html"
+                          title="previous chapter">Welcome to pgr-tk’s documentation!</a></p>
+  </div>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="_sources/pgrlite.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to pgr-tk’s documentation!"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">pgr-tk  documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">pgrlite package</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2022, Jason Chin.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 4.5.0.
+    </div>
+  </body>
+</html>
