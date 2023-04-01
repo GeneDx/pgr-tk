@@ -10,10 +10,11 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
+use rayon::prelude::*;
 
 /// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-make-frgdb")]
+#[clap(name = "pgr-compare-cov")]
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
@@ -213,7 +214,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -263,7 +264,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -391,7 +392,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -419,8 +420,8 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c0 > 0);
-                let r = c0 as f32 / c1 as f32;
-                (k.2, k.3, r, c1, c0)
+                let r = c1 as f32 / c0 as f32;
+                (k.2, k.3, r, c0, c1)
             })
             .collect::<Vec<_>>();
         output_cov_bed(
@@ -446,7 +447,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -474,7 +475,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c1 > 0);
-                let r = c1 as f32 / c0 as f32;
+                let r = c0 as f32 / c1 as f32;
                 (k.2, k.3, r, c1, c0)
             })
             .collect::<Vec<_>>();
