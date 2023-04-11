@@ -808,9 +808,9 @@ impl CompactSeqDB {
 impl CompactSeqDB {
     pub fn write_to_frag_files(&self, file_prefix: String) {
         let mut sdx_file =
-            BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("csq file open fail"));
+            BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("sdx file creating fail\n"));
         let mut frg_file =
-            BufWriter::new(File::create(file_prefix + ".frg").expect("frg file open fail"));
+            BufWriter::new(File::create(file_prefix + ".frg").expect("frg file creating fail\n"));
 
         let config = config::standard();
 
@@ -844,11 +844,11 @@ impl CompactSeqDB {
             let l = v.len();
             frag_addr_offeset.push((offset, v.len(), *frag_len));
             offset += l;
-            frg_file.write_all(v).expect("frag file writing error");
+            frg_file.write_all(v).expect("frag file writing error\n");
         });
 
         bincode::encode_into_std_write((frag_addr_offeset, &self.seqs), &mut sdx_file, config)
-            .expect("csq file writing error");
+            .expect("sdx file writing error\n");
         //bincode::encode_into_std_write(compressed_frags, &mut frg_file, config)
         //    .expect(" frag file writing error");
     }
@@ -1233,7 +1233,7 @@ pub fn write_shmr_map_file(
     shmmr_map: &ShmmrToFrags,
     filepath: String,
 ) -> Result<(), std::io::Error> {
-    let mut out_file = File::create(filepath).expect("open fail");
+    let mut out_file = File::create(filepath).expect("open fail while writing the SHIMMER map (.mdb) file\n");
     let mut buf = Vec::<u8>::new();
 
     buf.extend("mdb".to_string().into_bytes());
@@ -1265,7 +1265,7 @@ pub fn write_shmr_map_file(
 }
 
 pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
-    let mut in_file = File::open(filepath).expect("open fail");
+    let mut in_file = File::open(filepath).expect("Error while opening the SHIMMER map file (.mdb) file");
     let mut buf = Vec::<u8>::new();
 
     let mut u64bytes = [0_u8; 8];
@@ -1346,7 +1346,7 @@ pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::
 }
 
 pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
-    let mut in_file = File::open(filepath).expect("open fail");
+    let mut in_file = File::open(filepath).expect("open fail while reading the SHIMMER map (.mdb) file");
     let mut buf = Vec::<u8>::new();
 
     let mut u64bytes = [0_u8; 8];

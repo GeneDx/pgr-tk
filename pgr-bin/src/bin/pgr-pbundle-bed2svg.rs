@@ -40,6 +40,9 @@ struct CmdOptions {
     /// the track panel size in pixel
     #[clap(long, default_value_t = 1600)]
     track_panel_width: usize,
+    /// the factor to increase height of each track
+    #[clap(long, default_value_t = 1.0)]
+    track_scaling: f32,
     /// the left padding in pixel
     #[clap(long)]
     left_padding: Option<usize>,
@@ -310,9 +313,9 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut y_offset = 0.0_f32;
     let delta_y = if !annotation_region_record.is_empty() {
-        22.0_f32 + args.annotation_region_stroke_width * 0.5
+        22.0_f32 * args.track_scaling + args.annotation_region_stroke_width * 0.5
     } else {
-        16.0_f32
+        16.0_f32 * args.track_scaling
     };
 
     // generate the bundle path elements
@@ -338,7 +341,7 @@ fn main() -> Result<(), std::io::Error> {
                     }
 
                     let arror_end = end as f32;
-                    let halfwidth = 5.0;
+                    let halfwidth = 5.0 * args.track_scaling;
                     let end =
                         if direction == 0 {
                             if end as f32 - halfwidth < bgn {
