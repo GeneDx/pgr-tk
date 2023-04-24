@@ -9,10 +9,10 @@ pub type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1
 pub fn sparse_aln(
     sp_hits: &mut Vec<HitPair>,
     max_span: u32,
-    penality: f32,
+    penalty: f32,
 ) -> Vec<(f32, Vec<HitPair>)> {
     // given a set of hits in the form of (bgn1, end1, orientation1),  (bgn2, end2, orientation2)
-    // perform (banded) dynamic programmng to group them into list of hit chains
+    // perform (banded) dynamic programming to group them into list of hit chains
     sp_hits.sort_by(|a, b| a.0 .0.partial_cmp(&b.0 .0).unwrap());
     let mut v_s = FxHashMap::<HitPair, f32>::default(); // score for each vertex
     let mut best_pre_v = FxHashMap::<HitPair, Option<HitPair>>::default(); // look up for the best pre-vertex
@@ -43,12 +43,12 @@ pub fn sparse_aln(
 
             if hp.0 .2 == hp.1 .2 {
                 // same orientation
-                s -= penality
+                s -= penalty
                     * ((hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs()
                         + (hp.1 .0 as f32 - pre_hp.1 .1 as f32).abs());
             } else {
                 // oppsite orientation
-                s -= penality
+                s -= penalty
                     * ((hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs()
                         + (hp.1 .1 as f32 - pre_hp.1 .0 as f32).abs());
             }

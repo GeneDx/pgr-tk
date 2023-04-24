@@ -124,8 +124,8 @@ impl AGCFile {
         self.number_iter_thread = number_iter_thread;
     }
 
-    pub fn set_prefetching(&mut self, perfetching: bool) {
-        self.prefetching = perfetching;
+    pub fn set_prefetching(&mut self, prefetching: bool) {
+        self.prefetching = prefetching;
     }
 
     pub fn get_sub_seq(
