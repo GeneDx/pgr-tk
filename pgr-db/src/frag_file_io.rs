@@ -31,7 +31,7 @@ impl CompactSeqDBStorage {
         let (frag_addr_offsets, seqs): (Vec<(usize, usize, u32)>, Vec<CompactSeq>) =
             bincode::decode_from_std_read(&mut sdx_file, config).expect("read sdx file error");
         let f_file = File::open(frag_file_prefix.clone() + ".frg").expect("frag file open fail");
-        let frag_file = unsafe { Mmap::map(&f_file).expect("frag mmap fail") };
+        let frag_file = unsafe { Mmap::map(&f_file).expect("frag file memory map creation fail") };
         let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
         let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
 
