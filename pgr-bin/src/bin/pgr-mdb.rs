@@ -65,7 +65,7 @@ fn load_write_index_from_agcfile(
     )?;
 
     //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
-    sdb.write_shmr_map_index(prefix)?;
+    sdb.write_shmmr_map_index(prefix)?;
     Ok(())
 }
 

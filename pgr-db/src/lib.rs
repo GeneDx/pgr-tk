@@ -284,11 +284,11 @@ mod tests {
     #[test]
     fn test_shmmrmap_read_write() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
-        use seq_db::{query_fragment, read_mdb_file, write_shmr_map_file};
+        use seq_db::{query_fragment, read_mdb_file, write_shmmr_map_file};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
-        write_shmr_map_file(
+        write_shmmr_map_file(
             &sdb.shmmr_spec,
             &sdb.frag_map,
             "test/test_data/test_shmmr.db".to_string(),

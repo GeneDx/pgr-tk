@@ -782,10 +782,10 @@ impl GetSeq for CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn write_shmr_map_index(&self, fp_prefix: String) -> Result<(), std::io::Error> {
+    pub fn write_shmmr_map_index(&self, fp_prefix: String) -> Result<(), std::io::Error> {
         let seq_idx_fp = fp_prefix.clone() + ".midx";
         let data_fp = fp_prefix + ".mdb";
-        write_shmr_map_file(&self.shmmr_spec, &self.frag_map, data_fp)?;
+        write_shmmr_map_file(&self.shmmr_spec, &self.frag_map, data_fp)?;
         let mut idx_file = BufWriter::new(File::create(seq_idx_fp).expect("file create error"));
         self.seqs
             .iter()
@@ -1228,7 +1228,7 @@ pub fn get_match_positions_with_fragment(
     res
 }
 
-pub fn write_shmr_map_file(
+pub fn write_shmmr_map_file(
     shmmr_spec: &ShmmrSpec,
     shmmr_map: &ShmmrToFrags,
     filepath: String,
