@@ -31,7 +31,7 @@ impl CompactSeqDBStorage {
         let (frag_addr_offsets, seqs): (Vec<(usize, usize, u32)>, Vec<CompactSeq>) =
             bincode::decode_from_std_read(&mut sdx_file, config).expect("read sdx file error");
         let f_file = File::open(frag_file_prefix.clone() + ".frg").expect("frag file open fail");
-        let frag_file = unsafe { Mmap::map(&f_file).expect("frag mmap fail") };
+        let frag_file = unsafe { Mmap::map(&f_file).expect("frag file memory map creation fail") };
         let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
         let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
 
@@ -127,7 +127,7 @@ impl GetSeq for CompactSeqDBStorage {
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let (_, _, mut frag_len) = self.frag_addr_offsets[frag_id as usize];
             if frag_id != frag_range.0 && frag_id != frag_range.0 + frag_range.1 - 1 {
-                // for internal segements
+                // for internal segments
                 frag_len -= self.shmmr_spec.k;
             }
             if (base_offset <= bgn && bgn < base_offset + frag_len)

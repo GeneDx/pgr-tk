@@ -69,7 +69,7 @@ struct CmdOptions {
     #[clap(long, default_value_t = false)]
     only_summary: bool,
 
-    /// output summaries in the bed foramt
+    /// output summaries in the bed format
     #[clap(long, default_value_t = false)]
     bed_summary: bool,
 }
