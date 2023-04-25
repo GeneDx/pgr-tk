@@ -44,7 +44,7 @@ enum GZFastaReader {
 }
 
 #[derive(Debug, Clone, Decode, Encode)]
-pub enum Fragment {
+pub enum Fragment { // size = 40, align = 8
     AlnSegments(AlnSegments),
     Prefix(Bases),
     Internal(Bases),
@@ -317,7 +317,7 @@ impl CompactSeqDB {
             })
             .collect::<Vec<_>>();
 
-        // TODO: parallize by sharding the key
+        // TODO: parallelize by sharding the key
         internal_frags.iter().for_each(|v| match v {
             Some((shmmr, frg, bgn, end, orientation)) => {
                 if !self.frag_map.contains_key(shmmr) {

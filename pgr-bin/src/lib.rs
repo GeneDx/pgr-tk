@@ -286,7 +286,7 @@ impl SeqIndexDB {
             }
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -323,7 +323,7 @@ impl SeqIndexDB {
             }
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -347,7 +347,7 @@ impl SeqIndexDB {
             Backend::FRG => Ok(self.frg_db.as_ref().unwrap().get_seq_by_id(sid)),
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -382,7 +382,7 @@ impl SeqIndexDB {
                 .get_sub_seq_by_id(sid, bgn as u32, end as u32)),
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
