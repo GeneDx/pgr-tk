@@ -32,7 +32,7 @@ pub struct SeqIndexDB {
     /// Rust internal: store the sequences
     pub seq_db: Option<seq_db::CompactSeqDB>,
     /// Rust internal: store the agc file and the index
-    pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
+    pub agc_db: Option<agc_io::AGCSeqDB>,
     pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
@@ -66,7 +66,7 @@ impl SeqIndexDB {
         let (shmmr_spec, new_map) =
             seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
-        self.agc_db = Some((agc_file, new_map));
+        self.agc_db = Some(agc_io::AGCSeqDB {agc_file, frag_map: new_map});
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
@@ -255,7 +255,7 @@ impl SeqIndexDB {
                     .agc_db
                     .as_ref()
                     .unwrap()
-                    .0
+                    .agc_file
                     .get_sub_seq(sample_name, ctg_name, bgn, end))
             }
             Backend::MEMORY | Backend::FASTX => {
@@ -301,7 +301,7 @@ impl SeqIndexDB {
                 .agc_db
                 .as_ref()
                 .unwrap()
-                .0
+                .agc_file
                 .get_seq(sample_name, ctg_name)),
             Backend::MEMORY | Backend::FASTX => {
                 let &(sid, _) = self
@@ -338,7 +338,7 @@ impl SeqIndexDB {
                     .agc_db
                     .as_ref()
                     .unwrap()
-                    .0
+                    .agc_file
                     .get_seq(sample_name, ctg_name))
             }
             Backend::MEMORY | Backend::FASTX => {
@@ -367,7 +367,7 @@ impl SeqIndexDB {
                     .agc_db
                     .as_ref()
                     .unwrap()
-                    .0
+                    .agc_file
                     .get_sub_seq(sample_name, ctg_name, bgn, end))
             }
             Backend::MEMORY | Backend::FASTX => Ok(self
@@ -609,7 +609,7 @@ impl SeqIndexDB {
                     self.agc_db
                         .as_ref()
                         .unwrap()
-                        .0
+                        .agc_file
                         .get_seq(sample_name, ctg_name)
                 }
                 Backend::MEMORY => self.seq_db.as_ref().unwrap().get_seq_by_id(sid),
@@ -906,7 +906,7 @@ impl SeqIndexDB {
     // depending on the storage type, return the corresponded index
     pub fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
         match self.backend {
-            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().1),
+            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().frag_map),
             Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),

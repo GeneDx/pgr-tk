@@ -3,6 +3,7 @@ use crate::bindings::{
     agc_n_ctg, agc_n_sample, agc_open, agc_t,
 };
 use crate::fasta_io::SeqRec;
+use crate::seq_db::ShmmrToFrags;
 use libc::strlen;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -36,6 +37,11 @@ pub struct AGCFile {
     sample_ctg: Vec<(String, String)>,
     pub prefetching: bool,
     pub number_iter_thread: usize,
+}
+
+pub struct AGCSeqDB {
+    pub agc_file: AGCFile,
+    pub frag_map: ShmmrToFrags 
 }
 
 pub struct AGCFileIter<'a> {
