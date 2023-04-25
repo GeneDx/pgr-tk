@@ -9,3 +9,5 @@ Cargo.lock
 pgr-tk/pgrtk/*.so
 pgr-tk-workstation/*.whl
 docker/github-build
+.vscode/settings.json
+.gitignore

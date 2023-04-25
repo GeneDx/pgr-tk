@@ -4,7 +4,7 @@
 use crate::aln::query_fragment_to_hps;
 use crate::fasta_io::reverse_complement;
 use crate::graph_utils::{ShmmrGraphNode, WeightedNode};
-use crate::seq_db::{self, CompactSeqDB, GetSeq};
+use crate::seq_db::{self, CompactSeqDB, GetSeq, raw_query_fragment};
 use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use petgraph::algo::toposort;
 use petgraph::EdgeDirection::Outgoing;
@@ -270,7 +270,7 @@ pub fn shmmr_dbg_consensus(
 
 /// perform error correction using shimmer de Bruijn graph
 ///
-/// this methods try to perseve SNP specific to a guide read (the first one in the list)
+/// this methods try to preserve SNP specific to a guide read (the first one in the list)
 /// if there is more or equal to the "min_cov"
 ///
 pub fn guided_shmmr_dbg_consensus(
@@ -534,8 +534,9 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
     ) -> Result<Vec<(Vec<u8>, Vec<u32>)>, &'static str> {
         let shmmr_spec = &sdb.shmmr_spec;
         let seq0 = sdb.get_seq_by_id(sid0);
+        let raw_query_hits = raw_query_fragment(&sdb.frag_map, &seq0, shmmr_spec);
         let hit_pairs = query_fragment_to_hps(
-            &sdb.frag_map,
+            raw_query_hits,
             &seq0,
             shmmr_spec,
             0.1,

@@ -9,7 +9,7 @@ use std::path::Path;
 
 
 /// Query a PGR-TK pangenome sequence database,
-/// ouput the hit summary and generate fasta files from the target sequences
+/// output the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-query")]
 #[clap(author, version)]
@@ -20,9 +20,9 @@ struct CmdOptions {
     /// the path to the query fasta file
     query_fastx_path: String,
     /// the prefix of the output file
-    output_prfix: String,
+    output_prefix: String,
 
-    /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
+    /// using the frg format for the sequence database (default to the AGC backend database if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
 
@@ -37,27 +37,27 @@ struct CmdOptions {
     /// sparse minimizer (shimmer) reduction factor
     #[clap(long, short, default_value_t = 4)]
     r: u32,
-    /// min span for neighboring minimiers
+    /// min span for neighboring minimizers
     #[clap(long, short, default_value_t = 64)]
     min_span: u32,
 
-    /// the gap penality factor for sparse alignments in the SHIMMER space
+    /// the gap penalty factor for sparse alignments in the SHIMMER space
     #[clap(long, short, default_value_t = 0.025)]
-    gap_penality_factor: f32,
+    gap_penalty_factor: f32,
 
     /// merge hits with the specified distance
     #[clap(long, short, default_value_t = 100000)]
     merge_range_tol: usize,
 
-    /// the max count of SHIMMER used for the sparse alignemnt
+    /// the max count of SHIMMER used for the sparse alignment
     #[clap(long, default_value_t = 128)]
     max_count: u32,
 
-    /// the max count of SHIMMER in the query sequences used for the sparse alignemnt
+    /// the max count of SHIMMER in the query sequences used for the sparse alignment
     #[clap(long, default_value_t = 128)]
     max_query_count: u32,
 
-    /// the max count of SHIMMER in the targets sequences used for the sparse alignemnt
+    /// the max count of SHIMMER in the targets sequences used for the sparse alignment
     #[clap(long, default_value_t = 128)]
     max_target_count: u32,
 
@@ -88,10 +88,10 @@ fn main() -> Result<(), std::io::Error> {
     };
 
     match get_fastx_reader(args.query_fastx_path)? {
-        #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
+        #[allow(clippy::useless_conversion)] // the into_iter() is necessary for dyn patching
         GZFastaReader::GZFile(reader) => add_seqs(&mut reader.into_iter()),
 
-        #[allow(clippy::useless_conversion)] // the into_iter() is neceesay for dyn patching
+        #[allow(clippy::useless_conversion)] // the into_iter() is necessary for dyn patching
         GZFastaReader::RegularFile(reader) => add_seqs(&mut reader.into_iter()),
     };
 
@@ -99,12 +99,12 @@ fn main() -> Result<(), std::io::Error> {
     if args.frg_file {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"the optione `--frg_file` is specified, read the input file as a AGC backed index database files.");
+        let _ = handle.write_all(b"the option `--frg_file` is specified, read the input file as a AGC backed index database files.");
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else if args.fastx_file {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"the optione `--fastx_file` is specified, read the input file as a file file.");
+        let _ = handle.write_all(b"the option `--fastx_file` is specified, read the input file as a file file.");
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
@@ -113,7 +113,7 @@ fn main() -> Result<(), std::io::Error> {
         let _ = handle.write_all(b"Read the input as a AGC backed index database files.");
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
     }
-    let prefix = Path::new(&args.output_prfix);
+    let prefix = Path::new(&args.output_prefix);
 
     let mut hit_file = if args.bed_summary {
         BufWriter::new(File::create(prefix.with_extension("hit.bed")).unwrap())
@@ -171,7 +171,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let query_results = seq_index_db.query_fragment_to_hps(
                 query_seq,
-                args.gap_penality_factor,
+                args.gap_penalty_factor,
                 Some(args.max_count),
                 Some(args.max_query_count),
                 Some(args.max_target_count),
@@ -204,13 +204,13 @@ fn main() -> Result<(), std::io::Error> {
                 let mut aln_range = FxHashMap::default();
                 sid_to_alns.into_iter().for_each(|(sid, alns)| {
                     alns.into_iter().for_each(|(aln, orientation)| {
-                        let mut target_coordiantes = aln
+                        let mut target_coordinates = aln
                             .iter()
                             .map(|v| (v.1 .0, v.1 .1))
                             .collect::<Vec<(u32, u32)>>();
-                        target_coordiantes.sort();
-                        let bgn = target_coordiantes[0].0;
-                        let end = target_coordiantes[target_coordiantes.len() - 1].1;
+                        target_coordinates.sort();
+                        let bgn = target_coordinates[0].0;
+                        let end = target_coordinates[target_coordinates.len() - 1].1;
                         let e = aln_range.entry(sid).or_insert_with(Vec::new);
                         e.push((bgn, end, end - bgn, orientation, aln));
                     })
