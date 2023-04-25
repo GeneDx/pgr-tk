@@ -267,7 +267,7 @@ impl SeqIndexDB {
         let shmmr_spec = self.shmmr_spec.as_ref().unwrap();
             let (frag_location_map, frag_map_file) = if self.backend == Backend::AGC {
                 (&self.agc_db.as_ref().unwrap().frag_location_map, &self.agc_db.as_ref().unwrap().frag_map_file) 
-            } else if self.backend == Backend::FASTX {
+            } else if self.backend == Backend::FRG {
                 (&self.frg_db.as_ref().unwrap().frag_location_map, &self.frg_db.as_ref().unwrap().frag_map_file)  
             } else {
                 panic!("the call query_fragment_to_hps_from_mmap_file() needs AGC or FRAG backend file");

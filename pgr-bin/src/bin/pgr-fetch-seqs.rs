@@ -15,7 +15,7 @@ struct CmdOptions {
     /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,
 
-    /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
+    /// using the frg format for the sequence database (default to the AGC backend database if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
 
