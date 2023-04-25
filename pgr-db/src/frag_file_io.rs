@@ -127,7 +127,7 @@ impl GetSeq for CompactSeqDBStorage {
         for frag_id in frag_range.0..frag_range.0 + frag_range.1 {
             let (_, _, mut frag_len) = self.frag_addr_offsets[frag_id as usize];
             if frag_id != frag_range.0 && frag_id != frag_range.0 + frag_range.1 - 1 {
-                // for internal segements
+                // for internal segments
                 frag_len -= self.shmmr_spec.k;
             }
             if (base_offset <= bgn && bgn < base_offset + frag_len)

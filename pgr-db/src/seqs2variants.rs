@@ -80,7 +80,7 @@ pub fn get_cigar(seq0: &String, seq1: &String) -> Result<(i32, Vec<u8>), &'stati
     }
 }
 
-pub fn get_aln_segements(
+pub fn get_aln_segments(
     ref_id: u32,
     ref_seq: &String,
     tgt_id: u32,
@@ -288,7 +288,7 @@ mod test {
         let seq1 = include_str!("../test/test_data/seq1")
             .trim_end()
             .to_string();
-        let v = super::get_aln_segements(0, &seq0, 1, &seq1).unwrap();
+        let v = super::get_aln_segments(0, &seq0, 1, &seq1).unwrap();
         let aln_map = get_aln_map(&v, &seq0, &seq1).unwrap();
         let ref_a_seq = aln_map.ref_a_seq;
         let aln_seq = aln_map.aln_seq;
@@ -308,7 +308,7 @@ mod test {
         let seq1 = include_str!("../test/test_data/seq1")
             .trim_end()
             .to_string();
-        let aln_segs = super::get_aln_segements(0, &seq0, 1, &seq1).unwrap();
+        let aln_segs = super::get_aln_segments(0, &seq0, 1, &seq1).unwrap();
         let aln_map = get_aln_map(&aln_segs, &seq0, &seq1).unwrap();
         let aln_segs = aln_segs
             .iter()

@@ -546,7 +546,7 @@ impl SeqIndexDB {
                         .collect::<Vec<(u64, u64, u8)>>();
                     rpb.iter().enumerate().for_each(|(p, v)| {
                         vertex_to_bundle_id_direction_pos.insert((v.0, v.1), (*bid, v.2, p));
-                        // overide what in the hashpmap
+                        // override what in the hashmap
                     });
                     rpb
                 } else {

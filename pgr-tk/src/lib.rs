@@ -55,7 +55,7 @@ pub fn pgr_lib_version() -> PyResult<String> {
 ///     # genomes.midx should have the same prefix as the parameter used to call  load_from_agc_index() method
 ///
 /// One can also create index and load the sequences from a fasta file using ```load_from_fastx()``` methods.
-/// Currently, this might be a good option for mid-size dataset (up to a couple of hundred magebases).
+/// Currently, this might be a good option for mid-size dataset (up to a couple of hundred megabases).
 ///
 /// Or, a user can load the sequence from memory using a Python list. This is convenient when one needs to
 /// rebuild the SHIMMER index with different parameters for a different resolution.
@@ -1135,7 +1135,7 @@ impl SeqIndexDB {
         &self,
         pb: Vec<Vec<(u64, u64, u8)>>,
     ) -> FxHashMap<(u64, u64), (usize, u8, usize)> {
-        // coutn segment for filtering, some unidirectional seg may have both forward and reverse in the principle bundles
+        // count segment for filtering, some unidirectional seg may have both forward and reverse in the principle bundles
         // let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
         // pb.iter().for_each(|bundle| {
         //    bundle.iter().for_each(|v| {
@@ -1365,7 +1365,7 @@ impl SeqIndexDB {
                         .collect::<Vec<(u64, u64, u8)>>();
                     rpb.iter().enumerate().for_each(|(p, v)| {
                         vertex_to_bundle_id_direction_pos.insert((v.0, v.1), (*bid, v.2, p));
-                        // override what in the hashpmap
+                        // override what in the hashmap
                     });
                     rpb
                 } else {
@@ -1402,7 +1402,7 @@ impl SeqIndexDB {
         (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
     }
 
-    /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
+    /// Convert the adjacent list of the shimmer graph shimmer_pair -> GFA
     ///
     /// Parameters
     /// ----------
@@ -1558,11 +1558,11 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    /// Write addtional meta data for GFA into a file
+    /// Write additional meta data for GFA into a file
     ///
     /// Parameters
     /// ----------
-    /// filenpath : string
+    /// filepath : string
     ///     the path to the output file
     ///
     /// Returns
@@ -1635,14 +1635,14 @@ impl SeqIndexDB {
         self.write_mapg_idx(filepath)
     }
 
-    /// Convert the adjecent list of the shimmer graph shimmer_pair -> GFA
+    /// Convert the adjacent list of the shimmer graph shimmer_pair -> GFA
     ///
     /// Parameters
     /// ----------
     /// min_count : int
     ///     the minimum number of times a pair of shimmers must be observed to be included in the graph
     ///
-    /// filenpath : string
+    /// filepath : string
     ///     the path to the output file
     ///
     /// Returns
@@ -1672,7 +1672,7 @@ impl SeqIndexDB {
         let (pb, filtered_adj_list) =
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff);
 
-        // TODO: we will remove this redundant converion in the future
+        // TODO: we will remove this redundant conversion in the future
         let pb = pb
             .into_iter()
             .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
@@ -1776,7 +1776,7 @@ impl SeqIndexDB {
     ) -> PyResult<Vec<(u32, Vec<(Vec<u8>, Vec<u32>)>)>> {
         assert!(
             self.backend == Backend::FASTX || self.backend == Backend::MEMORY,
-            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+            "Only DB created with load_from_fastx() can add data from another fastx file"
         );
         let sdb = &self.seq_db.as_ref().unwrap();
         let consensus = pgr_db::ec::shmmr_sparse_aln_consensus_with_sdb(sids, sdb, min_cov);
@@ -1800,9 +1800,9 @@ impl SeqIndexDB {
     }
 }
 
-/// A PyO3 class wrapping an exising AGC file for reading
+/// A PyO3 class wrapping an existing AGC file for reading
 ///
-/// Examaple::
+/// Example::
 ///
 ///      >>> agc_file = AGCFile("/path/to/genomes.agc")
 ///  
@@ -1899,7 +1899,7 @@ impl AGCFile {
 ///     a list of tuple of ``HitPair`` defined as
 ///     ``pub type HitPair = ((u32, u32, u8), (u32, u32, u8))``
 ///     This represents the hits as the position of matched Shimmer Pairs from
-///     the two sequence. For example, if there two shimmers at positiong 2342
+///     the two sequence. For example, if there two shimmers at position 2342
 ///     and 4322 of the query sequence that matches the shimmers at positions
 ///     6125465 and 6127445, them the HitPair will be ``(2342, 4322, 0)`` and
 ///     ``(6125465, 6127445, 0)``. The third number would be 1 if shimmer paired
@@ -1911,22 +1911,22 @@ impl AGCFile {
 ///     space for the best alignment. If the two sequences are very repetitive,
 ///     then one needs to use larger ``max_span`` to ensure capturing the right
 ///     alignment path
-///
-/// penality : float
+//
+/// penalty : float
 ///     this parameter will determine when to break the alignment if there are big
-///     gaps between the alignment segement. One can set it to zero to catch large
+///     gaps between the alignment segment. One can set it to zero to catch large
 ///     chunk alignment ignoring the gaps. Typically, a number between 0.1 to 0.5 should
 ///     be used.
 ///
-#[pyfunction(sp_hits, max_span, penality)]
-#[pyo3(text_signature = "($self, sp_hits, max_span, penality)")]
+#[pyfunction(sp_hits, max_span, penalty)]
+#[pyo3(text_signature = "($self, sp_hits, max_span, penalty)")]
 pub fn sparse_aln(
     sp_hits: Vec<HitPair>,
     max_span: u32,
-    penality: f32,
+    penalty: f32,
 ) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
     let mut hp = sp_hits.clone();
-    Ok(aln::sparse_aln(&mut hp, max_span, penality))
+    Ok(aln::sparse_aln(&mut hp, max_span, penalty))
 }
 
 /// Generate a list of shimmer pair from a sequence
@@ -1940,24 +1940,24 @@ pub fn sparse_aln(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimiers (shimmer),
+///     reduction factor for generate sparse hierarchical minimziers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
 ///     - a parameter to remove close-by shimmer pairs
-///     - if not zero, shimmer pairs whic the distance between them are less
+///     - if not zero, shimmer pairs which the distance between them are less
 ///       than ``the min_span`` will be removed
 ///     - default to 16
 ///
 /// padding : bool
-///     - for short fragment that segemented by using shimmer, set ``padding`` to true
+///     - for short fragment that segmented by using shimmer, set ``padding`` to true
 ///       to preserve the first and last shimmers
 ///     - default to false
 ///
 /// Returns
 /// -------
 /// list of tuple
-///     a list fo tuple of ``(shimmr0, shimmr1, position0, position1, orientation)``  
+///     a list fo tuple of ``(shmmr0, shmmr1, position0, position1, orientation)``  
 ///
 #[pyfunction(w = "80", k = "56", r = "4", min_span = "16", padding = "false")]
 #[pyo3(text_signature = "($self, w, k, r, min_span, padding)")]
@@ -2012,12 +2012,12 @@ fn get_shmmr_pairs_from_seq(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimiers (shimmer),
+///     reduction factor for generate sparse hierarchical minimziers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
 ///     -  a parameter to remove close-by shimmer pairs
-///     -  if not zero, shimmer pairs whic the distance between them are less
+///     -  if not zero, shimmer pairs which the distance between them are less
 ///        than ``the min_span`` will be removed
 ///
 /// Returns
@@ -2052,19 +2052,19 @@ fn get_shmmr_dots(
 
     let shmmr0 = sequence_to_shmmrs(0, &seq0, &shmmr_spec, false);
     let shmmr1 = sequence_to_shmmrs(1, &seq1, &shmmr_spec, false);
-    let mut basemmer_x = FxHashMap::<u64, Vec<u32>>::default();
+    let mut base_mmer_x = FxHashMap::<u64, Vec<u32>>::default();
 
     for m in shmmr0 {
         let hash = m.x >> 8;
         let pos = ((m.y & 0xFFFFFFFF) >> 1) as u32;
-        basemmer_x.entry(hash).or_insert_with(|| vec![]).push(pos);
+        base_mmer_x.entry(hash).or_insert_with(|| vec![]).push(pos);
     }
 
     for m in shmmr1 {
         let hash = m.x >> 8;
         let py = ((m.y & 0xFFFFFFFF) >> 1) as u32;
-        if basemmer_x.contains_key(&hash) {
-            for px in basemmer_x.get(&hash).unwrap() {
+        if base_mmer_x.contains_key(&hash) {
+            for px in base_mmer_x.get(&hash).unwrap() {
                 x.push(*px);
                 y.push(py);
             }
@@ -2074,10 +2074,10 @@ fn get_shmmr_dots(
     (x, y)
 }
 
-/// A wrapper class to represent alignment segement for python
+/// A wrapper class to represent alignment segment for python
 ///
 /// This wraps the Rust struct ``seq2variants::AlnSegment`` mapping
-/// the enum ``seq2variants::AlnSegType`` to intergers
+/// the enum ``seq2variants::AlnSegType`` to integers
 ///
 #[pyclass]
 #[derive(Clone)]
@@ -2137,18 +2137,18 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
     }
 }
 
-/// Get alignement segments from two sequences
+/// Get alignment segments from two sequences
 ///
 /// Parameters
 /// ----------
 /// ref_id : int
-///     a interger id for the reference sequence
+///     a integer id for the reference sequence
 ///
 /// ref_seq : string
 ///     a python string of the reference sequence
 ///
 /// tgt_id : int
-///     a interger id for the target sequnece
+///     a integer id for the target sequence
 ///
 /// tgt_seq : string
 ///     a python string of the target sequence
@@ -2156,7 +2156,7 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
 /// Returns
 /// -------
 /// list
-///     a list of ``AlnSegement``
+///     a list of ``AlnSegment``
 ///
 ///     the ``AlnSegment`` is a Rust struct defined as::
 ///
@@ -2182,7 +2182,7 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
 ///
 #[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
 #[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
-fn get_aln_segements(
+fn get_aln_segments(
     ref_id: u32,
     ref_seq: &PyString,
     tgt_id: u32,
@@ -2190,7 +2190,7 @@ fn get_aln_segements(
 ) -> PyResult<Vec<AlnSegment>> {
     let ref_seq = ref_seq.to_string();
     let tgt_seq = tgt_seq.to_string();
-    let aln_segs = seqs2variants::get_aln_segements(ref_id, &ref_seq, tgt_id, &tgt_seq);
+    let aln_segs = seqs2variants::get_aln_segments(ref_id, &ref_seq, tgt_id, &tgt_seq);
 
     match aln_segs {
         Ok(segs) => Ok(segs
@@ -2445,7 +2445,7 @@ fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
     m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
-    m.add_function(wrap_pyfunction!(get_aln_segements, m)?)?;
+    m.add_function(wrap_pyfunction!(get_aln_segments, m)?)?;
     m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
