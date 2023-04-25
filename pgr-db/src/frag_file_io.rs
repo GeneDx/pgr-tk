@@ -1,15 +1,19 @@
-use crate::seq_db::{self, read_mdb_file_parallel, CompactSeq, Fragment, ShmmrToFrags, GetSeq};
+use crate::seq_db::{self, read_mdb_file_parallel, CompactSeq, Fragment, ShmmrToFrags, GetSeq, read_mdb_file_to_frag_locations};
 use crate::shmmrutils::ShmmrSpec;
 use bincode::config;
 use flate2::read::DeflateDecoder;
-use memmap::Mmap;
+use memmap2::Mmap;
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 
+type ShmmrToFragMapLocation = FxHashMap<(u64, u64), (usize, usize)>;
+
 pub struct CompactSeqDBStorage {
     pub shmmr_spec: ShmmrSpec,
     pub seqs: Vec<CompactSeq>,
+    pub frag_location_map: ShmmrToFragMapLocation,
+    pub frag_map_file: Mmap,
     pub frag_map: ShmmrToFrags,
     pub frag_file_prefix: String,
     pub frag_file: Mmap,
@@ -22,8 +26,18 @@ pub struct CompactSeqDBStorage {
 impl CompactSeqDBStorage {
     pub fn new(prefix: String) -> Self {
         let frag_file_prefix = prefix;
+
+        let fmap_file = File::open(frag_file_prefix.clone() + ".mdb").expect("frag map file open fail");
+        let frag_map_file = unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
+
         let (shmmr_spec, frag_map) =
             read_mdb_file_parallel(frag_file_prefix.clone() + ".mdb").unwrap();
+
+        let (_shmmr_spec, frag_location_map) =
+            read_mdb_file_to_frag_locations(frag_file_prefix.clone() + ".mdb").unwrap();
+
+        let frag_location_map = FxHashMap::<(u64, u64),(usize, usize)>::from_iter(frag_location_map);
+
         let mut sdx_file = BufReader::new(
             File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error"),
         );
@@ -32,6 +46,9 @@ impl CompactSeqDBStorage {
             bincode::decode_from_std_read(&mut sdx_file, config).expect("read sdx file error");
         let f_file = File::open(frag_file_prefix.clone() + ".frg").expect("frag file open fail");
         let frag_file = unsafe { Mmap::map(&f_file).expect("frag file memory map creation fail") };
+
+
+
         let mut seq_index = FxHashMap::<(String, Option<String>), (u32, u32)>::default();
         let mut seq_info = FxHashMap::<u32, (String, Option<String>, u32)>::default();
 
@@ -57,6 +74,8 @@ impl CompactSeqDBStorage {
         Self {
             shmmr_spec,
             seqs,
+            frag_location_map,
+            frag_map_file,
             frag_map,
             frag_file_prefix,
             frag_file,

@@ -99,7 +99,7 @@ fn main() -> Result<(), std::io::Error> {
     if args.frg_file {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"the option `--frg_file` is specified, read the input file as a AGC backed index database files.");
+        let _ = handle.write_all(b"the option `--frg_file` is specified, read the input file as a FRG backed index database files.");
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else if args.fastx_file {
         let stderr = io::stderr();

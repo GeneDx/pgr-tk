@@ -1,12 +1,13 @@
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
-use crate::graph_utils::{ShmmrGraphNode, AdjPair, AdjList};
+use crate::graph_utils::{AdjList, AdjPair, ShmmrGraphNode};
 use crate::shmmrutils::{match_reads, sequence_to_shmmrs, DeltaPoint, ShmmrSpec, MM128};
 use bincode::{config, Decode, Encode};
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use flate2::bufread::MultiGzDecoder;
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
+use memmap2::{Mmap, MmapOptions};
 use petgraph::graphmap::DiGraphMap;
 use petgraph::visit::Dfs;
 use petgraph::EdgeDirection::{Incoming, Outgoing};
@@ -15,7 +16,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::fmt;
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write, Seek, SeekFrom};
 
 pub const KMERSIZE: u32 = 56;
 pub const SHMMRSPEC: ShmmrSpec = ShmmrSpec {
@@ -44,7 +45,8 @@ enum GZFastaReader {
 }
 
 #[derive(Debug, Clone, Decode, Encode)]
-pub enum Fragment { // size = 40, align = 8
+pub enum Fragment {
+    // size = 40, align = 8
     AlnSegments(AlnSegments),
     Prefix(Bases),
     Internal(Bases),
@@ -274,11 +276,11 @@ impl CompactSeqDB {
                                     &frg,
                                 );
 
-                                /*  // For debugging 
+                                /*  // For debugging
                                 let out = reconstruct_seq_from_aln_segs(base_frg, &aln_segs);
                                 if out != frg {
                                     println!("DBG: {:?} {} {}", deltas, m.end0, m.end1);
-                                    println!("DBG: {:?} {:?} {:?} {} {}", String::from_utf8_lossy(base_frg), aln_segs, 
+                                    println!("DBG: {:?} {:?} {:?} {} {}", String::from_utf8_lossy(base_frg), aln_segs,
                                     String::from_utf8_lossy(&frg), base_frg.len(), frg.len());
                                 };
                                 assert_eq!(out, frg);
@@ -707,7 +709,7 @@ impl CompactSeqDB {
                             println!("DBG X: {:?} {:?}", String::from_utf8_lossy(base_seq), a);
                         }
                         */
-                        
+
                         assert_eq!(*_length as usize, seq.len());
                         if *reversed {
                             seq = reverse_complement(&seq);
@@ -775,7 +777,7 @@ impl GetSeq for CompactSeqDB {
         let reconstructed_seq = self.reconstruct_seq_from_frags(sub_seq_frag.iter().map(|v| v.0));
 
         // println!("DBG: {} {} {} {} {}", sid, frag_range.1, sub_seq_frag.len(), end, reconstructed_seq.len() );
-        
+
         let offset = bgn - sub_seq_frag[0].1;
         reconstructed_seq[(offset as usize)..((offset + end - bgn) as usize)].to_vec()
     }
@@ -807,8 +809,9 @@ impl CompactSeqDB {
 
 impl CompactSeqDB {
     pub fn write_to_frag_files(&self, file_prefix: String) {
-        let mut sdx_file =
-            BufWriter::new(File::create(file_prefix.clone() + ".sdx").expect("sdx file creating fail\n"));
+        let mut sdx_file = BufWriter::new(
+            File::create(file_prefix.clone() + ".sdx").expect("sdx file creating fail\n"),
+        );
         let mut frg_file =
             BufWriter::new(File::create(file_prefix + ".frg").expect("frg file creating fail\n"));
 
@@ -926,7 +929,6 @@ pub fn frag_map_to_adj_list(
         .collect::<AdjList>() // seq_id, node0, node1
 }
 
-
 pub fn generate_smp_adj_list_for_seq(
     seq: &Vec<u8>,
     sid: u32,
@@ -966,8 +968,16 @@ pub fn generate_smp_adj_list_for_seq(
                     vec![None]
                 } else {
                     vec![
-                        Some((sid, ShmmrGraphNode(v.0, v.1, v.4), ShmmrGraphNode(w.0, w.1, w.4))),
-                        Some((sid, ShmmrGraphNode(w.0, w.1, 1 - w.4), ShmmrGraphNode(v.0, v.1, 1 - v.4))),
+                        Some((
+                            sid,
+                            ShmmrGraphNode(v.0, v.1, v.4),
+                            ShmmrGraphNode(w.0, w.1, w.4),
+                        )),
+                        Some((
+                            sid,
+                            ShmmrGraphNode(w.0, w.1, 1 - w.4),
+                            ShmmrGraphNode(v.0, v.1, 1 - v.4),
+                        )),
                     ]
                 }
             })
@@ -975,8 +985,6 @@ pub fn generate_smp_adj_list_for_seq(
             .collect::<AdjList>()
     }
 }
-
-
 
 type PBundleNode = (
     // node, Option<previous_node>, node_weight, is_leaf, global_rank, branch, branch_rank
@@ -987,14 +995,13 @@ type PBundleNode = (
     u32,
     u32,
     u32,
-);  
+);
 
 pub fn sort_adj_list_by_weighted_dfs(
     frag_map: &ShmmrToFrags,
     adj_list: &[AdjPair],
     start: ShmmrGraphNode,
 ) -> Vec<PBundleNode> {
-
     use crate::graph_utils::BiDiGraphWeightedDfs;
 
     let mut g = DiGraphMap::<ShmmrGraphNode, ()>::new();
@@ -1021,7 +1028,9 @@ pub fn sort_adj_list_by_weighted_dfs(
 
     let mut weighted_dfs_walker = BiDiGraphWeightedDfs::new(&g, start, &score);
     let mut out = vec![];
-    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) = weighted_dfs_walker.next(&g) {
+    while let Some((node, p_node, is_leaf, rank, branch_id, branch_rank)) =
+        weighted_dfs_walker.next(&g)
+    {
         let node_count = *score.get(&node).unwrap();
         let p_node = p_node.map(|pnode| ShmmrGraphNode(pnode.0, pnode.1, pnode.2));
         out.push((
@@ -1042,10 +1051,7 @@ pub fn get_principal_bundles_from_adj_list(
     frag_map: &ShmmrToFrags,
     adj_list: &[AdjPair],
     path_len_cutoff: usize,
-) -> (
-    Vec<Vec<ShmmrGraphNode>>,
-    AdjList,
-) {
+) -> (Vec<Vec<ShmmrGraphNode>>, AdjList) {
     assert!(!adj_list.is_empty());
     // println!("DBG: adj_list[0]: {:?}", adj_list[0]);
     let s = adj_list[0].1;
@@ -1233,7 +1239,8 @@ pub fn write_shmmr_map_file(
     shmmr_map: &ShmmrToFrags,
     filepath: String,
 ) -> Result<(), std::io::Error> {
-    let mut out_file = File::create(filepath).expect("open fail while writing the SHIMMER map (.mdb) file\n");
+    let mut out_file =
+        File::create(filepath).expect("open fail while writing the SHIMMER map (.mdb) file\n");
     let mut buf = Vec::<u8>::new();
 
     buf.extend("mdb".to_string().into_bytes());
@@ -1265,7 +1272,8 @@ pub fn write_shmmr_map_file(
 }
 
 pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
-    let mut in_file = File::open(filepath).expect("Error while opening the SHIMMER map file (.mdb) file");
+    let mut in_file =
+        File::open(filepath).expect("Error while opening the SHIMMER map file (.mdb) file");
     let mut buf = Vec::<u8>::new();
 
     let mut u64bytes = [0_u8; 8];
@@ -1345,28 +1353,39 @@ pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::
     Ok((shmmr_spec, shmmr_map))
 }
 
-pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
-    let mut in_file = File::open(filepath).expect("open fail while reading the SHIMMER map (.mdb) file");
-    let mut buf = Vec::<u8>::new();
+pub fn read_mdb_file_to_frag_locations(
+    filepath: String,
+) -> Result<(ShmmrSpec, Vec<((u64, u64), (usize, usize))>), io::Error> {
+    let mut in_file =
+        File::open(filepath).expect("open fail while reading the SHIMMER map (.mdb) file");
+    let mut tag_buf = [0_u8; 3];
 
+    let mut u32bytes = [0_u8; 4];
     let mut u64bytes = [0_u8; 8];
 
-    in_file.read_to_end(&mut buf)?;
+    in_file.read_exact(&mut tag_buf)?;
     let mut cursor = 0_usize;
-    assert!(buf[0..3] == "mdb".to_string().into_bytes());
+    assert!(tag_buf[0..3] == "mdb".to_string().into_bytes());
     cursor += 3; // skip "mdb"
 
-    let w = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
-    cursor += 4;
-    let k = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
-    cursor += 4;
-    let r = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
-    cursor += 4;
-    let min_span = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
-    cursor += 4;
-    let flag = LittleEndian::read_u32(&buf[cursor..cursor + 4]);
-    cursor += 4;
+
+    in_file.read_exact(&mut u32bytes)?;
+    let w = LittleEndian::read_u32(&u32bytes);
+
+    in_file.read_exact(&mut u32bytes)?;
+    let k = LittleEndian::read_u32(&u32bytes);
+
+    in_file.read_exact(&mut u32bytes)?;
+    let r = LittleEndian::read_u32(&u32bytes);
+
+    in_file.read_exact(&mut u32bytes)?;
+    let min_span = LittleEndian::read_u32(&u32bytes);
+
+    in_file.read_exact(&mut u32bytes)?;
+    let flag = LittleEndian::read_u32(&u32bytes);
     let sketch = (flag & 0b01) == 0b01;
+
+    cursor += 4 * 5;
 
     let shmmr_spec = ShmmrSpec {
         w,
@@ -1375,32 +1394,44 @@ pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFra
         min_span,
         sketch,
     };
-    u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+
+    in_file.read_exact(&mut u64bytes)?;
     let shmmr_key_len = usize::from_le_bytes(u64bytes);
     cursor += 8;
-    ShmmrToFrags::default();
-    let mut rec_loc = Vec::<(u64, u64, usize, usize)>::new();
+    let mut rec_loc = Vec::<((u64, u64), (usize, usize))>::new();
     for _ in 0..shmmr_key_len {
-        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        in_file.read_exact(&mut u64bytes)?;
         let k1 = u64::from_le_bytes(u64bytes);
-        cursor += 8;
 
-        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        in_file.read_exact(&mut u64bytes)?;
         let k2 = u64::from_le_bytes(u64bytes);
-        cursor += 8;
 
-        u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
+        in_file.read_exact(&mut u64bytes)?;
         let vec_len = usize::from_le_bytes(u64bytes);
-        cursor += 8;
-
+        cursor += 8 * 3;
         let start = cursor;
-        cursor += vec_len * 17;
-        rec_loc.push((k1, k2, start, vec_len))
+        let advance = 17 * vec_len; 
+        cursor += advance; 
+        in_file.seek(SeekFrom::Current(advance as i64))?;
+        rec_loc.push(((k1, k2), (start, vec_len)));
     }
+    Ok((shmmr_spec, rec_loc))
+}
+
+pub fn read_mdb_file_parallel(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::Error> {
+    let mut in_file =
+        File::open(filepath.clone()).expect("open fail while reading the SHIMMER map (.mdb) file");
+    let mut buf = Vec::<u8>::new();
+    in_file.read_to_end(&mut buf)?;
+    let _map_options = MmapOptions::new();
+    let frag_map_file = unsafe { Mmap::map(&in_file).expect("open fail while reading the SHIMMER map (.mdb) file") };
+
+
+    let (shmmr_spec, rec_loc) = read_mdb_file_to_frag_locations(filepath)?;
 
     let shmmr_map = rec_loc
         .par_iter()
-        .map(|&(k1, k2, start, vec_len)| {
+        .map(|&( (k1, k2), (start, vec_len))| {
             let mut cursor = start;
             let value = (0..vec_len)
                 .into_iter()
