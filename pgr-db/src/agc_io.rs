@@ -3,7 +3,7 @@ use crate::bindings::{
     agc_n_ctg, agc_n_sample, agc_open, agc_t,
 };
 use crate::fasta_io::SeqRec;
-use crate::seq_db::ShmmrToFrags;
+use crate::frag_file_io::ShmmrToFragMapLocation;
 use libc::strlen;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::ffi::CString;
 use std::io;
 use std::mem;
+use memmap2::Mmap;
 //use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -41,7 +42,8 @@ pub struct AGCFile {
 
 pub struct AGCSeqDB {
     pub agc_file: AGCFile,
-    pub frag_map: ShmmrToFrags 
+    pub frag_location_map: ShmmrToFragMapLocation,
+    pub frag_map_file: Mmap,
 }
 
 pub struct AGCFileIter<'a> {
@@ -70,7 +72,7 @@ impl AGCFile {
         let mut handle = stderr.lock();
         let _ = io::Write::write_all(&mut handle, b"Reading AGC file using the AGC library writing \
  in C can cause segmentation fault if wrong file type or corrupted AGC file is provided. If you see segmentation \
- fault, please make sure you have proper AGC files specified as the input file.");
+ fault, please make sure you have a proper AGC file specified as the input file.\n");
         unsafe {
             let agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),

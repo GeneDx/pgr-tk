@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
-
 /// Query a PGR-TK pangenome sequence database,
 /// output the hit summary and generate fasta files from the target sequences
 #[derive(Parser, Debug)]
@@ -99,18 +98,20 @@ fn main() -> Result<(), std::io::Error> {
     if args.frg_file {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"the option `--frg_file` is specified, read the input file as a FRG backed index database files.");
+        let _ = handle.write_all(b"the option `--frg_file` is specified, read the input file as a FRG backed index database files.\n");
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else if args.fastx_file {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"the option `--fastx_file` is specified, read the input file as a file file.");
+        let _ = handle.write_all(
+            b"the option `--fastx_file` is specified, read the input file as a file file.\n",
+        );
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = handle.write_all(b"Read the input as a AGC backed index database files.");
+        let _ = handle.write_all(b"Read the input as a AGC backed index database files.\n");
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
     }
     let prefix = Path::new(&args.output_prefix);
@@ -169,14 +170,25 @@ fn main() -> Result<(), std::io::Error> {
             let query_seq = seq_rec.seq;
             let q_len = query_seq.len();
 
-            let query_results = seq_index_db.query_fragment_to_hps(
-                query_seq,
-                args.gap_penalty_factor,
-                Some(args.max_count),
-                Some(args.max_query_count),
-                Some(args.max_target_count),
-                Some(args.max_aln_chain_span),
-            );
+            let query_results = if !args.fastx_file {
+                seq_index_db.query_fragment_to_hps_from_mmap_file(
+                    query_seq,
+                    args.gap_penalty_factor,
+                    Some(args.max_count),
+                    Some(args.max_query_count),
+                    Some(args.max_target_count),
+                    Some(args.max_aln_chain_span),
+                )
+            } else {
+                seq_index_db.query_fragment_to_hps(
+                    query_seq,
+                    args.gap_penalty_factor,
+                    Some(args.max_count),
+                    Some(args.max_query_count),
+                    Some(args.max_target_count),
+                    Some(args.max_aln_chain_span),
+                )
+            };
 
             if let Some(qr) = query_results {
                 let mut sid_to_alns = FxHashMap::default();
@@ -316,8 +328,7 @@ fn main() -> Result<(), std::io::Error> {
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
-                            let target_seq_name =
-                            if args.fastx_file && args.bed_summary {
+                            let target_seq_name = if args.fastx_file && args.bed_summary {
                                 format!("{}", ctg)
                             } else {
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)

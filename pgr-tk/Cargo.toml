@@ -18,3 +18,4 @@ pyo3 = { version = "0.14.1" }
 pgr-db = { path = "../pgr-db/" }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
+memmap2 = "0.5.10"

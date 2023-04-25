@@ -1,6 +1,7 @@
 // src/lib.rs
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
+use memmap2::Mmap;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 use pgr_db::seq_db::{self, raw_query_fragment};
@@ -116,10 +117,23 @@ impl SeqIndexDB {
     ///
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
-        let (shmmr_spec, new_map) =
-            seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, frag_location_map) =
+            seq_db::read_mdb_file_to_frag_locations(prefix.to_string() + ".mdb").unwrap();
+
+        let frag_location_map =
+            FxHashMap::<(u64, u64), (usize, usize)>::from_iter(frag_location_map);
+
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
-        self.agc_db = Some(agc_io::AGCSeqDB{agc_file, frag_map: new_map});
+
+        let fmap_file = File::open(prefix.clone() + ".mdb").expect("frag map file open fail");
+        let frag_map_file =
+            unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
+
+        self.agc_db = Some(agc_io::AGCSeqDB {
+            agc_file,
+            frag_location_map,
+            frag_map_file,
+        });
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
@@ -825,14 +839,12 @@ impl SeqIndexDB {
         end: usize,
     ) -> PyResult<Vec<u8>> {
         match self.backend {
-            Backend::AGC => {
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .agc_file
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
-            }
+            Backend::AGC => Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                sample_name,
+                ctg_name,
+                bgn,
+                end,
+            )),
             Backend::MEMORY | Backend::FASTX => {
                 let &(sid, _) = self
                     .seq_index
@@ -886,12 +898,12 @@ impl SeqIndexDB {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
                 let sample_name = sample_name.as_ref().unwrap().clone();
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .agc_file
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
+                Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                    sample_name,
+                    ctg_name,
+                    bgn,
+                    end,
+                ))
             }
             Backend::MEMORY | Backend::FASTX => Ok(self
                 .seq_db
@@ -1791,10 +1803,10 @@ impl SeqIndexDB {
     // depending on the storage type, return the corresponded index
     fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
         match self.backend {
-            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().frag_map),
+            Backend::AGC => None,
             Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
-            Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),
+            Backend::FRG => None,
             Backend::UNKNOWN => None,
         }
     }
@@ -1940,7 +1952,7 @@ pub fn sparse_aln(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimziers (shimmer),
+///     reduction factor for generate sparse hierarchical minimizers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
@@ -2012,7 +2024,7 @@ fn get_shmmr_pairs_from_seq(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimziers (shimmer),
+///     reduction factor for generate sparse hierarchical minimizers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
@@ -2214,7 +2226,7 @@ fn get_aln_segments(
     }
 }
 
-/// Get alignement map from a list of alignment segments
+/// Get alignment map from a list of alignment segments
 ///
 /// Parameters
 /// ----------

@@ -1,9 +1,10 @@
 use flate2::bufread::MultiGzDecoder;
+use memmap2::Mmap;
 use pgr_db::aln;
 use pgr_db::fasta_io::FastaReader;
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 pub use pgr_db::seq_db::pair_shmmrs;
-use pgr_db::seq_db::{self, GetSeq, raw_query_fragment};
+use pgr_db::seq_db::{self, GetSeq, raw_query_fragment, raw_query_fragment_from_mmap_midx};
 pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 use pgr_db::{agc_io, frag_file_io};
 use rayon::prelude::*;
@@ -63,10 +64,20 @@ impl SeqIndexDB {
     }
 
     pub fn load_from_agc_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
-        let (shmmr_spec, new_map) =
-            seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, frag_location_map) =
+            seq_db::read_mdb_file_to_frag_locations(prefix.to_string() + ".mdb").unwrap();
+
+        let frag_location_map =
+            FxHashMap::<(u64, u64), (usize, usize)>::from_iter(frag_location_map);
+
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
-        self.agc_db = Some(agc_io::AGCSeqDB {agc_file, frag_map: new_map});
+
+        let fmap_file =
+            File::open(prefix.clone() + ".mdb").expect("frag map file open fail");
+        let frag_map_file =
+            unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
+
+        self.agc_db = Some(agc_io::AGCSeqDB {agc_file, frag_location_map, frag_map_file });
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
@@ -241,6 +252,40 @@ impl SeqIndexDB {
         } else {
             None
         }
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn query_fragment_to_hps_from_mmap_file(
+        &self,
+        seq: Vec<u8>,
+        penalty: f32,
+        max_count: Option<u32>,
+        max_count_query: Option<u32>,
+        max_count_target: Option<u32>,
+        max_aln_span: Option<u32>,
+    ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
+        let shmmr_spec = self.shmmr_spec.as_ref().unwrap();
+            let (frag_location_map, frag_map_file) = if self.backend == Backend::AGC {
+                (&self.agc_db.as_ref().unwrap().frag_location_map, &self.agc_db.as_ref().unwrap().frag_map_file) 
+            } else if self.backend == Backend::FASTX {
+                (&self.frg_db.as_ref().unwrap().frag_location_map, &self.frg_db.as_ref().unwrap().frag_map_file)  
+            } else {
+                panic!("the call query_fragment_to_hps_from_mmap_file() needs AGC or FRAG backend file");
+            };
+          
+            let raw_query_hits = raw_query_fragment_from_mmap_midx(frag_location_map,
+                frag_map_file, &seq, shmmr_spec);
+            let res = aln::query_fragment_to_hps(
+                raw_query_hits,
+                &seq,
+                shmmr_spec,
+                penalty,
+                max_count,
+                max_count_query,
+                max_count_target,
+                max_aln_span,
+            );
+            Some(res)
     }
 
     pub fn get_sub_seq(
@@ -907,10 +952,10 @@ impl SeqIndexDB {
     // depending on the storage type, return the corresponded index
     pub fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
         match self.backend {
-            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().frag_map),
+            Backend::AGC => None,
             Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
-            Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),
+            Backend::FRG => None,
             Backend::UNKNOWN => None,
         }
     }
