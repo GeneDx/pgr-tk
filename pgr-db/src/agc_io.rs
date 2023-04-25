@@ -3,6 +3,7 @@ use crate::bindings::{
     agc_n_ctg, agc_n_sample, agc_open, agc_t,
 };
 use crate::fasta_io::SeqRec;
+use crate::seq_db::ShmmrToFrags;
 use libc::strlen;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -38,6 +39,11 @@ pub struct AGCFile {
     pub number_iter_thread: usize,
 }
 
+pub struct AGCSeqDB {
+    pub agc_file: AGCFile,
+    pub frag_map: ShmmrToFrags 
+}
+
 pub struct AGCFileIter<'a> {
     agc_file: &'a AGCFile,
     agc_thread_pool: ThreadPool,
@@ -62,9 +68,9 @@ impl AGCFile {
         let mut sample_ctg = vec![];
         let stderr = io::stderr();
         let mut handle = stderr.lock();
-        let _ = io::Write::write_all(&mut handle, b"Reading AGC file using the AGC library writting \
- in C can cause segementation fault if wrong file type or corrupted AGC file is provided. If you see segenmentation \
- fault, please make sure you have proper AGC files specifed as the input file.");
+        let _ = io::Write::write_all(&mut handle, b"Reading AGC file using the AGC library writing \
+ in C can cause segmentation fault if wrong file type or corrupted AGC file is provided. If you see segmentation \
+ fault, please make sure you have proper AGC files specified as the input file.");
         unsafe {
             let agc_handle = AGCHandle(agc_open(
                 CString::new(filepath.clone()).unwrap().into_raw(),
@@ -124,8 +130,8 @@ impl AGCFile {
         self.number_iter_thread = number_iter_thread;
     }
 
-    pub fn set_prefetching(&mut self, perfetching: bool) {
-        self.prefetching = perfetching;
+    pub fn set_prefetching(&mut self, prefetching: bool) {
+        self.prefetching = prefetching;
     }
 
     pub fn get_sub_seq(

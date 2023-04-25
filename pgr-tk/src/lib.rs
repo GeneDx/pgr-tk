@@ -3,7 +3,7 @@ pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
-use pgr_db::seq_db;
+use pgr_db::seq_db::{self, raw_query_fragment};
 use pgr_db::seqs2variants;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
 use pgr_db::{agc_io, fasta_io, frag_file_io};
@@ -36,15 +36,15 @@ pub fn pgr_lib_version() -> PyResult<String> {
     Ok(VERSION_STRING.to_string())
 }
 
-/// A class that stores pangenomics indices and seqeunces with multiple backend storage options (AGC, fasta file, memory)
-/// Large set of genomic sequenes, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
+/// A class that stores pangenomics indices and sequences with multiple backend storage options (AGC, fasta file, memory)
+/// Large set of genomic sequences, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
 /// which can read an AGC to create the index file. For example, we can create the index files from an AGC file::
 ///
 ///     # create a file that contains a list of file that contains a set of files from which we want to build the indices
 ///  
 ///     $ echo HPRC-y1-rebuild-04252022.agc > filelist
 ///  
-///     # using pgr-mdb to create the index files, for 97 haplotyed genome assembly from HPRC year one release,
+///     # using pgr-mdb to create the index files, for 97 haplotyped genome assembly from HPRC year one release,
 ///     # it takes about 30 to 40 min to create the index files
 ///
 ///     $ pgr-mdb filelist HPRC-y1-rebuild-04252022
@@ -54,10 +54,10 @@ pub fn pgr_lib_version() -> PyResult<String> {
 ///     # when we use the load_from_agc_index() method, all three files, e.g., genomes.agc, genomes.mdb and
 ///     # genomes.midx should have the same prefix as the parameter used to call  load_from_agc_index() method
 ///
-/// One can also create index and load the seqeunces from a fasta file using ```load_from_fastx()``` methods.
-/// Curretnly, this might be a good option for mid-size dataset (up to a couple of hundred magebases).
+/// One can also create index and load the sequences from a fasta file using ```load_from_fastx()``` methods.
+/// Currently, this might be a good option for mid-size dataset (up to a couple of hundred magebases).
 ///
-/// Or, a user can load the sequnece from memory using a Python list. This is convinient when one needs to
+/// Or, a user can load the sequence from memory using a Python list. This is convenient when one needs to
 /// rebuild the SHIMMER index with different parameters for a different resolution.
 ///  
 /// Once the index is built, the database can be queried quickly by using the ``query_fragment()`` or
@@ -65,7 +65,7 @@ pub fn pgr_lib_version() -> PyResult<String> {
 ///  
 #[pyclass]
 struct SeqIndexDB {
-    /// Rust internal: store the specification of the shmmr specifcation
+    /// Rust internal: store the specification of the shmmr_spec
     pub shmmr_spec: Option<ShmmrSpec>,
     /// Rust internal: store the sequences
     pub seq_db: Option<seq_db::CompactSeqDB>,
@@ -232,7 +232,7 @@ impl SeqIndexDB {
     pub fn append_from_fastx(&mut self, filepath: String) -> PyResult<()> {
         assert!(
             self.backend == Backend::FASTX,
-            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+            "Only DB created with load_from_fastx() can add data from another fastx file"
         );
         let sdb = self.seq_db.as_mut().unwrap();
         sdb.load_seqs_from_fastx(filepath)?;
@@ -253,7 +253,7 @@ impl SeqIndexDB {
     /// ----------
     ///
     /// seq_list : list
-    ///     a list of tuple of the form (squence_id : int, sequence_name : string, sequence: list of bytes)
+    ///     a list of tuple of the form (sequence_id : int, sequence_name : string, sequence: list of bytes)
     ///
     /// source : string
     ///     a string indicating the source of the sequence, default to "Memory"
@@ -317,19 +317,19 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    /// use a fragement of sequence to query the database to get all hits
+    /// use a fragment of sequence to query the database to get all hits
     ///
     /// Parameters
     /// ----------
     ///
     /// seq : list
-    ///     the sequnece in bytes used for query
+    ///     the sequence in bytes used for query
     ///
     /// Returns
     /// -------
     ///
     /// list
-    ///   a list of hits in the format (shimmer_pair, query_fragement, target_fragments), where
+    ///   a list of hits in the format (shimmer_pair, query_fragment, target_fragments), where
     ///     - shimmer_pair: (int, int), tuple of the shimmer_pair
     ///     - query_fragment: (int, int, int) = (start_coordinate, end_coordinate, orientation)
     ///     - target_fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end,
@@ -346,17 +346,17 @@ impl SeqIndexDB {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
         let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
-            seq_db::query_fragment(shmmr_to_frags, &seq, shmmr_spec);
+            seq_db::raw_query_fragment(shmmr_to_frags, &seq, shmmr_spec);
         Ok(res)
     }
 
-    /// use a fragement of sequence to query the database to get all hits and sort it by the data base sequence id
+    /// use a fragment of sequence to query the database to get all hits and sort it by the data base sequence id
     ///
     /// Parameters
     /// ----------
     ///
     /// seq : list
-    ///     the sequnece in bytes used for query
+    ///     the sequence in bytes used for query
     ///
     /// Returns
     /// -------
@@ -376,17 +376,17 @@ impl SeqIndexDB {
         Ok(res)
     }
 
-    /// use a fragement of sequence to query the database to get all hits
+    /// use a fragment of sequence to query the database to get all hits
     ///
-    /// sparese dynamic programming is performed to long chain of alignment
+    /// sparse dynamic programming is performed to long chain of alignment
     ///  
     /// Parameters
     /// ----------
     /// seq : list of bytes
     ///    a list of bytes representing the DNA sequence
     ///
-    /// penality : float
-    ///    the gap penalty factor used in sparse dyanmic programming for finding the hits
+    /// penalty : float
+    ///    the gap penalty factor used in sparse dynamic programming for finding the hits
     ///
     /// merge_range_tol : int
     ///    a parameter used to merge the alignment ranges
@@ -413,24 +413,25 @@ impl SeqIndexDB {
     ///     ((``query_start``, ``query_end``, ``query_orientation``),
     ///     (``target_start``, ``target_end``, ``target_orientation``))
     #[pyo3(
-        text_signature = "($self, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
+        text_signature = "($self, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span)"
     )]
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
-        penality: f32,
+        penalty: f32,
         max_count: Option<u32>,
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+        if let Some(frag_map) = self.get_shmmr_map_internal() {
+            let raw_query_hits = raw_query_fragment(frag_map, &seq, shmmr_spec);
             let res = aln::query_fragment_to_hps(
-                shmmr_to_frags,
+                raw_query_hits,
                 &seq,
                 shmmr_spec,
-                penality,
+                penalty,
                 max_count,
                 max_count_query,
                 max_count_target,
@@ -445,8 +446,8 @@ impl SeqIndexDB {
     /// Given a sequence context, this function maps the specific positions in the context
     /// to the sequences in the database. The context sequence is aligned to the sequences
     /// in the database with sparse dynamic programming, then the regions include the
-    /// positions of interest are identified. A wavefront alginment is performed to pin
-    /// down the exact mapped poitions in the sequences in the database.
+    /// positions of interest are identified. A wavefront alignment is performed to pin
+    /// down the exact mapped positions in the sequences in the database.
     ///
     /// Parameters
     /// ----------
@@ -456,8 +457,8 @@ impl SeqIndexDB {
     /// seq : list of bytes
     ///    a list of bytes representing the DNA sequence providing to context
     ///
-    /// penality : float
-    ///    the gap penalty factor used in sparse dyanmic programming for finding the hits
+    /// penalty : float
+    ///    the gap penalty factor used in sparse dynamic programming for finding the hits
     ///
     /// merge_range_tol : int
     ///    a parameter used to merge the alignment ranges
@@ -485,17 +486,17 @@ impl SeqIndexDB {
     ///     (``target_end``, ``target_end``))
     ///
     ///     the sequences from (``context_end``, ``context_end``) in the context sequence and
-    ///     the sequences from (``target_end``, ``target_end``) in the target sequnence are
+    ///     the sequences from (``target_end``, ``target_end``) in the target sequence are
     ///     used for the detailed alignment to pin down the exact mapped positions.
     ///
     #[pyo3(
-        text_signature = "($self, positions, seq, penality, max_count, max_query_count, max_target_count, max_aln_span)"
+        text_signature = "($self, positions, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span)"
     )]
     pub fn map_positions_in_seq(
         &self,
         positions: Vec<u32>,
         seq: Vec<u8>,
-        penality: f32,
+        penalty: f32,
         max_count: Option<u32>,
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
@@ -503,12 +504,13 @@ impl SeqIndexDB {
     ) -> PyResult<Vec<(u32, (u32, u32, u8), (u32, u32), (u32, u32))>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
 
-        let mut all_alns = if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+        let mut all_alns = if let Some(frag_map) = self.get_shmmr_map_internal() {
+            let raw_query_hits = raw_query_fragment(frag_map, &seq, shmmr_spec);
             aln::query_fragment_to_hps(
-                shmmr_to_frags,
+                raw_query_hits,
                 &seq,
                 shmmr_spec,
-                penality,
+                penalty,
                 max_count,
                 max_count_query,
                 max_count_target,
@@ -662,7 +664,7 @@ impl SeqIndexDB {
         }
     }
 
-    /// count the number of shimmer hits paritioned by the source file in the database
+    /// count the number of shimmer hits partitioned by the source file in the database
     ///
     /// Parameters
     /// ----------
@@ -671,14 +673,14 @@ impl SeqIndexDB {
     ///     a shimmer pair used for query
     ///
     /// max_unique_count : int
-    ///     a interger to filter out shimmer pairs with count that are greater
+    ///     a integer to filter out shimmer pairs with count that are greater
     ///     than the `max_unique_count`  
     ///
     /// Returns
     /// -------
     ///
     /// list
-    ///     a list of the tuple (soure_name : string, count : int)
+    ///     a list of the tuple (source_name : string, count : int)
     ///
     #[pyo3(text_signature = "($self, shmmr_pair, max_unique_count)")]
     #[args(max_unique_count = "1")]
@@ -749,7 +751,7 @@ impl SeqIndexDB {
         }
     }
 
-    /// get the ``shmmer_pair`` to ``fragment_id`` map in Python
+    /// get the ``shmmr_pair`` to ``fragment_id`` map in Python
     ///
     /// this can be very expensive to generate the Python objects of a large hashmap in Rust
     ///
@@ -757,7 +759,7 @@ impl SeqIndexDB {
     /// -------
     ///
     /// dict
-    ///     the ``shmmer_pair`` to ``fragments`` map
+    ///     the ``shmmr_pair`` to ``fragments`` map
     ///
     ///     fragments: a list of ``FragmentSignature``: (frg_id, seq_id, bgn, end,
     ///     orientation(to the shimmer pair)) defined as::
@@ -771,7 +773,7 @@ impl SeqIndexDB {
         pyo3::Python::with_gil(|py| Ok(shmmr_to_frags.to_object(py)))
     }
 
-    /// get the ``shmmer_pair`` to ``fragment_id`` map in Python as a list
+    /// get the ``shmmr_pair`` to ``fragment_id`` map in Python as a list
     ///
     /// this can be very expensive to generate the Python objects of a large hashmap in Rust
     ///
@@ -985,7 +987,7 @@ impl SeqIndexDB {
         }
     }
 
-    /// Get adjecent list of the shimmer graph shimmer_pair -> shimmer_pair
+    /// Get adjacent list of the shimmer graph shimmer_pair -> shimmer_pair
     ///
     /// Parameters
     /// ----------
@@ -1021,7 +1023,7 @@ impl SeqIndexDB {
         }
     }
 
-    /// Sort the adjecent list of the shimmer graph
+    /// Sort the adjacent list of the shimmer graph
     ///
     /// Parameters
     /// ----------
@@ -1094,7 +1096,7 @@ impl SeqIndexDB {
     /// path_len_cut_off : int
     ///     remove short path less than path_len_cut_off when generating the principal path
     ///     
-    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///     if the number is small, the generated principal paths will be more fragmented.
     ///  
     /// Returns
     /// -------
@@ -1129,11 +1131,11 @@ impl SeqIndexDB {
         pb
     }
 
-    fn get_vertex_map_from_priciple_bundles(
+    fn get_vertex_map_from_principal_bundles(
         &self,
         pb: Vec<Vec<(u64, u64, u8)>>,
     ) -> FxHashMap<(u64, u64), (usize, u8, usize)> {
-        // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
+        // coutn segment for filtering, some unidirectional seg may have both forward and reverse in the principle bundles
         // let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
         // pb.iter().for_each(|bundle| {
         //    bundle.iter().for_each(|v| {
@@ -1153,7 +1155,7 @@ impl SeqIndexDB {
             .collect()
     }
 
-    /// Get the principal bundles and bundle decomposition of all seqeuences
+    /// Get the principal bundles and bundle decomposition of all sequences
     ///
     /// Parameters
     /// ----------
@@ -1163,7 +1165,7 @@ impl SeqIndexDB {
     /// path_len_cut_off : int
     ///     remove short path less than path_len_cut_off when generating the principal path
     ///     
-    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///     if the number is small, the generated principal paths will be more fragmented.
     ///  
     /// Returns
     /// -------
@@ -1221,7 +1223,7 @@ impl SeqIndexDB {
     /// path_len_cut_off : int
     ///     remove short path less than path_len_cut_off when generating the principal path
     ///     
-    ///     if the number is small, the generated principal paths will be more fragemented.
+    ///     if the number is small, the generated principal paths will be more fragmented.
     ///  
     /// sequences : (contig_id: int, list of sequences)
     ///
@@ -1292,14 +1294,14 @@ impl SeqIndexDB {
         //println!("DBG: # bundles {}", pb.len());
 
         let mut vertex_to_bundle_id_direction_pos =
-            self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
+            self.get_vertex_map_from_principal_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
         let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = sequences
             .into_iter()
             .map(|(sid, seq)| (sid as u32, get_smps(seq, &self.shmmr_spec.clone().unwrap())))
             .collect();
 
-        // data for reordering the bundles and for re-ordering them along the sequnces
+        // data for reordering the bundles and for re-ordering them along the sequences
         let mut bundle_id_to_directions = FxHashMap::<usize, Vec<u32>>::default();
         let mut bundle_id_to_orders = FxHashMap::<usize, Vec<f32>>::default();
         seqid_smps.iter().for_each(|(_sid, smps)| {
@@ -1363,7 +1365,7 @@ impl SeqIndexDB {
                         .collect::<Vec<(u64, u64, u8)>>();
                     rpb.iter().enumerate().for_each(|(p, v)| {
                         vertex_to_bundle_id_direction_pos.insert((v.0, v.1), (*bid, v.2, p));
-                        // overide what in the hashpmap
+                        // override what in the hashpmap
                     });
                     rpb
                 } else {
@@ -1374,7 +1376,7 @@ impl SeqIndexDB {
             })
             .collect::<Vec<(usize, usize, Vec<(u64, u64, u8)>)>>();
 
-        // loop through each sequnece and generate the decomposition for the sequence
+        // loop through each sequence and generate the decomposition for the sequence
         let seqid_smps_with_bundle_id_seg_direction = seqid_smps
             .iter()
             .map(|(sid, smps)| {
@@ -1407,7 +1409,7 @@ impl SeqIndexDB {
     /// min_count : int
     ///     the minimum number of times a pair of shimmers must be observed to be included in the graph
     ///
-    /// filenpath : string
+    /// filepath : string
     ///     the path to the output file
     ///
     /// Returns
@@ -1676,7 +1678,7 @@ impl SeqIndexDB {
             .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
             .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
-        let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_priciple_bundles(pb);
+        let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_principal_bundles(pb);
 
         filtered_adj_list.iter().for_each(|(k, v, w)| {
             if v.0 <= w.0 {
@@ -1759,7 +1761,7 @@ impl SeqIndexDB {
 
             internal.write_to_frag_files(file_prefix.clone());
             internal
-                .write_shmr_map_index(file_prefix.clone())
+                .write_shmmr_map_index(file_prefix.clone())
                 .expect("write mdb file fail");
         };
     }
