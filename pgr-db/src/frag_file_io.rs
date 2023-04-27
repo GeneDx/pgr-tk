@@ -224,7 +224,7 @@ impl GetSeq for CompactSeqFragFileStorage {
             }
         }
         let mut seq = Vec::<u8>::new();
-        println!("{:?} {} {} {} {} {}", frag_range, sid, group_ids.len(), bgn, end, end-bgn);
+        //println!("{:?} {} {} {} {} {}", frag_range, sid, group_ids.len(), bgn, end, end-bgn);
         let offset = (bgn - sub_seqs[0].0) as usize;
         sub_seqs.into_iter().for_each(|ss| seq.extend(ss.1));
         return seq[offset..offset + (end - bgn) as usize].to_vec();
