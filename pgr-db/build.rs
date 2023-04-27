@@ -75,11 +75,11 @@ fn main() {
     #[cfg(feature = "with_agc")]
     if build_agc().is_none() {
         panic!("Error building AGC C library");
+    } else {
+        let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let agc_path = out_path.join("agc");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let agc_path = out_path.join("agc");
-
-    // shared library.
+        // shared library.
         println!("cargo:rustc-link-lib=agc");
         println!("cargo:rustc-link-search={}", agc_path.display());
         println!("cargo:rustc-link-lib=zstd");

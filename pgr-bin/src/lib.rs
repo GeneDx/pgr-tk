@@ -11,7 +11,7 @@ use pgr_db::seq_db::{self, GetSeq, raw_query_fragment, raw_query_fragment_from_m
 pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
 
 #[cfg(feature = "with_agc")]
-use pgr_db::{agc_io, frag_file_io};
+use pgr_db::agc_io;
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};

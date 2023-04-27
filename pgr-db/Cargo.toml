@@ -30,3 +30,4 @@ rs-libwfa2 = { path = "../rs-libwfa2/" }
 
 [features]
 with_agc = []
+default = ["with_agc"]
