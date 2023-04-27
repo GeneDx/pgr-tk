@@ -1,3 +1,4 @@
+#[cfg(feature = "with_agc")]
 use crate::agc_io::AGCFile;
 use crate::fasta_io::{reverse_complement, FastaReader, SeqRec};
 use crate::graph_utils::{AdjList, AdjPair, ShmmrGraphNode};
@@ -671,7 +672,7 @@ impl CompactSeqDB {
 
         Ok(())
     }
-
+    #[cfg(feature = "with_agc")]
     pub fn load_index_from_agcfile(&mut self, agcfile: AGCFile) -> Result<(), std::io::Error> {
         //let agcfile = AGCFile::new(filepath);
 

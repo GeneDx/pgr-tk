@@ -37,10 +37,18 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
 
     let mut seq_index_db = SeqIndexDB::new();
+
+    #[cfg(feature = "with_agc")]
     if args.frg_file {
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else {
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+    }
+    #[cfg(not(feature = "with_agc"))]
+    if args.frg_file {
+        let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
+    } else {
+        panic!("This command is compiled with only frg file support, please specify `--frg-file");
     }
 
     if args.list {

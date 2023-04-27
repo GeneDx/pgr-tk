@@ -27,3 +27,6 @@ regex = "1"
 bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
 memmap2 = "0.5.10"
 rs-libwfa2 = { path = "../rs-libwfa2/" }
+
+[features]
+with_agc = []

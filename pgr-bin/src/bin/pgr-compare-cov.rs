@@ -312,9 +312,17 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
 
 fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
     let mut seq_index_db = SeqIndexDB::new();
+    #[cfg(feature = "with_agc")]
     if input_type == "AGC" {
         let _ = seq_index_db.load_from_agc_index(args.agc_idx_prefix.as_ref().unwrap().clone());
     } else if input_type == "FRG" {
+        let _ = seq_index_db.load_from_frg_index(args.frg_idx_prefix.as_ref().unwrap().clone());
+    } else {
+        panic!("input type has to be specified  AGC or FRG backends")
+    };
+    
+    #[cfg(not(feature = "with_agc"))]
+    if input_type == "FRG" {
         let _ = seq_index_db.load_from_frg_index(args.frg_idx_prefix.as_ref().unwrap().clone());
     } else {
         panic!("input type has to be specified  AGC or FRG backends")

@@ -109,10 +109,17 @@ fn main() -> Result<(), std::io::Error> {
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
+        
+        #[cfg(feature = "with_agc")] {        
         let stderr = io::stderr();
         let mut handle = stderr.lock();
         let _ = handle.write_all(b"Read the input as a AGC backed index database files.\n");
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+        }
+
+        #[cfg(not(feature = "with_agc"))]
+        panic!("This command is compiled with only frg file support, please specify `--frg-file");
+
     }
     let prefix = Path::new(&args.output_prefix);
 
