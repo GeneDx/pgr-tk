@@ -12,11 +12,11 @@ crate-type = ["rlib","cdylib"]
 [dependencies]
 pyo3 = { version = "0.14.1" }
 
-pgr-db = { path = "../pgr-db/" }
+pgr-db = { path = "../pgr-db/", default-features = false  }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
 memmap2 = "0.5.10"
 
 [features]
 with_agc = []
-default = ["pyo3/extension-module", "with_agc"]
+default = ["pyo3/extension-module", "pgr-db/with_agc"]

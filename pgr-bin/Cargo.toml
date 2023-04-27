@@ -7,7 +7,7 @@ authors = ["Jason Chin <cschin@infoecho.net>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pgr-db = {path = "../pgr-db"}
+pgr-db = {path = "../pgr-db", default-features = false }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
 log = { version = "^0.4.5", features = ["std"] }
 clap = { version = "4.0.30", features = ["derive"] }
@@ -19,5 +19,5 @@ kodama = "0.2.3"
 memmap2 = "0.5.10"
 
 [features]
-with_agc =[]
 default = ["with_agc"]
+with_agc = ["pgr-db/with_agc"]
