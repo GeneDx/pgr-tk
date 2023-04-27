@@ -11,12 +11,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 pub type ShmmrToFragMapLocation = FxHashMap<(u64, u64), (usize, usize)>;
 
-pub struct CompactSeqDBStorage {
+pub struct CompactSeqFragFileStorage {
     pub shmmr_spec: ShmmrSpec,
     pub seqs: Vec<CompactSeq>,
     pub frag_location_map: ShmmrToFragMapLocation,
     pub frag_map_file: Mmap,
-    // pub frag_map: ShmmrToFrags,
     pub frag_file_prefix: String,
     pub frag_file: Mmap,
     pub frag_addr_offsets: Vec<(usize, usize, u32)>, //offset, compress_chunk_size, frag_len_in_bases
@@ -26,18 +25,16 @@ pub struct CompactSeqDBStorage {
     pub seq_info: FxHashMap<u32, (String, Option<String>, u32)>,
 }
 
-impl CompactSeqDBStorage {
+impl CompactSeqFragFileStorage {
     pub fn new(prefix: String) -> Self {
         let frag_file_prefix = prefix;
 
         let fmap_file =
             File::open(frag_file_prefix.clone() + ".mdb").expect("frag map file open fail");
+
         let frag_map_file =
             unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
 
-        //let (shmmr_spec, frag_map) =
-        //    read_mdb_file_parallel(frag_file_prefix.clone() + ".mdb").unwrap();
-        // let frag_map = FxHashMap::default();
         let (shmmr_spec, frag_location_map) =
             read_mdb_file_to_frag_locations(frag_file_prefix.clone() + ".mdb").unwrap();
 
@@ -47,6 +44,8 @@ impl CompactSeqDBStorage {
         let mut sdx_file = BufReader::new(
             File::open(frag_file_prefix.clone() + ".sdx").expect("sdx file open error"),
         );
+        let mut sdx_version_string = [0_u8;7];
+        sdx_file.read_exact(&mut sdx_version_string).expect("sdx file reading error");
         let config = config::standard();
         let (frag_compress_chunk_size, frag_addr_offsets, seqs): (
             usize,
@@ -83,7 +82,6 @@ impl CompactSeqDBStorage {
             seqs,
             frag_location_map,
             frag_map_file,
-            // frag_map,
             frag_file_prefix,
             frag_file,
             frag_addr_offsets,
@@ -176,7 +174,7 @@ impl CompactSeqDBStorage {
     }
 }
 
-impl GetSeq for CompactSeqDBStorage {
+impl GetSeq for CompactSeqFragFileStorage {
     fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         assert!((sid as usize) < self.seqs.len());
         let frag_range = &self.seqs[sid as usize].seq_frag_range;
@@ -196,11 +194,7 @@ impl GetSeq for CompactSeqDBStorage {
             .filter(|(gid, _id)| *gid == frag_group_ids[0].0)
             .map(|v| v.1);
 
-        // we need to trim the end of the first sequence
         let first_group_seq = self.get_seq_from_frag_ids(first_group_ids.clone());
-        //println!("{} {:?}, {:?} {} {}\n", sid, frag_range, first_group_ids, first_group_seq.len(),  self.shmmr_spec.k );
-        let first_group_seq =
-            first_group_seq[0..first_group_seq.len() - self.shmmr_spec.k as usize].to_owned();
 
         let mut current_chunk_bgn;
         let mut current_chunk_end = first_group_seq.len() as u32;
@@ -209,16 +203,15 @@ impl GetSeq for CompactSeqDBStorage {
             sub_seqs.push((0, first_group_seq));
         };
 
-        let group_ids = (frag_group_ids[0].0..frag_group_ids[frag_group_ids.len() - 1].0)
+        let group_ids = (frag_group_ids[0].0..=frag_group_ids[frag_group_ids.len() - 1].0)
             .map(|v| v)
             .collect::<Vec<u32>>();
 
         if group_ids.len() > 1 {
-            for group_id in group_ids[1]..group_ids[group_ids.len() - 1] {
+            for &group_id in group_ids[1..].into_iter()  {
                 let (_, _, frag_seq_len) = self.frag_addr_offsets[group_id as usize];
                 current_chunk_bgn = current_chunk_end;
                 current_chunk_end = current_chunk_bgn + frag_seq_len as u32;
-
                 if (current_chunk_bgn <= bgn && bgn < current_chunk_end)
                     || (current_chunk_bgn <= end && end < current_chunk_end)
                     || (bgn <= current_chunk_bgn && current_chunk_end <= end)
@@ -226,17 +219,12 @@ impl GetSeq for CompactSeqDBStorage {
                     let frags =
                         fetch_frag_group(group_id, &self.frag_addr_offsets, &self.frag_file);
                     let sub_seq = self.reconstruct_sequence_from_frags(frags);
-                    if group_id != group_ids[group_ids.len() - 1] {
-                        let sub_seq =
-                            sub_seq[0..sub_seq.len() - self.shmmr_spec.k as usize].to_owned();
-                        sub_seqs.push((current_chunk_bgn, sub_seq));
-                    } else {
-                        sub_seqs.push((current_chunk_bgn, sub_seq));
-                    }
+                    sub_seqs.push((current_chunk_bgn, sub_seq));
                 }
             }
         }
         let mut seq = Vec::<u8>::new();
+        println!("{:?} {} {} {} {} {}", frag_range, sid, group_ids.len(), bgn, end, end-bgn);
         let offset = (bgn - sub_seqs[0].0) as usize;
         sub_seqs.into_iter().for_each(|ss| seq.extend(ss.1));
         return seq[offset..offset + (end - bgn) as usize].to_vec();
@@ -250,6 +238,8 @@ fn fetch_frag_group(
 ) -> Fragments {
     let config = config::standard();
     let (offset, size, _) = frag_addr_offsets[frag_group_id as usize];
+    let version_string_offset = 7;
+    let offset = offset + version_string_offset; 
     let compress_chunk = frag_file[offset..(offset + size)].to_vec();
     let mut deflater = DeflateDecoder::new(&compress_chunk[..]);
     let mut s: Vec<u8> = vec![];

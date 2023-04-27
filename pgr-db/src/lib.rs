@@ -356,8 +356,8 @@ mod tests {
     #[test]
     fn test_open_compact_seq_db_storage() {
         use seq_db::GetSeq;
-        use crate::frag_file_io::CompactSeqDBStorage;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        use crate::frag_file_io::CompactSeqFragFileStorage;
+        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let seq = seq_storage.get_seq_by_id(0);
         println!("{}", String::from_utf8_lossy(&seq[..]));
         let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
@@ -366,9 +366,9 @@ mod tests {
 
     #[test]
     fn test_seq_db_storage_get_sub_read() {
-        use crate::frag_file_io::CompactSeqDBStorage;
+        use crate::frag_file_io::CompactSeqFragFileStorage;
         use seq_db::GetSeq;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let sid = 0;
 
         let seq = seq_storage.get_seq_by_id(sid);

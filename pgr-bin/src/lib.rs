@@ -34,7 +34,7 @@ pub struct SeqIndexDB {
     pub seq_db: Option<seq_db::CompactSeqDB>,
     /// Rust internal: store the agc file and the index
     pub agc_db: Option<agc_io::AGCSeqDB>,
-    pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
+    pub frg_db: Option<frag_file_io::CompactSeqFragFileStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
     pub seq_index: Option<FxHashMap<(String, Option<String>), (u32, u32)>>,
@@ -106,7 +106,7 @@ impl SeqIndexDB {
     }
 
     pub fn load_from_frg_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
-        let mut frag_db = pgr_db::frag_file_io::CompactSeqDBStorage::new(prefix);
+        let mut frag_db = pgr_db::frag_file_io::CompactSeqFragFileStorage::new(prefix);
 
         let seq_index = frag_db.seq_index.into_iter().map(|(k, v)| (k, v)).collect();
 
@@ -179,7 +179,7 @@ impl SeqIndexDB {
         if self.seq_db.is_some() {
             let internal = self.seq_db.as_ref().unwrap();
 
-            internal.write_to_frag_files(file_prefix.clone());
+            internal.write_to_frag_files(file_prefix.clone(), None);
             internal
                 .write_shmmr_map_index(file_prefix)
                 .expect("write mdb file fail");

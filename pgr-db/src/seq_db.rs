@@ -810,19 +810,18 @@ impl CompactSeqDB {
 }
 
 impl CompactSeqDB {
-    pub fn write_to_frag_files(&self, file_prefix: String) {
+    pub fn write_to_frag_files(&self, file_prefix: String, chunk_size: Option<usize>) {
         let mut sdx_file = BufWriter::new(
             File::create(file_prefix.clone() + ".sdx").expect("sdx file creating fail\n"),
         );
+        sdx_file.write_all("SDX:0.5".as_bytes()).expect("sdx file writing error");
         let mut frg_file =
             BufWriter::new(File::create(file_prefix + ".frg").expect("frg file creating fail\n"));
 
+        frg_file.write_all("FRG:0.5".as_bytes()).expect("frg file writing error");
         let config = config::standard();
 
-        //self.seqs.iter().for_each(|s| {
-        //    println!("{:?} {:?} {} {}", s.id, s.seq_frags.len(), s.seq_frags[0], s.seq_frags[s.seq_frags.len()-1]);
-        //});
-        let chunk_size = 256_usize;
+        let chunk_size = chunk_size.unwrap_or(256_usize);
         let compressed_frags = self
             .frags
             .as_ref()
@@ -834,12 +833,11 @@ impl CompactSeqDB {
                 let mut total_frag_len = 0_u32;
                 frags.iter().for_each(|f| {
                     total_frag_len += match f {
-                        Fragment::AlnSegments(d) => d.2,
+                        Fragment::AlnSegments(d) => d.2 - self.shmmr_spec.k,
                         Fragment::Prefix(b) => b.len() as u32,
-                        Fragment::Internal(b) => b.len() as u32,
+                        Fragment::Internal(b) => b.len() as u32 - self.shmmr_spec.k,
                         Fragment::Suffix(b) => b.len() as u32,
                     };
-                    total_frag_len -= self.shmmr_spec.k;
                 });
 
                 let w = bincode::encode_to_vec(frags.to_vec(), config).unwrap();
@@ -858,7 +856,7 @@ impl CompactSeqDB {
             offset += l;
             frg_file.write_all(v).expect("frag file writing error\n");
         });
-
+        
         bincode::encode_into_std_write((chunk_size, frag_addr_offset, &self.seqs), &mut sdx_file, config)
             .expect("sdx file writing error\n");
         //bincode::encode_into_std_write(compressed_frags, &mut frg_file, config)
