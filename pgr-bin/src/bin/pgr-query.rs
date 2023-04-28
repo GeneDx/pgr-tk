@@ -2,6 +2,7 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use pgr_bin::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::SeqRec;
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -109,17 +110,16 @@ fn main() -> Result<(), std::io::Error> {
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
     } else {
-        
-        #[cfg(feature = "with_agc")] {        
-        let stderr = io::stderr();
-        let mut handle = stderr.lock();
-        let _ = handle.write_all(b"Read the input as a AGC backed index database files.\n");
-        let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+        #[cfg(feature = "with_agc")]
+        {
+            let stderr = io::stderr();
+            let mut handle = stderr.lock();
+            let _ = handle.write_all(b"Read the input as a AGC backed index database files.\n");
+            let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
         }
 
         #[cfg(not(feature = "with_agc"))]
         panic!("This command is compiled with only frg file support, please specify `--frg-file");
-
     }
     let prefix = Path::new(&args.output_prefix);
 
@@ -318,12 +318,15 @@ fn main() -> Result<(), std::io::Error> {
                     .collect::<FxHashMap<_, _>>();
 
                 let mut fasta_out = None;
-                let mut fasta_buf: BufWriter<File>;
+                let fasta_buf: BufWriter<File>;
                 if !args.only_summary {
                     let ext = format!("{:03}.fa", idx);
                     fasta_buf = BufWriter::new(File::create(prefix.with_extension(ext)).unwrap());
-                    fasta_out = Some(&mut fasta_buf);
+                    fasta_out = Some(fasta_buf);
                 };
+
+                let mut sub_seq_range_for_fasta = Vec::<(u32, u32, u32, u32, String)>::new();
+
                 aln_range.into_iter().for_each(|(sid, rgns)| {
                     let (ctg, src, _ctg_len) =
                         seq_index_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
@@ -376,22 +379,39 @@ fn main() -> Result<(), std::io::Error> {
                                     target_seq_name
                                 );
                             }
+                            sub_seq_range_for_fasta.push((
+                                sid,
+                                b,
+                                e,
+                                orientation,
+                                target_seq_name.clone(),
+                            ));
                             //println!("DBG: {}", seq_id);
-                            if let Some(fasta_out) = fasta_out.as_mut() {
-                                let target_seq = seq_index_db
-                                    .get_sub_seq_by_id(sid, b as usize, e as usize)
-                                    .unwrap();
-                                let target_seq = if orientation == 1 {
-                                    pgr_db::fasta_io::reverse_complement(&target_seq)
-                                } else {
-                                    target_seq
-                                };
-                                let _ = writeln!(fasta_out, ">{}", target_seq_name);
-                                let _ =
-                                    writeln!(fasta_out, "{}", String::from_utf8_lossy(&target_seq));
-                            };
                         });
                 });
+                if let Some(fasta_out) = fasta_out.as_mut() {
+                    sub_seq_range_for_fasta
+                        .par_iter()
+                        .map(|(sid, b, e, orientation, target_seq_name)| {
+                            let target_seq = seq_index_db
+                                .get_sub_seq_by_id(*sid, *b as usize, *e as usize)
+                                .unwrap();
+                            let target_seq = if *orientation == 1 {
+                                pgr_db::fasta_io::reverse_complement(&target_seq)
+                            } else {
+                                target_seq
+                            };
+                            (target_seq_name.into(), target_seq)
+                        })
+                        .collect::<Vec<(String, Vec<u8>)>>()
+                        .into_iter()
+                        .for_each(|(target_seq_name, target_seq)| {
+                            writeln!(fasta_out, ">{}", target_seq_name)
+                                .expect("can't write the query output fasta file\n");
+                            writeln!(fasta_out, "{}", String::from_utf8_lossy(&target_seq))
+                                .expect("can't write the query output fasta file\n");
+                        });
+                };
             };
         });
     Ok(())
