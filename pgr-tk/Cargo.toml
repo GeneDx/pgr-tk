@@ -19,4 +19,4 @@ memmap2 = "0.5.10"
 
 [features]
 with_agc = []
-default = ["pgr-db/with_agc"]
+default = ["pgr-db/with_agc", "with_agc"]
