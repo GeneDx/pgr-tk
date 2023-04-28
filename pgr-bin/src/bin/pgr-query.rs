@@ -123,54 +123,9 @@ fn main() -> Result<(), std::io::Error> {
     }
     let prefix = Path::new(&args.output_prefix);
 
-    let mut hit_file = if args.bed_summary {
-        BufWriter::new(File::create(prefix.with_extension("hit.bed")).unwrap())
-    } else {
-        BufWriter::new(File::create(prefix.with_extension("hit")).unwrap())
-    };
-    if args.bed_summary {
-        writeln!(
-            hit_file,
-            "#{}",
-            [
-                "target",
-                "bgn",
-                "end",
-                "query",
-                "color",
-                "orientation",
-                "q_len",
-                "aln_anchor_count",
-                "q_idx",
-                "src",
-                "ctg_bgn",
-                "ctg_end",
-            ]
-            .join("\t")
-        )?;
-    } else {
-        writeln!(
-            hit_file,
-            "#{}",
-            [
-                "out_seq_name",
-                "ctg_bgn",
-                "ctg_end",
-                "color",
-                "q_name",
-                "orientation",
-                "idx",
-                "q_idx",
-                "query_bgn",
-                "query_end",
-                "q_len",
-                "aln_anchor_count",
-            ]
-            .join("\t")
-        )?;
-    };
+
     query_seqs
-        .into_iter()
+        .into_par_iter()
         .enumerate()
         .for_each(|(idx, seq_rec)| {
             let q_name = String::from_utf8_lossy(&seq_rec.id);
@@ -326,7 +281,52 @@ fn main() -> Result<(), std::io::Error> {
                 };
 
                 let mut sub_seq_range_for_fasta = Vec::<(u32, u32, u32, u32, String)>::new();
-
+                let mut hit_file = if args.bed_summary {
+                    BufWriter::new(File::create(prefix.with_extension(format!("{:03}.hit.bed",idx ))).unwrap())
+                } else {
+                    BufWriter::new(File::create(prefix.with_extension(format!("{:03}.hit",idx ))).unwrap())
+                };
+                if args.bed_summary {
+                    writeln!(
+                        hit_file,
+                        "#{}",
+                        [
+                            "target",
+                            "bgn",
+                            "end",
+                            "query",
+                            "color",
+                            "orientation",
+                            "q_len",
+                            "aln_anchor_count",
+                            "q_idx",
+                            "src",
+                            "ctg_bgn",
+                            "ctg_end",
+                        ]
+                        .join("\t")
+                    ).expect("writing bed summary fail\n");
+                } else {
+                    writeln!(
+                        hit_file,
+                        "#{}",
+                        [
+                            "out_seq_name",
+                            "ctg_bgn",
+                            "ctg_end",
+                            "color",
+                            "q_name",
+                            "orientation",
+                            "idx",
+                            "q_idx",
+                            "query_bgn",
+                            "query_end",
+                            "q_len",
+                            "aln_anchor_count",
+                        ]
+                        .join("\t")
+                    ).expect("writing bed summary fail\n");
+                };
                 aln_range.into_iter().for_each(|(sid, rgns)| {
                     let (ctg, src, _ctg_len) =
                         seq_index_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
@@ -343,9 +343,9 @@ fn main() -> Result<(), std::io::Error> {
                             } else {
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)
                             };
-
+                            
                             if args.bed_summary {
-                                let _ = writeln!(
+                                writeln!(
                                     hit_file,
                                     "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                     target_seq_name,
@@ -360,9 +360,9 @@ fn main() -> Result<(), std::io::Error> {
                                     src,
                                     q_bgn,
                                     q_end,
-                                );
+                                ).expect("writing hit summary fail\n");
                             } else {
-                                let _ = writeln!(
+                                writeln!(
                                     hit_file,
                                     "{:03}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                     idx,
@@ -377,7 +377,7 @@ fn main() -> Result<(), std::io::Error> {
                                     e,
                                     orientation,
                                     target_seq_name
-                                );
+                                ).expect("writing hit summary fail\n");
                             }
                             sub_seq_range_for_fasta.push((
                                 sid,
