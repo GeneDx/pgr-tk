@@ -17,6 +17,7 @@ regex = "1"
 svg = "*"
 kodama = "0.2.3"
 memmap2 = "0.5.10"
+bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
 
 [features]
 default = ["with_agc"]

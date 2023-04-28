@@ -22,11 +22,11 @@ use std::io::BufRead;
 
 use std::io::{BufReader, BufWriter, Read, Write};
 
-type PrincipalBundles = Vec<Vec<(u64, u64, u8)>>; //shimmer pair vector
-type PrincipalBundlesWithId = Vec<(usize, usize, Vec<(u64, u64, u8)>)>; //vector of "bundle_id, mean_order, shimmer pair vector"
+pub type PrincipalBundles = Vec<Vec<(u64, u64, u8)>>; //shimmer pair vector
+pub type PrincipalBundlesWithId = Vec<(usize, usize, Vec<(u64, u64, u8)>)>; //vector of "bundle_id, mean_order, shimmer pair vector"
 type ShmmrPair = (u64, u64);
 type ShmmrPairAndBundleVertices = Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>; // Vector of ( sequence_id, vector of (shimmer pair, optional bundle vertex)
-type VertexToBundleIdMap = FxHashMap<ShmmrPair, (usize, u8, usize)>;
+pub type VertexToBundleIdMap = FxHashMap<ShmmrPair, (usize, u8, usize)>;
 
 #[allow(clippy::large_enum_variant)]
 pub enum GZFastaReader {
@@ -640,45 +640,6 @@ impl SeqIndexDB {
         (principal_bundles_with_id, vertex_to_bundle_id_direction_pos)
     }
 
-    #[allow(clippy::type_complexity)] // TODO: Define the type for readability
-    pub fn get_principal_bundle_decomposition(
-        &self,
-        vertex_to_bundle_id_direction_pos: &VertexToBundleIdMap,
-        seq_db: &SeqIndexDB,
-    ) -> Vec<(u32, ShmmrPairAndBundleVertices)> {
-        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = seq_db
-            .seq_info
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|(sid, data)| {
-                let (ctg_name, source, _) = data;
-                let source = source.clone().unwrap();
-                let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
-                (*sid, self.get_smps(seq, &self.shmmr_spec.clone().unwrap()))
-            })
-            .collect();
-
-        // loop through each sequence and generate the decomposition for the sequence
-        let seqid_smps_with_bundle_id_seg_direction = seqid_smps
-            .iter()
-            .map(|(sid, smps)| {
-                let smps = smps
-                    .iter()
-                    .map(|v| {
-                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
-                        (*v, seg_match)
-                    })
-                    .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
-                (*sid, smps)
-            })
-            .collect::<Vec<(
-                u32,
-                Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
-            )>>();
-
-        seqid_smps_with_bundle_id_seg_direction
-    }
 
     pub fn generate_mapg_gfa(
         &self,
@@ -1003,6 +964,44 @@ impl SeqIndexDB {
             Backend::UNKNOWN => None,
         }
     }
+}
+#[allow(clippy::type_complexity)] // TODO: Define the type for readability
+pub fn get_principal_bundle_decomposition(
+    vertex_to_bundle_id_direction_pos: &VertexToBundleIdMap,
+    seq_db: &SeqIndexDB,
+) -> Vec<(u32, ShmmrPairAndBundleVertices)> {
+    let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = seq_db
+        .seq_info
+        .clone()
+        .unwrap_or_default()
+        .iter()
+        .map(|(sid, data)| {
+            let (ctg_name, source, _) = data;
+            let source = source.clone().unwrap();
+            let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
+            (*sid, seq_db.get_smps(seq, &seq_db.shmmr_spec.clone().unwrap()))
+        })
+        .collect();
+
+    // loop through each sequence and generate the decomposition for the sequence
+    let seqid_smps_with_bundle_id_seg_direction = seqid_smps
+        .iter()
+        .map(|(sid, smps)| {
+            let smps = smps
+                .iter()
+                .map(|v| {
+                    let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
+                    (*v, seg_match)
+                })
+                .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
+            (*sid, smps)
+        })
+        .collect::<Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>>();
+
+    seqid_smps_with_bundle_id_seg_direction
 }
 
 pub fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {
