@@ -72,11 +72,17 @@ struct CmdOptions {
     /// output summaries in the bed format
     #[clap(long, default_value_t = false)]
     bed_summary: bool,
+
+    /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
+    #[clap(long, default_value_t = 0)]
+    number_of_thread: usize,
 }
 
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
+
+    rayon::ThreadPoolBuilder::new().num_threads(args.number_of_thread).build_global().unwrap();
 
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
