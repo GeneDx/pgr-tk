@@ -2,7 +2,7 @@
 name = "pgrtk"
 version = "0.5.0"
 authors = ["Jason Chin <cschin@infoecho.net>"]
-edition = "2023"
+edition = "2021"
 
 
 [lib]
