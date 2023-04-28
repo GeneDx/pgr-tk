@@ -1,11 +1,14 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
+use bincode::config;
 use clap::{self, CommandFactory, Parser};
-use pgr_bin::SeqIndexDB;
+use pgr_bin::{
+    get_principal_bundle_decomposition, PrincipalBundlesWithId, SeqIndexDB, VertexToBundleIdMap,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 //use std::fs::File;
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufRead, BufReader, BufWriter, Read, Write},
     path::Path,
 };
 
@@ -19,6 +22,9 @@ struct CmdOptions {
     fastx_path: String,
     /// the prefix of the output files
     output_prefix: String,
+    /// if specified, we will use file in <PRECOMPUTED_BUNDLES> for the principal bundle data, this overrides computing bundles from <FASTX_PATH>
+    #[clap(long, short, default_value = None)]
+    precomputed_bundles: Option<String>,
     /// the path to the file that contains a list of contig name in the <FASTX_PATH> to be analyzed
     #[clap(long, short, default_value = None)]
     include: Option<String>,
@@ -132,15 +138,114 @@ fn group_smps_by_principle_bundle_id(
 
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
-    let args = CmdOptions::parse();
+    let mut args = CmdOptions::parse();
     let cmd_string = std::env::args().collect::<Vec<String>>().join(" ");
-    let mut seq_index_db = SeqIndexDB::new();
     let fastx_path = args.fastx_path.clone();
-    seq_index_db
-        .load_from_fastx(fastx_path.clone(), args.w, args.k, args.r, args.min_span)
-        .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
+    let mut seq_index_db = SeqIndexDB::new();
 
+    let (
+        width,
+        ksize,
+        rfactor,
+        min_span,
+        min_branch_size,
+        min_cov,
+        principal_bundles_with_id,
+        vertex_to_bundle_id_direction_pos,
+    ) = match args.precomputed_bundles.clone() {
+        Some(precomputed_bundles) => {
+            let mut pdb_input_file = BufReader::new(
+                File::open(Path::new(&precomputed_bundles)).expect("pdb input file open error"),
+            );
+            let mut buf = [0_u8; 7];
+            pdb_input_file
+                .read_exact(&mut buf)
+                .expect("pdb input file reading error");
+            let config = config::standard();
+            let mut s: Vec<u8> = vec![];
+            pdb_input_file
+                .read_to_end(&mut s)
+                .expect("pdb input file reading error");
 
+            let (
+                (
+                    w,
+                    k,
+                    r,
+                    min_span,
+                    min_branch_size,
+                    min_cov,
+                    principal_bundles_with_id,
+                    vertex_to_bundle_id_direction_pos,
+                ),
+                _size,
+            ): (
+                (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    usize,
+                    usize,
+                    PrincipalBundlesWithId,
+                    VertexToBundleIdMap,
+                ),
+                usize,
+            ) = bincode::decode_from_slice::<
+                (
+                    u32,
+                    u32,
+                    u32,
+                    u32,
+                    usize,
+                    usize,
+                    PrincipalBundlesWithId,
+                    pgr_bin::VertexToBundleIdMap,
+                ),
+                config::Configuration,
+            >(&s[..], config)
+            .unwrap();
+            (
+                w,
+                k,
+                r,
+                min_span,
+                min_branch_size,
+                min_cov,
+                principal_bundles_with_id,
+                vertex_to_bundle_id_direction_pos,
+            )
+        }
+        None => {
+            // get principle bundle from fastx_path
+
+            seq_index_db
+                .load_from_fastx(fastx_path.clone(), args.w, args.k, args.r, args.min_span)
+                .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
+
+            let (principal_bundles_with_id, vertex_to_bundle_id_direction_pos) = seq_index_db
+                .get_principal_bundles_with_id(args.min_cov, args.min_branch_size, None);
+            (
+                args.w,
+                args.k,
+                args.r,
+                args.min_span,
+                args.min_branch_size,
+                args.min_cov,
+                principal_bundles_with_id,
+                vertex_to_bundle_id_direction_pos,
+            )
+        }
+    };
+
+    args.w = width;
+    args.k = ksize;
+    args.r = rfactor;
+    args.min_span = min_span;
+    args.min_branch_size = min_branch_size;
+    args.min_cov = min_cov;
+
+    // get sequence data for decomposition from `target_fastx_path`. If it is not specified, using `fastx_path`
     let decomp_fastx_path;
     let mut decomp_seq_index_db = if let Some(target_fastx_path) = args.decomp_fastx_path {
         decomp_fastx_path = target_fastx_path.clone();
@@ -151,34 +256,17 @@ fn main() -> Result<(), std::io::Error> {
         decomp_seq_index_db
     } else {
         //The file is read using a Mmap which is not clonable, need to rebuild the database. TODO: fix this.
-        let seq_list = seq_index_db
-            .seq_info
-            .as_ref()
-            .unwrap()
-            .values()
-            .map(|(ctg, _src, _len)| {
-                let seq = seq_index_db
-                    .get_seq(fastx_path.clone(), ctg.clone())
-                    .expect("fail to fetch sequence");
-                (ctg.clone(), seq)
-            })
-            .collect::<Vec<_>>();
         let mut decomp_seq_index_db = SeqIndexDB::new();
-        let _ = decomp_seq_index_db.load_from_seq_list(
-            seq_list,
-            Some(fastx_path.as_str()),
-            args.w,
-            args.k,
-            args.r,
-            args.min_span,
-        );
+        decomp_seq_index_db
+            .load_from_fastx(fastx_path.clone(), args.w, args.k, args.r, args.min_span)
+            .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
         decomp_fastx_path = fastx_path.clone();
         decomp_seq_index_db
     };
 
     if args.include.is_some() {
         let f = BufReader::new(
-            File::open(Path::new(&args.include.unwrap())).expect("can't opne the inlude file"),
+            File::open(Path::new(&args.include.unwrap())).expect("can't open the include file"),
         );
         let include_ctgs = f.lines().map(|c| c.unwrap()).collect::<FxHashSet<String>>();
         let seq_list = include_ctgs
@@ -202,46 +290,37 @@ fn main() -> Result<(), std::io::Error> {
         decomp_seq_index_db = new_seq_index_db;
     };
 
-    let (principal_bundles, sid_smps) = seq_index_db.get_principal_bundle_decomposition(
-        args.min_cov,
-        args.min_branch_size,
-        Some(&decomp_seq_index_db),
-        None,
-    );
-
-    let bid_to_size = principal_bundles
-        .iter()
-        .map(|v| (v.0, v.2.len()))
-        .collect::<FxHashMap<usize, usize>>();
-    let sid_smps: FxHashMap<u32, Vec<_>> = sid_smps.into_iter().collect();
-
     let output_prefix_path = Path::new(&args.output_prefix);
-    seq_index_db.generate_mapg_gfa(
-        0,
-        output_prefix_path
-            .with_extension("mapg.gfa")
-            .to_str()
-            .unwrap(),
-        "from_fragmap",
-        None,
-    )?;
 
-    seq_index_db.write_mapg_idx(
-        output_prefix_path
-            .with_extension("mapg.idx")
-            .to_str()
-            .unwrap(),
-    )?;
+    if args.precomputed_bundles.is_none() {
+        seq_index_db.generate_mapg_gfa(
+            0,
+            output_prefix_path
+                .with_extension("mapg.gfa")
+                .to_str()
+                .unwrap(),
+            "from_fragmap",
+            None,
+        )?;
 
-    seq_index_db.generate_principal_mapg_gfa(
-        args.min_cov,
-        args.min_branch_size,
-        output_prefix_path
-            .with_extension("pmapg.gfa")
-            .to_str()
-            .unwrap(),
-        None,
-    )?;
+        seq_index_db.write_mapg_idx(
+            output_prefix_path
+                .with_extension("mapg.idx")
+                .to_str()
+                .unwrap(),
+        )?;
+
+        seq_index_db.generate_principal_mapg_gfa(
+            args.min_cov,
+            args.min_branch_size,
+            output_prefix_path
+                .with_extension("pmapg.gfa")
+                .to_str()
+                .unwrap(),
+            None,
+        )?;
+    };
+
     let mut outpu_bed_file =
         BufWriter::new(File::create(output_prefix_path.with_extension("bed"))?);
 
@@ -250,6 +329,14 @@ fn main() -> Result<(), std::io::Error> {
     )?);
 
     writeln!(outpu_bed_file, "# cmd: {}", cmd_string).expect("bed file write error");
+
+    let mut repeat_count = FxHashMap::<u32, Vec<u32>>::default();
+    let mut non_repeat_count = FxHashMap::<u32, Vec<u32>>::default();
+
+    let sid_smps = get_principal_bundle_decomposition(
+        &vertex_to_bundle_id_direction_pos,
+        &decomp_seq_index_db,
+    );
 
     let mut seq_info = decomp_seq_index_db
         .seq_info
@@ -260,8 +347,39 @@ fn main() -> Result<(), std::io::Error> {
 
     seq_info.sort_by_key(|k| k.1 .0.clone());
 
-    let mut repeat_count = FxHashMap::<u32, Vec<u32>>::default();
-    let mut non_repeat_count = FxHashMap::<u32, Vec<u32>>::default();
+    let bid_to_size = principal_bundles_with_id
+        .iter()
+        .map(|v| (v.0, v.2.len()))
+        .collect::<FxHashMap<usize, usize>>();
+    let sid_smps: FxHashMap<u32, Vec<_>> = sid_smps.into_iter().collect();
+
+    if args.precomputed_bundles.is_none() {
+        let mut pdb_output_file = BufWriter::new(
+            File::create(Path::new(&args.output_prefix).with_extension("pdb"))
+                .expect("pdb file creating error"),
+        );
+        pdb_output_file
+            .write_all("PDB:0.5".as_bytes())
+            .expect("pdb file writing error");
+        let config = config::standard();
+        let bincode_vec = bincode::encode_to_vec(
+            (
+                args.w,
+                args.k,
+                args.r,
+                args.min_span,
+                args.min_branch_size,
+                args.min_cov,
+                principal_bundles_with_id,
+                vertex_to_bundle_id_direction_pos,
+            ),
+            config,
+        )
+        .unwrap();
+        pdb_output_file
+            .write_all(&bincode_vec[..])
+            .expect("pdb file writing error");
+    }
 
     seq_info.iter().for_each(|(sid, sdata)| {
         let (ctg, _src, _len) = sdata;
@@ -317,13 +435,13 @@ fn main() -> Result<(), std::io::Error> {
         "length",
         "repeat_bundle_count",
         "repeat_bundle_sum",
-        "repeat_bunlde_percentage",
+        "repeat_bundle_percentage",
         "repeat_bundle_mean",
         "repeat_bundle_min",
         "repeat_bundle_max",
         "non_repeat_bundle_count",
         "non_repeat_bundle_sum",
-        "non_repeat_bunlde_percentage",
+        "non_repeat_bundle_percentage",
         "non_repeat_bundle_mean",
         "non_repeat_bundle_min",
         "non_repeat_bundle_max",

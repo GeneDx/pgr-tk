@@ -1,16 +1,21 @@
 // src/lib.rs
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
-
+#[cfg(feature = "with_agc")]
+use memmap2::Mmap;
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 use pgr_db::seq_db::{self, raw_query_fragment};
-use pgr_db::seqs2variants;
+//use pgr_db::seqs2variants;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
-use pgr_db::{agc_io, fasta_io, frag_file_io};
+
+#[cfg(feature = "with_agc")]
+use pgr_db::agc_io;
+
+use pgr_db::{fasta_io, frag_file_io};
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+#[cfg(feature = "with_agc")]
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rayon::prelude::*;
@@ -18,11 +23,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use seq_db::GetSeq;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+#[cfg(feature = "with_agc")]
+use std::io::{BufRead, BufReader};
+use std::io::{BufWriter, Write};
 use std::iter::FromIterator;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Backend {
+    #[cfg(feature = "with_agc")]
     AGC,
     FRG,
     FASTX,
@@ -69,9 +77,12 @@ struct SeqIndexDB {
     pub shmmr_spec: Option<ShmmrSpec>,
     /// Rust internal: store the sequences
     pub seq_db: Option<seq_db::CompactSeqDB>,
+
+    #[cfg(feature = "with_agc")]
     /// Rust internal: store the agc file and the index
     pub agc_db: Option<agc_io::AGCSeqDB>,
-    pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
+
+    pub frg_db: Option<frag_file_io::CompactSeqFragFileStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[pyo3(get)]
     pub seq_index: Option<HashMap<(String, Option<String>), (u32, u32)>>,
@@ -92,6 +103,7 @@ impl SeqIndexDB {
         SeqIndexDB {
             seq_db: None,
             frg_db: None,
+            #[cfg(feature = "with_agc")]
             agc_db: None,
             shmmr_spec: None,
             seq_index: None,
@@ -114,12 +126,26 @@ impl SeqIndexDB {
     ///
     /// None or I/O Error
     ///
+    #[cfg(feature = "with_agc")]
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> PyResult<()> {
-        let (shmmr_spec, new_map) =
-            seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, frag_location_map) =
+            seq_db::read_mdb_file_to_frag_locations(prefix.to_string() + ".mdb").unwrap();
+
+        let frag_location_map =
+            FxHashMap::<(u64, u64), (usize, usize)>::from_iter(frag_location_map);
+
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
-        self.agc_db = Some(agc_io::AGCSeqDB{agc_file, frag_map: new_map});
+
+        let fmap_file = File::open(prefix.clone() + ".mdb").expect("frag map file open fail");
+        let frag_map_file =
+            unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
+
+        self.agc_db = Some(agc_io::AGCSeqDB {
+            agc_file,
+            frag_location_map,
+            frag_map_file,
+        });
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
@@ -149,7 +175,7 @@ impl SeqIndexDB {
 
     #[pyo3(text_signature = "($self, prefix)")]
     pub fn load_from_frg_index(&mut self, prefix: String) -> PyResult<()> {
-        let mut frag_db = pgr_db::frag_file_io::CompactSeqDBStorage::new(prefix);
+        let mut frag_db = pgr_db::frag_file_io::CompactSeqFragFileStorage::new(prefix);
 
         let seq_index = frag_db.seq_index.into_iter().map(|(k, v)| (k, v)).collect();
 
@@ -825,14 +851,13 @@ impl SeqIndexDB {
         end: usize,
     ) -> PyResult<Vec<u8>> {
         match self.backend {
-            Backend::AGC => {
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .agc_file
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
-            }
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                sample_name,
+                ctg_name,
+                bgn,
+                end,
+            )),
             Backend::MEMORY | Backend::FASTX => {
                 let &(sid, _) = self
                     .seq_index
@@ -882,16 +907,17 @@ impl SeqIndexDB {
     #[pyo3(text_signature = "($self, sample_name, ctg_name, bgn, end)")]
     pub fn get_sub_seq_by_id(&self, sid: u32, bgn: usize, end: usize) -> PyResult<Vec<u8>> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
                 let sample_name = sample_name.as_ref().unwrap().clone();
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .agc_file
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
+                Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                    sample_name,
+                    ctg_name,
+                    bgn,
+                    end,
+                ))
             }
             Backend::MEMORY | Backend::FASTX => Ok(self
                 .seq_db
@@ -924,6 +950,7 @@ impl SeqIndexDB {
     #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => Ok(self
                 .agc_db
                 .as_ref()
@@ -969,6 +996,7 @@ impl SeqIndexDB {
     #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
     pub fn get_seq_by_id(&self, sid: u32) -> PyResult<Vec<u8>> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
@@ -1428,6 +1456,7 @@ impl SeqIndexDB {
     ) -> PyResult<()> {
         let get_seq_by_id = |sid| -> Vec<u8> {
             match self.backend {
+                #[cfg(feature = "with_agc")]
                 Backend::AGC => {
                     let (ctg_name, sample_name, _) =
                         self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
@@ -1759,7 +1788,7 @@ impl SeqIndexDB {
         if self.seq_db.is_some() {
             let internal = self.seq_db.as_ref().unwrap();
 
-            internal.write_to_frag_files(file_prefix.clone());
+            internal.write_to_frag_files(file_prefix.clone(), None);
             internal
                 .write_shmmr_map_index(file_prefix.clone())
                 .expect("write mdb file fail");
@@ -1791,10 +1820,11 @@ impl SeqIndexDB {
     // depending on the storage type, return the corresponded index
     fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
         match self.backend {
-            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().frag_map),
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => None,
             Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
-            Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),
+            Backend::FRG => None,
             Backend::UNKNOWN => None,
         }
     }
@@ -1805,7 +1835,8 @@ impl SeqIndexDB {
 /// Example::
 ///
 ///      >>> agc_file = AGCFile("/path/to/genomes.agc")
-///  
+///
+#[cfg(feature = "with_agc")]  
 #[pyclass(unsendable)] // lock in one thread (see https://github.com/PyO3/pyo3/blob/main/guide/src/class.md)
 struct AGCFile {
     /// internal agc_file handle
@@ -1822,6 +1853,7 @@ struct AGCFile {
     pub ctg_lens: FxHashMap<(String, String), usize>,
 }
 
+#[cfg(feature = "with_agc")]
 #[pymethods]
 impl AGCFile {
     /// constructor
@@ -1940,7 +1972,7 @@ pub fn sparse_aln(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimziers (shimmer),
+///     reduction factor for generate sparse hierarchical minimizers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
@@ -2012,7 +2044,7 @@ fn get_shmmr_pairs_from_seq(
 ///     k-mer size, default to 56, max allowed is 56
 ///
 /// r : int
-///     reduction factor for generate sparse hierarchical minimziers (shimmer),
+///     reduction factor for generate sparse hierarchical minimizers (shimmer),
 ///     default to 4, max allowed is 12
 ///
 /// min_span : int
@@ -2127,15 +2159,15 @@ pub struct AlnMap {
 /// tuple
 ///     tuple of (alignment_score, CIGAR_list)
 ///
-#[pyfunction(seq0, seq1)]
-#[pyo3(text_signature = "($self, seq0, seq1)")]
-fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
-    if let Ok((score, cigar)) = seqs2variants::get_cigar(&seq0.to_string(), &seq1.to_string()) {
-        Ok((score, cigar))
-    } else {
-        Err(PyValueError::new_err("fail to align"))
-    }
-}
+// #[pyfunction(seq0, seq1)]
+// #[pyo3(text_signature = "($self, seq0, seq1)")]
+// fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
+//     if let Ok((score, cigar)) = seqs2variants::get_cigar(&seq0.to_string(), &seq1.to_string()) {
+//         Ok((score, cigar))
+//     } else {
+//         Err(PyValueError::new_err("fail to align"))
+//     }
+// }
 
 /// Get alignment segments from two sequences
 ///
@@ -2180,41 +2212,41 @@ fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
 ///             pub t: AlnSegType,
 ///         }
 ///
-#[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
-#[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
-fn get_aln_segments(
-    ref_id: u32,
-    ref_seq: &PyString,
-    tgt_id: u32,
-    tgt_seq: &PyString,
-) -> PyResult<Vec<AlnSegment>> {
-    let ref_seq = ref_seq.to_string();
-    let tgt_seq = tgt_seq.to_string();
-    let aln_segs = seqs2variants::get_aln_segments(ref_id, &ref_seq, tgt_id, &tgt_seq);
+// #[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
+// #[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
+// fn get_aln_segments(
+//     ref_id: u32,
+//     ref_seq: &PyString,
+//     tgt_id: u32,
+//     tgt_seq: &PyString,
+// ) -> PyResult<Vec<AlnSegment>> {
+//     let ref_seq = ref_seq.to_string();
+//     let tgt_seq = tgt_seq.to_string();
+//     let aln_segs = seqs2variants::get_aln_segments(ref_id, &ref_seq, tgt_id, &tgt_seq);
 
-    match aln_segs {
-        Ok(segs) => Ok(segs
-            .par_iter()
-            .map(|seg| {
-                let t = match seg.t {
-                    seqs2variants::AlnSegType::Match => b'M',
-                    seqs2variants::AlnSegType::Mismatch => b'X',
-                    seqs2variants::AlnSegType::Insertion => b'I',
-                    seqs2variants::AlnSegType::Deletion => b'D',
-                    seqs2variants::AlnSegType::Unspecified => b'?',
-                };
-                AlnSegment {
-                    t: t,
-                    ref_loc: (seg.ref_loc.id, seg.ref_loc.bgn, seg.ref_loc.len),
-                    tgt_loc: (seg.tgt_loc.id, seg.tgt_loc.bgn, seg.tgt_loc.len),
-                }
-            })
-            .collect()),
-        Err(_) => Err(exceptions::PyException::new_err("alignment failed")),
-    }
-}
+//     match aln_segs {
+//         Ok(segs) => Ok(segs
+//             .par_iter()
+//             .map(|seg| {
+//                 let t = match seg.t {
+//                     seqs2variants::AlnSegType::Match => b'M',
+//                     seqs2variants::AlnSegType::Mismatch => b'X',
+//                     seqs2variants::AlnSegType::Insertion => b'I',
+//                     seqs2variants::AlnSegType::Deletion => b'D',
+//                     seqs2variants::AlnSegType::Unspecified => b'?',
+//                 };
+//                 AlnSegment {
+//                     t: t,
+//                     ref_loc: (seg.ref_loc.id, seg.ref_loc.bgn, seg.ref_loc.len),
+//                     tgt_loc: (seg.tgt_loc.id, seg.tgt_loc.bgn, seg.tgt_loc.len),
+//                 }
+//             })
+//             .collect()),
+//         Err(_) => Err(exceptions::PyException::new_err("alignment failed")),
+//     }
+// }
 
-/// Get alignement map from a list of alignment segments
+/// Get alignment map from a list of alignment segments
 ///
 /// Parameters
 /// ----------
@@ -2231,48 +2263,48 @@ fn get_aln_segments(
 /// -------
 /// list
 ///     a list of ``AlnSegement``
-#[pyfunction(aln_segs, s0, s1)]
-#[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
-fn get_aln_map(
-    aln_segs: Vec<AlnSegment>,
-    ref_seq: &PyString,
-    tgt_seq: &PyString,
-) -> PyResult<AlnMap> {
-    let s0 = ref_seq.to_string();
-    let s1 = tgt_seq.to_string();
+// #[pyfunction(aln_segs, s0, s1)]
+// #[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
+// fn get_aln_map(
+//     aln_segs: Vec<AlnSegment>,
+//     ref_seq: &PyString,
+//     tgt_seq: &PyString,
+// ) -> PyResult<AlnMap> {
+//     let s0 = ref_seq.to_string();
+//     let s1 = tgt_seq.to_string();
 
-    let aln_segs = aln_segs
-        .par_iter()
-        .map(|s| seqs2variants::AlnSegment {
-            ref_loc: seqs2variants::SeqLocus {
-                id: s.ref_loc.0,
-                bgn: s.ref_loc.1,
-                len: s.ref_loc.2,
-            },
-            tgt_loc: seqs2variants::SeqLocus {
-                id: s.tgt_loc.0,
-                bgn: s.tgt_loc.1,
-                len: s.tgt_loc.2,
-            },
-            t: match s.t {
-                b'M' => seqs2variants::AlnSegType::Match,
-                b'X' => seqs2variants::AlnSegType::Mismatch,
-                b'I' => seqs2variants::AlnSegType::Insertion,
-                b'D' => seqs2variants::AlnSegType::Deletion,
-                _ => seqs2variants::AlnSegType::Unspecified,
-            },
-        })
-        .collect::<seqs2variants::AlnSegments>();
+//     let aln_segs = aln_segs
+//         .par_iter()
+//         .map(|s| seqs2variants::AlnSegment {
+//             ref_loc: seqs2variants::SeqLocus {
+//                 id: s.ref_loc.0,
+//                 bgn: s.ref_loc.1,
+//                 len: s.ref_loc.2,
+//             },
+//             tgt_loc: seqs2variants::SeqLocus {
+//                 id: s.tgt_loc.0,
+//                 bgn: s.tgt_loc.1,
+//                 len: s.tgt_loc.2,
+//             },
+//             t: match s.t {
+//                 b'M' => seqs2variants::AlnSegType::Match,
+//                 b'X' => seqs2variants::AlnSegType::Mismatch,
+//                 b'I' => seqs2variants::AlnSegType::Insertion,
+//                 b'D' => seqs2variants::AlnSegType::Deletion,
+//                 _ => seqs2variants::AlnSegType::Unspecified,
+//             },
+//         })
+//         .collect::<seqs2variants::AlnSegments>();
 
-    let aln_map = seqs2variants::get_aln_map(&aln_segs, &s0, &s1).unwrap();
+//     let aln_map = seqs2variants::get_aln_map(&aln_segs, &s0, &s1).unwrap();
 
-    Ok(AlnMap {
-        pmap: aln_map.pmap,
-        ref_a_seq: aln_map.ref_a_seq,
-        tgt_a_seq: aln_map.tgt_a_seq,
-        aln_seq: aln_map.aln_seq,
-    })
-}
+//     Ok(AlnMap {
+//         pmap: aln_map.pmap,
+//         ref_a_seq: aln_map.ref_a_seq,
+//         tgt_a_seq: aln_map.tgt_a_seq,
+//         aln_seq: aln_map.aln_seq,
+//     })
+// }
 
 /// Perform a navie de Bruijn graph consensus
 ///
@@ -2441,12 +2473,13 @@ pub fn shmmr_sparse_aln_consensus(
 #[pymodule]
 fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<SeqIndexDB>()?;
+    #[cfg(feature = "with_agc")]
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
-    m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
-    m.add_function(wrap_pyfunction!(get_aln_segments, m)?)?;
-    m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
+    //m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
+    //m.add_function(wrap_pyfunction!(get_aln_segments, m)?)?;
+    //m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
     m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;

@@ -15,7 +15,7 @@ struct CmdOptions {
     /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,
 
-    /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
+    /// using the frg format for the sequence database (default to the AGC backend database if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
 
@@ -37,10 +37,18 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
 
     let mut seq_index_db = SeqIndexDB::new();
+
+    #[cfg(feature = "with_agc")]
     if args.frg_file {
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else {
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+    }
+    #[cfg(not(feature = "with_agc"))]
+    if args.frg_file {
+        let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
+    } else {
+        panic!("This command is compiled with only frg file support, please specify `--frg-file");
     }
 
     if args.list {

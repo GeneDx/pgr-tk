@@ -1,16 +1,17 @@
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
+#[cfg(feature = "with_agc")]
 pub mod agc_io;
 pub mod aln;
 pub mod bindings;
 pub mod ec;
 pub mod fasta_io;
 pub mod frag_file_io;
-pub mod gff_db;
+//pub mod gff_db;
 pub mod graph_utils;
 pub mod kmer_filter;
 pub mod seq_db;
-pub mod seqs2variants;
+//pub mod seqs2variants;
 pub mod shmmrutils;
 
 #[cfg(test)]
@@ -176,6 +177,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn raw_agc_test() {
         use crate::bindings::{
             agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
@@ -226,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn act_io_test() -> Result<(), Box<dyn std::error::Error>> {
         use crate::agc_io::AGCFile;
 
@@ -253,6 +256,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn query_frag_test() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         use seq_db::raw_query_fragment;
@@ -282,6 +286,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn test_shmmrmap_read_write() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         use seq_db::{raw_query_fragment, read_mdb_file, write_shmmr_map_file};
@@ -316,6 +321,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn test_frag_map_to_adj_list() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
@@ -356,8 +362,8 @@ mod tests {
     #[test]
     fn test_open_compact_seq_db_storage() {
         use seq_db::GetSeq;
-        use crate::frag_file_io::CompactSeqDBStorage;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        use crate::frag_file_io::CompactSeqFragFileStorage;
+        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let seq = seq_storage.get_seq_by_id(0);
         println!("{}", String::from_utf8_lossy(&seq[..]));
         let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
@@ -366,9 +372,9 @@ mod tests {
 
     #[test]
     fn test_seq_db_storage_get_sub_read() {
-        use crate::frag_file_io::CompactSeqDBStorage;
+        use crate::frag_file_io::CompactSeqFragFileStorage;
         use seq_db::GetSeq;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let sid = 0;
 
         let seq = seq_storage.get_seq_by_id(sid);

@@ -6,13 +6,15 @@ const BUILD_TYPE: &str = "debug";
 #[cfg(not(debug_assertions))]
 const BUILD_TYPE: &str = "release";
 
-use std::{
-    env,
-    fs::{read_dir, remove_dir_all},
-    path::PathBuf,
-    process::Command,
-};
+#[cfg(feature = "with_agc")]
+use std::fs::{read_dir, remove_dir_all};
 
+#[cfg(feature = "with_agc")]
+use std::path::PathBuf;
+
+use std::{env, process::Command};
+
+#[cfg(feature = "with_agc")]
 fn build_agc() -> Option<()> {
     let mut agc_dir = read_dir("../agc").ok()?;
     if !agc_dir.any(|f| f.unwrap().file_name() == "makefile") {
@@ -52,63 +54,62 @@ fn build_agc() -> Option<()> {
     }
 }
 
-fn wfa() {
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let _cp_agc = Command::new("cp")
-        .arg("../WFA2-lib/lib/libwfa.a")
-        .arg(&out_path)
-        .output()
-        .unwrap();
-    // The directory of the WFA libraries, added to the search path.
-    println!("cargo:rustc-link-search={}", out_path.display());
-    // Link the `wfa-lib` library.
-    println!("cargo:rustc-link-lib=wfa");
-    // Also link `omp`.
-    println!("cargo:rustc-link-lib=omp5");
-}
+// fn wfa() {
+//     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+//     let _cp_agc = Command::new("cp")
+//         .arg("../WFA2-lib/lib/libwfa.a")
+//         .arg(&out_path)
+//         .output()
+//         .unwrap();
+//     // The directory of the WFA libraries, added to the search path.
+//     println!("cargo:rustc-link-search={}", out_path.display());
+//     // Link the `wfa-lib` library.
+//     println!("cargo:rustc-link-lib=wfa");
+//     // Also link `omp`.
+//     println!("cargo:rustc-link-lib=omp5");
+// }
 
 fn main() {
+    //wfa();
 
-    wfa();
-
+    #[cfg(feature = "with_agc")]
     if build_agc().is_none() {
         panic!("Error building AGC C library");
+    } else {
+        let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let agc_path = out_path.join("agc");
+
+        // shared library.
+        println!("cargo:rustc-link-lib=agc");
+        println!("cargo:rustc-link-search={}", agc_path.display());
+        println!("cargo:rustc-link-lib=zstd");
+        println!("cargo:rustc-link-search={}/libs", agc_path.display());
+        println!("cargo:rustc-link-lib=stdc++");
+        println!("cargo:rustc-link-search=/usr/lib/gcc/x86_64-linux-gnu/9/");
+
+        // Tell cargo to invalidate the built crate whenever the wrapper changes
+        println!("cargo:rerun-if-changed=wrapper.h");
+
+        // The bindgen::Builder is the main entry point
+        // to bindgen, and lets you build up options for
+        // the resulting bindings.
+        let bindings = bindgen::Builder::default()
+            // The input header we would like to generate
+            // bindings for.
+            .header("wrapper.h")
+            // Tell cargo to invalidate the built crate whenever any of the
+            // included header files changed.
+            .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+            // Finish the builder and generate the bindings.
+            .generate()
+            // Unwrap the Result and panic on failure.
+            .expect("Unable to generate bindings");
+
+        // Write the bindings to the $OUT_DIR/bindings.rs file.
+        bindings
+            .write_to_file(out_path.join("bindings.rs"))
+            .expect("Couldn't write bindings!");
     }
-
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let agc_path = out_path.join("agc");
-
-    // shared library.
-    println!("cargo:rustc-link-lib=agc");
-    println!("cargo:rustc-link-search={}", agc_path.display());
-    println!("cargo:rustc-link-lib=zstd");
-    println!("cargo:rustc-link-search={}/libs", agc_path.display());
-    println!("cargo:rustc-link-lib=stdc++");
-    println!("cargo:rustc-link-search=/usr/lib/gcc/x86_64-linux-gnu/9/");
-
-    // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=wrapper.h");
-
-    // The bindgen::Builder is the main entry point
-    // to bindgen, and lets you build up options for
-    // the resulting bindings.
-    let bindings = bindgen::Builder::default()
-        // The input header we would like to generate
-        // bindings for.
-        .header("wrapper.h")
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        // Finish the builder and generate the bindings.
-        .generate()
-        // Unwrap the Result and panic on failure.
-        .expect("Unable to generate bindings");
-
-    // Write the bindings to the $OUT_DIR/bindings.rs file.
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
-
     // from https://vallentin.dev/2019/06/06/versioning
     let branch_name = get_branch_name();
     if branch_name != *"bioconda" {
@@ -134,7 +135,7 @@ fn main() {
             BUILD_TYPE,
             get_branch_name(),
             get_commit_hash(),
-            if is_working_tree_clean() { "" } else { "+" }, 
+            if is_working_tree_clean() { "" } else { "+" },
             OS,
             ARCH,
             get_rustc_version()
