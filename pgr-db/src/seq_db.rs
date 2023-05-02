@@ -815,11 +815,15 @@ impl CompactSeqDB {
         let mut sdx_file = BufWriter::new(
             File::create(file_prefix.clone() + ".sdx").expect("sdx file creating fail\n"),
         );
-        sdx_file.write_all("SDX:0.5".as_bytes()).expect("sdx file writing error");
+        sdx_file
+            .write_all("SDX:0.5".as_bytes())
+            .expect("sdx file writing error");
         let mut frg_file =
             BufWriter::new(File::create(file_prefix + ".frg").expect("frg file creating fail\n"));
 
-        frg_file.write_all("FRG:0.5".as_bytes()).expect("frg file writing error");
+        frg_file
+            .write_all("FRG:0.5".as_bytes())
+            .expect("frg file writing error");
         let config = config::standard();
 
         let chunk_size = chunk_size.unwrap_or(256_usize);
@@ -857,9 +861,13 @@ impl CompactSeqDB {
             offset += l;
             frg_file.write_all(v).expect("frag file writing error\n");
         });
-        
-        bincode::encode_into_std_write((chunk_size, frag_addr_offset, &self.seqs), &mut sdx_file, config)
-            .expect("sdx file writing error\n");
+
+        bincode::encode_into_std_write(
+            (chunk_size, frag_addr_offset, &self.seqs),
+            &mut sdx_file,
+            config,
+        )
+        .expect("sdx file writing error\n");
         //bincode::encode_into_std_write(compressed_frags, &mut frg_file, config)
         //    .expect(" frag file writing error");
     }
@@ -1243,15 +1251,24 @@ pub fn raw_query_fragment_from_mmap_midx(
             }
         })
         .map(|(s0, s1, p0, p1, orientation)| {
-            if let Some(&(start, vec_len)) = frag_map_location.get(&(s0, s1)) {
-                let m = get_fragment_signatures_from_mmap_file(&frag_map_mmap_file, start, vec_len);
-                ((s0, s1), (p0, p1, orientation), m)
-            } else {
-                ((s0, s1), (p0, p1, orientation), vec![])
-            }
+            let m =
+                get_shmmr_matches_from_mmap_file(frag_map_location, (s0, s1), frag_map_mmap_file);
+            ((s0, s1), (p0, p1, orientation), m)
         })
         .collect::<Vec<_>>();
     query_results
+}
+
+pub fn get_shmmr_matches_from_mmap_file(
+    frag_map_location: &ShmmrToIndexFileLocation,
+    (s0, s1): ShmmrPair,
+    frag_map_mmap_file: &Mmap,
+) -> Vec<(u32, u32, u32, u32, u8)> {
+    if let Some(&(start, vec_len)) = frag_map_location.get(&(s0, s1)) {
+        get_fragment_signatures_from_mmap_file(&frag_map_mmap_file, start, vec_len)
+    } else {
+        vec![]
+    }
 }
 
 pub fn get_match_positions_with_fragment(

@@ -8,10 +8,10 @@ use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 pub use pgr_db::seq_db::pair_shmmrs;
 use pgr_db::seq_db::{self, raw_query_fragment, raw_query_fragment_from_mmap_midx, GetSeq};
 pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
-use pgr_db::{aln, frag_file_io};
+use pgr_db::{aln, frag_file_io::CompactSeqFragFileStorage};
 
 #[cfg(feature = "with_agc")]
-use pgr_db::agc_io;
+use pgr_db::agc_io::{self, AGCSeqDB};
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -51,8 +51,8 @@ pub struct SeqIndexDB {
     pub seq_db: Option<seq_db::CompactSeqDB>,
     #[cfg(feature = "with_agc")]
     /// Rust internal: store the agc file and the index
-    pub agc_db: Option<agc_io::AGCSeqDB>,
-    pub frg_db: Option<frag_file_io::CompactSeqFragFileStorage>,
+    pub agc_db: Option<AGCSeqDB>,
+    pub frg_db: Option<CompactSeqFragFileStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
     pub seq_index: Option<FxHashMap<(String, Option<String>), (u32, u32)>>,
