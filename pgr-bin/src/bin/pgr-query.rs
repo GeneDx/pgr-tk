@@ -1,6 +1,6 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
-use pgr_bin::{get_fastx_reader, GZFastaReader, SeqIndexDB};
+use pgr_db::ext::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::SeqRec;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -82,7 +82,10 @@ fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
 
-    rayon::ThreadPoolBuilder::new().num_threads(args.number_of_thread).build_global().unwrap();
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(args.number_of_thread)
+        .build_global()
+        .unwrap();
 
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
@@ -128,7 +131,6 @@ fn main() -> Result<(), std::io::Error> {
         panic!("This command is compiled with only frg file support, please specify `--frg-file");
     }
     let prefix = Path::new(&args.output_prefix);
-
 
     query_seqs
         .into_par_iter()
@@ -288,9 +290,13 @@ fn main() -> Result<(), std::io::Error> {
 
                 let mut sub_seq_range_for_fasta = Vec::<(u32, u32, u32, u32, String)>::new();
                 let mut hit_file = if args.bed_summary {
-                    BufWriter::new(File::create(prefix.with_extension(format!("{:03}.hit.bed",idx ))).unwrap())
+                    BufWriter::new(
+                        File::create(prefix.with_extension(format!("{:03}.hit.bed", idx))).unwrap(),
+                    )
                 } else {
-                    BufWriter::new(File::create(prefix.with_extension(format!("{:03}.hit",idx ))).unwrap())
+                    BufWriter::new(
+                        File::create(prefix.with_extension(format!("{:03}.hit", idx))).unwrap(),
+                    )
                 };
                 if args.bed_summary {
                     writeln!(
@@ -311,7 +317,8 @@ fn main() -> Result<(), std::io::Error> {
                             "ctg_end",
                         ]
                         .join("\t")
-                    ).expect("writing bed summary fail\n");
+                    )
+                    .expect("writing bed summary fail\n");
                 } else {
                     writeln!(
                         hit_file,
@@ -331,7 +338,8 @@ fn main() -> Result<(), std::io::Error> {
                             "aln_anchor_count",
                         ]
                         .join("\t")
-                    ).expect("writing bed summary fail\n");
+                    )
+                    .expect("writing bed summary fail\n");
                 };
                 aln_range.into_iter().for_each(|(sid, rgns)| {
                     let (ctg, src, _ctg_len) =
@@ -349,7 +357,7 @@ fn main() -> Result<(), std::io::Error> {
                             } else {
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)
                             };
-                            
+
                             if args.bed_summary {
                                 writeln!(
                                     hit_file,
@@ -366,7 +374,8 @@ fn main() -> Result<(), std::io::Error> {
                                     src,
                                     q_bgn,
                                     q_end,
-                                ).expect("writing hit summary fail\n");
+                                )
+                                .expect("writing hit summary fail\n");
                             } else {
                                 writeln!(
                                     hit_file,
@@ -383,7 +392,8 @@ fn main() -> Result<(), std::io::Error> {
                                     e,
                                     orientation,
                                     target_seq_name
-                                ).expect("writing hit summary fail\n");
+                                )
+                                .expect("writing hit summary fail\n");
                             }
                             sub_seq_range_for_fasta.push((
                                 sid,

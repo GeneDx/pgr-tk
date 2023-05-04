@@ -3,7 +3,7 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};
 
-use pgr_bin::SeqIndexDB;
+use pgr_db::ext::SeqIndexDB;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
