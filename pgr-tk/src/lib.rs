@@ -250,23 +250,34 @@ impl SeqIndexDB {
                     &self.db_internal.agc_db.as_ref().unwrap().frag_map_file,
                 );
                 let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap().clone();
-                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(frag_location_map, frag_map_file, &seq, &shmmr_spec))
-            },
+                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(
+                    frag_location_map,
+                    frag_map_file,
+                    &seq,
+                    &shmmr_spec,
+                ))
+            }
             Backend::FRG => {
                 let (frag_location_map, frag_map_file) = (
                     &self.db_internal.frg_db.as_ref().unwrap().frag_location_map,
                     &self.db_internal.frg_db.as_ref().unwrap().frag_map_file,
                 );
                 let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap().clone();
-                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(frag_location_map, frag_map_file, &seq, &shmmr_spec))
-            },
-            _ => {
+                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(
+                    frag_location_map,
+                    frag_map_file,
+                    &seq,
+                    &shmmr_spec,
+                ))
+            }
+            Backend::MEMORY | Backend::FASTX => {
                 let shmmr_spec = &self.db_internal.shmmr_spec.as_ref().unwrap();
                 let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
                 let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
                     seq_db::raw_query_fragment(shmmr_to_frags, &seq, shmmr_spec);
                 Ok(res)
             }
+            Backend::UNKNOWN => Ok(vec![]),
         }
     }
 
@@ -345,7 +356,19 @@ impl SeqIndexDB {
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         match self.db_internal.backend {
-            Backend::AGC | Backend::FRG => Ok(self
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => Ok(self
+                .db_internal
+                .query_fragment_to_hps_from_mmap_file(
+                    seq,
+                    penalty,
+                    max_count,
+                    max_count_query,
+                    max_count_target,
+                    max_aln_span,
+                )
+                .unwrap()),
+            Backend::FRG => Ok(self
                 .db_internal
                 .query_fragment_to_hps_from_mmap_file(
                     seq,
