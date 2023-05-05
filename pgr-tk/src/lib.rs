@@ -134,8 +134,7 @@ impl SeqIndexDB {
     /// None or I/O Error
     ///     None
     ///
-    #[pyo3(text_signature = "($self, w, k, r, min_span)")]
-    #[args(w = "80", k = "56", r = "4", min_span = "64")]
+    #[pyo3(signature = (filepath, w=80, k=56, r=4, min_span=64))]
     pub fn load_from_fastx(
         &mut self,
         filepath: String,
@@ -189,8 +188,7 @@ impl SeqIndexDB {
     /// None or I/O Error
     ///     None
     ///
-    #[pyo3(text_signature = "($self, seq_list, source, w, k, r, min_span)")]
-    #[args(source = "\"Memory\"", w = "80", k = "56", r = "4", min_span = "8")]
+    #[pyo3(signature = (seq_list, source="Memory", w=80, k=56, r=4, min_span=8))]
     pub fn load_from_seq_list(
         &mut self,
         seq_list: Vec<(String, Vec<u8>)>,
@@ -207,6 +205,7 @@ impl SeqIndexDB {
     }
 
     /// get a dictionary that maps (ctg_name, source) -> (id, len)
+    #[getter]
     pub fn get_seq_index(
         &self,
     ) -> PyResult<Option<FxHashMap<(String, Option<String>), (u32, u32)>>> {
@@ -214,6 +213,7 @@ impl SeqIndexDB {
     }
 
     /// a dictionary that maps id -> (ctg_name, source, len)
+    #[getter]
     pub fn get_seq_info(&self) -> PyResult<Option<FxHashMap<u32, (String, Option<String>, u32)>>> {
         Ok(self.db_internal.seq_info.clone())
     }
@@ -583,8 +583,7 @@ impl SeqIndexDB {
     /// list
     ///     a list of the tuple (source_name : string, count : int)
     ///
-    #[pyo3(text_signature = "($self, shmmr_pair, max_unique_count)")]
-    #[args(max_unique_count = "1")]
+    #[pyo3(signature = (shmmr_pair, max_unique_count))]
     pub fn get_shmmr_pair_source_count(
         &self,
         shmmr_pair: (u64, u64),
@@ -802,7 +801,7 @@ impl SeqIndexDB {
     /// list
     ///     list of pairs of shimmer pairs ((h00, h01, orientation0),(h10, h11, orientation1))  
     ///
-    #[args(keeps = "None")]
+    #[pyo3(signature = (min_count, keeps=None))]
     pub fn get_smp_adj_list(
         &self,
         min_count: usize,
@@ -906,7 +905,7 @@ impl SeqIndexDB {
     /// list
     ///     list of paths, each path is a list of nodes
     ///
-    #[args(keeps = "None")]
+    #[pyo3(signature = (min_count, path_len_cutoff, keeps=None))]
     pub fn get_principal_bundles(
         &mut self,
         min_count: usize,
@@ -970,7 +969,7 @@ impl SeqIndexDB {
     ///     the elements of the list are ((hash0:u64, hash1:u64, pos0:u32, pos0:u32, direction:0),
     ///                                   (principal_bundle_id, direction, order_in_the_bundle))
     ///
-    #[args(keeps = "None")]
+    #[pyo3(signature = (min_count, path_len_cutoff, keeps=None))]
     pub fn get_principal_bundle_decomposition(
         &mut self,
         min_count: usize,
@@ -1032,12 +1031,12 @@ impl SeqIndexDB {
     ///                                   (principal_bundle_id, direction, order_in_the_bundle))
     ///
     ///
-    #[args(keeps = "None")]
+    #[pyo3(signature = (min_count, path_len_cutoff, sequence, keeps=None))]
     pub fn get_principal_bundle_projection(
         &mut self,
         min_count: usize,
         path_len_cutoff: usize,
-        sequences: Vec<(u32, Vec<u8>)>,
+        sequence: Vec<(u32, Vec<u8>)>,
         keeps: Option<Vec<u32>>,
     ) -> (
         Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
@@ -1048,7 +1047,7 @@ impl SeqIndexDB {
     ) {
         let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
         //println!("DBG: # bundles {}", pb.len());
-        self._get_principal_bundle_projection_internal(pb, sequences)
+        self._get_principal_bundle_projection_internal(pb, sequence)
     }
 
     fn _get_principal_bundle_projection_internal(
@@ -1213,7 +1212,7 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///
-    #[args(method = "\"from_fragmap\"", keeps = "None")]
+    #[pyo3(signature = (min_count, filepath, method="from_fragmap", keeps=None))]
     pub fn generate_mapg_gfa(
         &self,
         min_count: usize,
@@ -1266,7 +1265,7 @@ impl SeqIndexDB {
     /// None
     ///     The data is written into the file at filepath
     ///     
-    #[args(keeps = "None")]
+    #[pyo3(signature = (min_count, path_len_cutoff, filepath, keeps=None))]
     pub fn generate_principal_mapg_gfa(
         &self,
         min_count: usize,
@@ -1295,8 +1294,7 @@ impl SeqIndexDB {
     }
 
     /// generate consensus sequence for one sequence in the database
-    #[args(sid, min_cov)]
-    #[pyo3(text_signature = "($self, sid, min_cov)")]
+    #[pyo3(signature = (sids, min_cov))]
     pub fn shmmr_sparse_aln_consensus(
         &self,
         sids: Vec<u32>,
@@ -1362,7 +1360,7 @@ impl AGCFile {
     /// ----------
     /// filepath: string
     ///     the path to a AGC file
-    #[args(filepath)]
+    #[pyo3(signature=(filepath))]
     #[new]
     pub fn new(filepath: String) -> PyResult<Self> {
         let agc_file = agc_io::AGCFile::new(filepath)?;
@@ -1390,8 +1388,7 @@ impl AGCFile {
     /// -------
     /// list
     ///     a list of bytes representing the sequence
-    #[args(sample_name, ctg_name, bgn, end)]
-    #[pyo3(text_signature = "($self, sample_name, ctg_name, bgn, end)")]
+    #[pyo3(signature = (sample_name, ctg_name, bgn, end))]
     pub fn get_sub_seq(
         &self,
         sample_name: String,
@@ -1415,8 +1412,7 @@ impl AGCFile {
     /// -------
     /// list
     ///     a list of bytes representing the sequence
-    #[args(sample_name, ctg_name)]
-    #[pyo3(text_signature = "($self, sample_name, ctg_name)")]
+    #[pyo3(signature = (sample_name, ctg_name))]
     pub fn get_seq(&self, sample_name: String, ctg_name: String) -> PyResult<Vec<u8>> {
         Ok(self.agc_file.get_seq(sample_name, ctg_name))
     }
@@ -1450,8 +1446,7 @@ impl AGCFile {
 ///     chunk alignment ignoring the gaps. Typically, a number between 0.1 to 0.5 should
 ///     be used.
 ///
-#[pyfunction(sp_hits, max_span, penalty)]
-#[pyo3(text_signature = "($self, sp_hits, max_span, penalty)")]
+#[pyfunction(signature = (sp_hits, max_span, penalty))]
 pub fn sparse_aln(
     sp_hits: Vec<HitPair>,
     max_span: u32,
@@ -1491,8 +1486,7 @@ pub fn sparse_aln(
 /// list of tuple
 ///     a list fo tuple of ``(shmmr0, shmmr1, position0, position1, orientation)``  
 ///
-#[pyfunction(w = "80", k = "56", r = "4", min_span = "16", padding = "false")]
-#[pyo3(text_signature = "($self, w, k, r, min_span, padding)")]
+#[pyfunction(signature = (seq, w=80, k=56, r=4, min_span=16, padding=false))]
 fn get_shmmr_pairs_from_seq(
     seq: Vec<u8>,
     w: u32,
@@ -1560,8 +1554,7 @@ fn get_shmmr_pairs_from_seq(
 ///     -  ``x``: the matched shimmer positions in sequence 0
 ///     -  ``y``: the matched shimmer positions in sequence 1
 ///
-#[pyfunction(w = "80", k = "56", r = "4", min_span = "16")]
-#[pyo3(text_signature = "($self, seq0, seq1, w, k, r, min_span)")]
+#[pyfunction(signature = (seq0, seq1, w = 80, k = 56, r = 4, min_span = 16))]
 fn get_shmmr_dots(
     seq0: Vec<u8>,
     seq1: Vec<u8>,
@@ -1824,8 +1817,7 @@ pub struct AlnMap {
 /// list
 ///     a list of bytes representing the consensus sequence
 ///
-#[pyfunction(seqs, kmer_size = 33, min_cov = 2)]
-#[pyo3(text_signature = "($self, seqs, kmer_size, min_cov)")]
+#[pyfunction(signature = (seqs, kmer_size=33, min_cov=2))]
 pub fn naive_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     kmer_size: usize,
@@ -1855,8 +1847,7 @@ pub fn naive_dbg_consensus(
 /// list
 ///     a list of a set of bytes representing the consensus sequences of all branches in the graph
 ///
-#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0)]
-#[pyo3(text_signature = "($self, seqs, w, k, r, min_span)")]
+#[pyfunction(signature= (seqs, w = 33, k = 33, r = 1, min_span = 0))]
 pub fn shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     w: u32,
@@ -1898,8 +1889,7 @@ pub fn shmmr_dbg_consensus(
 /// list
 ///     a list of a set of bytes representing the consensus sequences of all branches in the graph
 ///
-#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2)]
-#[pyo3(text_signature = "($self, seqs, w, k, r, min_span, min_cov)")]
+#[pyfunction(signature = (seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2))]
 pub fn guided_shmmr_dbg_consensus(
     seqs: Vec<Vec<u8>>,
     w: u32,
@@ -1939,8 +1929,7 @@ pub fn guided_shmmr_dbg_consensus(
 /// list
 ///     a list of a set of bytes representing the consensus sequences of all branches in the graph
 ///
-#[pyfunction(seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2)]
-#[pyo3(text_signature = "($self, seqs, w, k, r, min_span, min_cov)")]
+#[pyfunction(signature = (seqs, w = 33, k = 33, r = 1, min_span = 0, min_cov = 2))]
 pub fn shmmr_sparse_aln_consensus(
     seqs: Vec<Vec<u8>>,
     w: u32,
