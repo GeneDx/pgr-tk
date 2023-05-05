@@ -1,6 +1,6 @@
 [package]
 name = "pgrtk"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Jason Chin <cschin@infoecho.net>"]
 edition = "2021"
 
@@ -10,7 +10,7 @@ name = "pgrtk"
 crate-type = ["rlib","cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.14.3", features = ["extension-module"] }
+pyo3 = { version = "0.18.3", features = ["extension-module"] }
 
 pgr-db = { path = "../pgr-db/", default-features = false  }
 rustc-hash = "1.1.0"

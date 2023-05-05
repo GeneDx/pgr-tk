@@ -3,15 +3,16 @@ use flate2::bufread::MultiGzDecoder;
 #[cfg(feature = "with_agc")]
 use memmap2::Mmap;
 
-use pgr_db::fasta_io::FastaReader;
-use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
-pub use pgr_db::seq_db::pair_shmmrs;
-use pgr_db::seq_db::{self, raw_query_fragment, raw_query_fragment_from_mmap_midx, GetSeq};
-pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
-use pgr_db::{aln, frag_file_io};
+use crate::fasta_io::FastaReader;
+use crate::frag_file_io;
+use crate::graph_utils::{AdjList, ShmmrGraphNode};
+pub use crate::seq_db::pair_shmmrs;
+use crate::seq_db::{self, raw_query_fragment, raw_query_fragment_from_mmap_midx, GetSeq};
+pub use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
+use crate::{aln, frag_file_io::CompactSeqFragFileStorage};
 
 #[cfg(feature = "with_agc")]
-use pgr_db::agc_io;
+use crate::agc_io::{self, AGCSeqDB};
 
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -51,8 +52,8 @@ pub struct SeqIndexDB {
     pub seq_db: Option<seq_db::CompactSeqDB>,
     #[cfg(feature = "with_agc")]
     /// Rust internal: store the agc file and the index
-    pub agc_db: Option<agc_io::AGCSeqDB>,
-    pub frg_db: Option<frag_file_io::CompactSeqFragFileStorage>,
+    pub agc_db: Option<AGCSeqDB>,
+    pub frg_db: Option<CompactSeqFragFileStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
     pub seq_index: Option<FxHashMap<(String, Option<String>), (u32, u32)>>,
@@ -129,7 +130,7 @@ impl SeqIndexDB {
     }
 
     pub fn load_from_frg_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
-        let mut frag_db = pgr_db::frag_file_io::CompactSeqFragFileStorage::new(prefix);
+        let mut frag_db = frag_file_io::CompactSeqFragFileStorage::new(prefix);
 
         let seq_index = frag_db.seq_index.into_iter().map(|(k, v)| (k, v)).collect();
 
@@ -640,7 +641,6 @@ impl SeqIndexDB {
         (principal_bundles_with_id, vertex_to_bundle_id_direction_pos)
     }
 
-
     pub fn generate_mapg_gfa(
         &self,
         min_count: usize,
@@ -979,7 +979,10 @@ pub fn get_principal_bundle_decomposition(
             let (ctg_name, source, _) = data;
             let source = source.clone().unwrap();
             let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
-            (*sid, seq_db.get_smps(seq, &seq_db.shmmr_spec.clone().unwrap()))
+            (
+                *sid,
+                seq_db.get_smps(seq, &seq_db.shmmr_spec.clone().unwrap()),
+            )
         })
         .collect();
 

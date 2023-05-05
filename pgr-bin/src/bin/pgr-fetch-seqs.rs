@@ -1,6 +1,6 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
-use pgr_bin::SeqIndexDB;
+use pgr_db::ext::SeqIndexDB;
 use pgr_db::fasta_io;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -88,7 +88,7 @@ fn main() -> Result<(), std::io::Error> {
     } else {
         Box::new(io::stdout())
     };
-    
+
     region_file.lines().into_iter().for_each(|line| {
         let line = line.expect("fail to get a line in the region file");
         let fields = line.split('\t').collect::<Vec<&str>>();

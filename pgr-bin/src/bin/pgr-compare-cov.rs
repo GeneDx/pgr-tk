@@ -3,14 +3,14 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};
 
-use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
+use pgr_db::ext::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
+use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use std::{
     fs::File,
     io::{BufRead, BufReader, BufWriter, Write},
     path::Path,
 };
-use rayon::prelude::*;
 
 /// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
@@ -320,7 +320,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
     } else {
         panic!("input type has to be specified  AGC or FRG backends")
     };
-    
+
     #[cfg(not(feature = "with_agc"))]
     if input_type == "FRG" {
         let _ = seq_index_db.load_from_frg_index(args.frg_idx_prefix.as_ref().unwrap().clone());

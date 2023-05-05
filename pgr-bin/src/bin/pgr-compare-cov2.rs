@@ -3,7 +3,8 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};
 
-use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB};
+use pgr_db::ext::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB};
+use pgr_db::seq_db::{get_shmmr_matches_from_mmap_file, ShmmrPair};
 use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use std::{
@@ -179,7 +180,32 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     }
                 });
 
-            let frag_map = seq_index_db.get_shmmr_map_internal().unwrap();
+            //let frag_map = seq_index_db.get_shmmr_map_internal().unwrap();
+
+            let get_shmmr_matches = |smps: ShmmrPair| {
+                #[cfg(feature = "with_agc")]
+                if input_type == "AGC" {
+                    get_shmmr_matches_from_mmap_file(
+                        &seq_index_db.agc_db.as_ref().unwrap().frag_location_map,
+                        smps,
+                        &seq_index_db.agc_db.as_ref().unwrap().frag_map_file,
+                    )
+                } else {
+                    get_shmmr_matches_from_mmap_file(
+                        &seq_index_db.frg_db.as_ref().unwrap().frag_location_map,
+                        smps,
+                        &seq_index_db.frg_db.as_ref().unwrap().frag_map_file,
+                    )
+                }
+                #[cfg(not(feature = "with_agc"))]
+                {
+                    get_shmmr_matches_from_mmap_file(
+                        &seq_index_db.frg_db.as_ref().unwrap().frag_location_map,
+                        smps,
+                        &seq_index_db.frg_db.as_ref().unwrap().frag_map_file,
+                    )
+                }
+            };
             let mut output_bedgraph_file0 = BufWriter::new(
                 File::create(Path::new(&prefix).with_extension("0.bedgraph"))
                     .expect("can't create the output file"),
@@ -217,7 +243,8 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                         } else {
                             (s1, s0, p0, p1, 1_u8)
                         };
-                        let (c0, c1) = if let Some(hits) = frag_map.get(&(k.0, k.1)) {
+                        let (c0, c1) = {
+                            let hits = get_shmmr_matches((k.0, k.1));
                             let mut c0 = 0_usize;
                             let mut c1 = 0_usize;
                             hits.iter().for_each(|v| {
@@ -230,8 +257,6 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                                 }
                             });
                             (c0, c1)
-                        } else {
-                            (0, 0)
                         };
                         assert!(c0 > 0);
                         let r = c1 as f32 / c0 as f32;
@@ -273,7 +298,8 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                         } else {
                             (s1, s0, p0, p1, 1_u8)
                         };
-                        let (c0, c1) = if let Some(hits) = frag_map.get(&(k.0, k.1)) {
+                        let (c0, c1) = {
+                            let hits = get_shmmr_matches((k.0, k.1));
                             let mut c0 = 0_usize;
                             let mut c1 = 0_usize;
                             hits.iter().for_each(|v| {
@@ -286,8 +312,6 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                                 }
                             });
                             (c0, c1)
-                        } else {
-                            (0, 0)
                         };
                         assert!(c1 > 0);
                         let r = c0 as f32 / c1 as f32;

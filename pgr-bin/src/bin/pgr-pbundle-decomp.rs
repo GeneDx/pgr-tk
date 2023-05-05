@@ -1,7 +1,7 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use bincode::config;
 use clap::{self, CommandFactory, Parser};
-use pgr_bin::{
+use pgr_db::ext::{
     get_principal_bundle_decomposition, PrincipalBundlesWithId, SeqIndexDB, VertexToBundleIdMap,
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -200,7 +200,7 @@ fn main() -> Result<(), std::io::Error> {
                     usize,
                     usize,
                     PrincipalBundlesWithId,
-                    pgr_bin::VertexToBundleIdMap,
+                    VertexToBundleIdMap,
                 ),
                 config::Configuration,
             >(&s[..], config)

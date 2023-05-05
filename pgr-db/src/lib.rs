@@ -12,6 +12,7 @@ pub mod graph_utils;
 pub mod kmer_filter;
 pub mod seq_db;
 //pub mod seqs2variants;
+pub mod ext;
 pub mod shmmrutils;
 
 #[cfg(test)]
@@ -114,7 +115,8 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
+            let aln_segs =
+                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
             if frg != re_seq || true {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
@@ -143,7 +145,8 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
+            let aln_segs =
+                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
             if frg != re_seq || true {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
@@ -361,9 +364,10 @@ mod tests {
 
     #[test]
     fn test_open_compact_seq_db_storage() {
-        use seq_db::GetSeq;
         use crate::frag_file_io::CompactSeqFragFileStorage;
-        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
+        use seq_db::GetSeq;
+        let seq_storage =
+            CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let seq = seq_storage.get_seq_by_id(0);
         println!("{}", String::from_utf8_lossy(&seq[..]));
         let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
@@ -374,7 +378,8 @@ mod tests {
     fn test_seq_db_storage_get_sub_read() {
         use crate::frag_file_io::CompactSeqFragFileStorage;
         use seq_db::GetSeq;
-        let seq_storage = CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
+        let seq_storage =
+            CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let sid = 0;
 
         let seq = seq_storage.get_seq_by_id(sid);
