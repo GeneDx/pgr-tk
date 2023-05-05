@@ -14,7 +14,6 @@ use pgr_db::fasta_io;
 use pyo3::exceptions;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-#[cfg(feature = "with_agc")]
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
 use rayon::prelude::*;
