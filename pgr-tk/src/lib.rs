@@ -28,7 +28,7 @@ pub fn pgr_lib_version() -> PyResult<String> {
     Ok(VERSION_STRING.to_string())
 }
 
-/// A class that stores pangenomics indices and sequences with multiple backend storage options (AGC, fasta file, memory)
+/// A class that stores pangenome indices and sequences with multiple backend storage options (AGC, fasta file, memory)
 /// Large set of genomic sequences, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
 /// which can read an AGC to create the index file. For example, we can create the index files from an AGC file::
 ///
@@ -1750,12 +1750,12 @@ pub struct AlnMap {
 ///     a python string of the reference sequence
 ///
 /// s1: int
-///     a interger id for the target sequnece
+///     a integer id for the target sequence
 ///
 /// Returns
 /// -------
 /// list
-///     a list of ``AlnSegement``
+///     a list of ``AlnSegment``
 // #[pyfunction(aln_segs, s0, s1)]
 // #[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
 // fn get_aln_map(
@@ -1799,7 +1799,7 @@ pub struct AlnMap {
 //     })
 // }
 
-/// Perform a navie de Bruijn graph consensus
+/// Perform a naive de Bruijn graph consensus
 ///
 /// Parameters
 /// ----------
@@ -1810,7 +1810,7 @@ pub struct AlnMap {
 ///     the size of kmers used for constructing the de Bruijn graph
 ///
 /// min_cov : int
-///     to keep hyplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept
+///     to keep haplotype specific consensus, if a kmer has coverage more or equal to min_cov, it will be kept
 ///
 /// Returns
 /// -------
