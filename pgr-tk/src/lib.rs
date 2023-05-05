@@ -2,7 +2,7 @@
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
-use pgr_db::seq_db::{self, raw_query_fragment};
+use pgr_db::seq_db;
 //use pgr_db::seqs2variants;
 use pgr_db::shmmrutils::{sequence_to_shmmrs, DeltaPoint, ShmmrSpec};
 
@@ -11,7 +11,6 @@ use pgr_db::agc_io;
 
 use pgr_db::fasta_io;
 use pyo3::exceptions;
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 use pyo3::Python;
@@ -302,9 +301,17 @@ impl SeqIndexDB {
         seq: Vec<u8>,
     ) -> PyResult<FxHashMap<u32, Vec<(u32, u32, u8)>>> {
         let shmmr_spec = &self.db_internal.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
-        let res = seq_db::get_match_positions_with_fragment(shmmr_to_frags, &seq, shmmr_spec);
-        Ok(res)
+        match self.db_internal.backend {
+            Backend::FASTX | Backend::MEMORY => {
+                let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
+                let res =
+                    seq_db::get_match_positions_with_fragment(shmmr_to_frags, &seq, shmmr_spec);
+                Ok(res)
+            }
+            _ => Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            )),
+        }
     }
 
     /// use a fragment of sequence to query the database to get all hits
@@ -453,10 +460,9 @@ impl SeqIndexDB {
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, (u32, u32, u8), (u32, u32), (u32, u32))>> {
-        let shmmr_spec = &self.db_internal.shmmr_spec.as_ref().unwrap();
-
-        let mut all_alns = if let Some(frag_map) = self.get_shmmr_map_internal() {
-            let raw_query_hits = raw_query_fragment(frag_map, &seq, shmmr_spec);
+        let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap();
+        let mut all_alns = {
+            let raw_query_hits = self.query_fragment(seq.clone()).unwrap();
             aln::query_fragment_to_hps(
                 raw_query_hits,
                 &seq,
@@ -467,8 +473,6 @@ impl SeqIndexDB {
                 max_count_target,
                 max_aln_span,
             )
-        } else {
-            return Err(PyValueError::new_err("fail to find an index"));
         };
 
         // for reach position, we find the left_match and right_match shimmer pair that sandwiched the
@@ -609,15 +613,17 @@ impl SeqIndexDB {
     /// int
     ///     number of hits
     #[pyo3(text_signature = "($self, shmmr_pair)")]
-    pub fn get_shmmr_pair_count(&self, shmmr_pair: (u64, u64)) -> usize {
+    pub fn get_shmmr_pair_count(&self, shmmr_pair: (u64, u64)) -> PyResult<usize> {
         if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
             if shmmr_to_frags.contains_key(&shmmr_pair) {
-                shmmr_to_frags.get(&shmmr_pair).unwrap().len()
+                Ok(shmmr_to_frags.get(&shmmr_pair).unwrap().len())
             } else {
-                0
+                Ok(0)
             }
         } else {
-            0
+            Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ))
         }
     }
 
@@ -644,11 +650,13 @@ impl SeqIndexDB {
         &self,
         shmmr_pair: (u64, u64),
         max_unique_count: Option<usize>,
-    ) -> Vec<(String, usize)> {
+    ) -> PyResult<Vec<(String, usize)>> {
         let mut count = FxHashMap::<String, usize>::default();
         let shmmr_to_frags = self.get_shmmr_map_internal();
         if shmmr_to_frags.is_none() {
-            return vec![];
+            return Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ));
         };
         let shmmr_to_frags = shmmr_to_frags.unwrap();
 
@@ -672,7 +680,8 @@ impl SeqIndexDB {
                         .clone();
                     *count.entry(source).or_insert(0) += 1;
                 });
-            count
+
+            let out = count
                 .into_par_iter()
                 .filter(|(_k, v)| {
                     if let Some(muc) = max_unique_count {
@@ -686,9 +695,10 @@ impl SeqIndexDB {
                     }
                 })
                 .map(|(k, v)| (k, v))
-                .collect::<Vec<(String, usize)>>()
+                .collect::<Vec<(String, usize)>>();
+            Ok(out)
         } else {
-            vec![]
+            Ok(vec![])
         }
     }
 
@@ -726,8 +736,13 @@ impl SeqIndexDB {
     pub fn get_shmmr_map(&self) -> PyResult<PyObject> {
         // very expansive as the Rust FxHashMap will be converted to Python's dictionary
         // maybe limit the size that can be converted to avoid OOM
-        let shmmr_to_frags = self.get_shmmr_map_internal();
-        pyo3::Python::with_gil(|py| Ok(shmmr_to_frags.to_object(py)))
+        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+            pyo3::Python::with_gil(|py| Ok(shmmr_to_frags.to_object(py)))
+        } else {
+            Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ))
+        }
     }
 
     /// get the ``shmmr_pair`` to ``fragment_id`` map in Python as a list
@@ -752,7 +767,9 @@ impl SeqIndexDB {
                 .collect::<Vec<(u64, u64, u32, u32, u32, u8)>>();
             Ok(py_out)
         } else {
-            Err(PyValueError::new_err("index not found"))
+            Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ))
         }
     }
 
@@ -862,13 +879,15 @@ impl SeqIndexDB {
         &self,
         min_count: usize,
         keeps: Option<Vec<u32>>,
-    ) -> Vec<(u32, (u64, u64, u8), (u64, u64, u8))> {
+    ) -> PyResult<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>> {
         let frag_map = self.get_shmmr_map_internal();
         if frag_map.is_none() {
-            vec![]
+            return Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ));
         } else {
             let frag_map = frag_map.unwrap();
-            seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
+            let out = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
                 .iter()
                 .map(|adj_pair| {
                     (
@@ -877,7 +896,8 @@ impl SeqIndexDB {
                         (adj_pair.2 .0, adj_pair.2 .1, adj_pair.2 .2),
                     )
                 })
-                .collect()
+                .collect();
+            Ok(out)
         }
     }
 
