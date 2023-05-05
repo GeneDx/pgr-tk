@@ -242,11 +242,32 @@ impl SeqIndexDB {
         &self,
         seq: Vec<u8>,
     ) -> PyResult<Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)>> {
-        let shmmr_spec = &self.db_internal.shmmr_spec.as_ref().unwrap();
-        let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
-        let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
-            seq_db::raw_query_fragment(shmmr_to_frags, &seq, shmmr_spec);
-        Ok(res)
+        match self.db_internal.backend {
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => {
+                let (frag_location_map, frag_map_file) = (
+                    &self.db_internal.agc_db.as_ref().unwrap().frag_location_map,
+                    &self.db_internal.agc_db.as_ref().unwrap().frag_map_file,
+                );
+                let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap().clone();
+                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(frag_location_map, frag_map_file, &seq, &shmmr_spec))
+            },
+            Backend::FRG => {
+                let (frag_location_map, frag_map_file) = (
+                    &self.db_internal.frg_db.as_ref().unwrap().frag_location_map,
+                    &self.db_internal.frg_db.as_ref().unwrap().frag_map_file,
+                );
+                let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap().clone();
+                Ok(pgr_db::seq_db::raw_query_fragment_from_mmap_midx(frag_location_map, frag_map_file, &seq, &shmmr_spec))
+            },
+            _ => {
+                let shmmr_spec = &self.db_internal.shmmr_spec.as_ref().unwrap();
+                let shmmr_to_frags = self.get_shmmr_map_internal().unwrap();
+                let res: Vec<((u64, u64), (u32, u32, u8), Vec<seq_db::FragmentSignature>)> =
+                    seq_db::raw_query_fragment(shmmr_to_frags, &seq, shmmr_spec);
+                Ok(res)
+            }
+        }
     }
 
     /// use a fragment of sequence to query the database to get all hits and sort it by the data base sequence id
@@ -323,17 +344,31 @@ impl SeqIndexDB {
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
-        Ok(self
-            .db_internal
-            .query_fragment_to_hps(
-                seq,
-                penalty,
-                max_count,
-                max_count_query,
-                max_count_target,
-                max_aln_span,
-            )
-            .unwrap())
+        match self.db_internal.backend {
+            Backend::AGC | Backend::FRG => Ok(self
+                .db_internal
+                .query_fragment_to_hps_from_mmap_file(
+                    seq,
+                    penalty,
+                    max_count,
+                    max_count_query,
+                    max_count_target,
+                    max_aln_span,
+                )
+                .unwrap()),
+            Backend::MEMORY | Backend::FASTX => Ok(self
+                .db_internal
+                .query_fragment_to_hps(
+                    seq,
+                    penalty,
+                    max_count,
+                    max_count_query,
+                    max_count_target,
+                    max_aln_span,
+                )
+                .unwrap()),
+            Backend::UNKNOWN => Ok(vec![]),
+        }
     }
 
     /// Given a sequence context, this function maps the specific positions in the context
