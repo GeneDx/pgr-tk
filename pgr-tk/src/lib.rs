@@ -1,6 +1,5 @@
 // src/lib.rs
 pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
-#[cfg(feature = "with_agc")]
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 use pgr_db::seq_db::{self, raw_query_fragment};
