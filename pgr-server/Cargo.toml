@@ -1,0 +1,19 @@
+[package]
+name = "pgr-server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = "0.5.13"
+tokio = { version = "1.0", features = ["full"] }
+pgr-db = { path = "../pgr-db/" }
+rustc-hash = "1.1.0"
+rayon = "1.5.2"
+serde_json = "1.0.83"
+serde = { version = "1.0.117", features = ["derive", "rc"] }
+tower-http = { version = "0.3.0", features = ["cors", "trace"] }
+tower = "0.4.13"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
