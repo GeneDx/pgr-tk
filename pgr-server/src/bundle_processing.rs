@@ -23,7 +23,7 @@ static CMAP: [&str; 97] = [
     "#0000dd", "#009f00", "#f4e200", "#0000b9", "#00a248", "#dcf400", "#2d00a4", "#00aa8d",
     "#bcff00",
 ];
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MatchSummary {
     pub q_bgn: u32,
     pub q_end: u32,
@@ -356,9 +356,6 @@ pub fn get_target_and_principal_bundle_decomposition(
             .into_iter()
             .map(|(sid, rgns)| {
                 let (ctg, src, _ctg_len) = seq_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
-                rgns.iter().for_each(|(b, e, _, orientation, _)| {
-                    sub_seq_range_for_fasta.push((sid, *b, *e, *orientation, ctg.clone()));
-                });
                 let hits = rgns
                     .into_iter()
                     .map(|(b, e, _, orientation, mut aln)| {
@@ -374,8 +371,9 @@ pub fn get_target_and_principal_bundle_decomposition(
                             num_hits: aln.len(),
                             reversed: orientation == 1,
                         }
-                    })
+                    }).filter(|v| (v.num_hits > 100) & ((v.t_end-v.t_bgn) as f32 / (v.q_end-v.q_bgn) as f32 >0.6))
                     .collect::<Vec<MatchSummary>>();
+                hits.iter().for_each(|v| {sub_seq_range_for_fasta.push((sid, v.t_bgn, v.t_end, if v.reversed {1} else {0}, ctg.clone()))});
                 (sid, hits)
             })
             .collect::<Vec<(u32, Vec<MatchSummary>)>>();
@@ -475,7 +473,6 @@ pub fn get_target_and_principal_bundle_decomposition(
                             .push(e - b - shmmr_spec.k);
                         is_repeat = "U";
                     };
-
                     PrincipalBundleBedRecord {
                         ctg: ctg.clone(),
                         bgn: b,
@@ -516,7 +513,7 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     let ctg_data_vec = targets.bundle_bed_records.iter().map(|v| {
         let b_segements = v
             .iter()
-            .map(|r| (r.b_bgn, r.b_end, r.b_id, r.b_direction))
+            .map(|r| (r.bgn, r.end, r.b_id, r.b_direction))
             .collect::<Vec<_>>();
         let ctg = if let Some(r) = v.get(0) {
             r.ctg.clone()
@@ -527,17 +524,17 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     });
 
     let track_scaling = 1.0;
-    let stroke_width = 5.0;
+    let stroke_width = 1.0;
     let left_padding = 50.0;
     let no_tooltips = false;
-    let highlight_repeats = 2.0;
+    let highlight_repeats = 1.2;
     let mut y_offset = 0.0_f32;
     //let track_range = *median_length as f32 * 1.3;
-    let track_range = 500000.0;
+    let track_range = 1200000.0;
     let track_panel_width = 1200.0;
     let annotation_panel_width = 800.0;
     let tree_width = 0.0;
-    let h_factor = 1.4;
+    let h_factor = 1.5;
     let scaling_factor = track_panel_width as f32 / (track_range + 2.0 * left_padding) as f32;
     let delta_y = 16.0_f32 * track_scaling;
 
@@ -695,7 +692,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
     let text = element::Text::new()
         .set(
             "x",
-            20.0 + left_padding + track_range as f32 * scaling_factor,
+            20.0 + left_padding +  scaling_factor,
         )
         .set("y", -14)
         .set("font-size", "10px")
