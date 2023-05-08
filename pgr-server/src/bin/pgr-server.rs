@@ -18,7 +18,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, collections::HashMap};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::cors::Any;
