@@ -1,3 +1,3 @@
 [workspace]
-members = ["pgr-db", "pgr-bin", 'pgr-tk', "rs-libwfa2"] 
+members = ["pgr-db", "pgr-bin", 'pgr-tk', 'pgr-server'] 
 resolver = "2"
