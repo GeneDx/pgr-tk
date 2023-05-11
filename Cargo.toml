@@ -1,3 +1,3 @@
 [workspace]
-members = ["pgr-db", "pgr-bin", 'pgr-tk', 'pgr-server'] 
+members = ["pgr-db", "pgr-bin", 'pgr-tk', 'pgr-web/pgr-server', "pgr-web/frontend"] 
 resolver = "2"

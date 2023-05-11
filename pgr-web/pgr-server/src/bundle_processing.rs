@@ -1,12 +1,12 @@
 use std::io::{BufWriter, Write};
 use std::sync::Arc;
 
-use pgr_db::ext::{SeqIndexDB, get_principal_bundle_decomposition};
+use pgr_db::ext::{get_principal_bundle_decomposition, SeqIndexDB};
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use svg::node::{self, element, Node};
 use svg::Document;
-use rayon::prelude::*;
 
 static CMAP: [&str; 97] = [
     "#870098", "#00aaa5", "#3bff00", "#ec0000", "#00a2c3", "#00f400", "#ff1500", "#0092dd",
@@ -64,7 +64,6 @@ pub struct ShmmrSpec {
 }
 
 #[derive(Deserialize, Debug)]
-
 pub struct SequenceQuerySpec {
     pub source: String,
     pub ctg: String,
@@ -72,13 +71,17 @@ pub struct SequenceQuerySpec {
     pub end: usize,
     pub padding: usize,
     pub merge_range_tol: usize,
-    pub pb_shmmr_spec: ShmmrSpec,
+    //pub pb_shmmr_spec: ShmmrSpec,
+    pub w: u32,
+    pub k: u32,
+    pub r: u32,
+    pub min_span: u32,
+    pub sketch: bool,
     pub min_cov: usize,
     pub min_branch_size: usize,
     pub bundle_length_cutoff: usize,
     pub bundle_merge_distance: usize,
 }
-
 
 #[allow(clippy::type_complexity)]
 fn group_smps_by_principle_bundle_id(
@@ -158,7 +161,6 @@ fn group_smps_by_principle_bundle_id(
     }
     rtn_partitions
 }
-
 
 pub fn get_target_and_principal_bundle_decomposition(
     seq_query_spec: &SequenceQuerySpec,
@@ -362,7 +364,7 @@ pub fn get_target_and_principal_bundle_decomposition(
                         aln.sort();
                         let q_bgn = aln[0].0 .0;
                         let q_end = aln[aln.len() - 1].0 .1;
-                        
+
                         MatchSummary {
                             q_bgn,
                             q_end,
@@ -371,9 +373,21 @@ pub fn get_target_and_principal_bundle_decomposition(
                             num_hits: aln.len(),
                             reversed: orientation == 1,
                         }
-                    }).filter(|v| (v.num_hits > 100) & ((v.t_end-v.t_bgn) as f32 / (v.q_end-v.q_bgn) as f32 >0.6))
+                    })
+                    .filter(|v| {
+                        (v.num_hits > 100)
+                            & ((v.t_end - v.t_bgn) as f32 / (v.q_end - v.q_bgn) as f32 > 0.6)
+                    })
                     .collect::<Vec<MatchSummary>>();
-                hits.iter().for_each(|v| {sub_seq_range_for_fasta.push((sid, v.t_bgn, v.t_end, if v.reversed {1} else {0}, ctg.clone()))});
+                hits.iter().for_each(|v| {
+                    sub_seq_range_for_fasta.push((
+                        sid,
+                        v.t_bgn,
+                        v.t_end,
+                        if v.reversed { 1 } else { 0 },
+                        ctg.clone(),
+                    ))
+                });
                 (sid, hits)
             })
             .collect::<Vec<(u32, Vec<MatchSummary>)>>();
@@ -398,7 +412,14 @@ pub fn get_target_and_principal_bundle_decomposition(
         .collect::<Vec<(String, Vec<u8>)>>();
 
     let mut new_seq_db = SeqIndexDB::new();
-    let shmmr_spec = seq_query_spec.pb_shmmr_spec.clone();
+    let shmmr_spec = ShmmrSpec {
+        w: seq_query_spec.w,
+        k: seq_query_spec.k,
+        r: seq_query_spec.r,
+        min_span: seq_query_spec.r,
+        sketch: seq_query_spec.sketch,
+    };
+
     new_seq_db
         .load_from_seq_list(
             seq_list,
@@ -537,7 +558,6 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     let h_factor = 1.5;
     let scaling_factor = track_panel_width as f32 / (track_range + 2.0 * left_padding) as f32;
     let delta_y = 16.0_f32 * track_scaling;
-
 
     let mut bundle_class_styles = FxHashMap::<String, String>::default();
 
@@ -690,10 +710,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
     }
 
     let text = element::Text::new()
-        .set(
-            "x",
-            20.0 + left_padding +  scaling_factor,
-        )
+        .set("x", 20.0 + left_padding + scaling_factor)
         .set("y", -14)
         .set("font-size", "10px")
         .set("font-family", "sans-serif")

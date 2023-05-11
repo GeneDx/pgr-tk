@@ -8,13 +8,17 @@ edition = "2021"
 [dependencies]
 axum = "0.5.13"
 tokio = { version = "1.0", features = ["full"] }
-pgr-db = { path = "../pgr-db/" }
+pgr-db = { path = "../../pgr-db/" }
 rustc-hash = "1.1.0"
 rayon = "1.5.2"
 serde_json = "1.0.83"
 serde = { version = "1.0.117", features = ["derive", "rc"] }
-tower-http = { version = "0.3.0", features = ["cors", "trace"] }
+tower-http = { version = "0.3.0", features = ["cors", "trace", "fs"] }
 tower = "0.4.13"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 svg = "*"
+clap = "4.2.7"
+serde_qs = "0.12.0"
+use = "0.0.0"
+serde_with = "3.0.0"
