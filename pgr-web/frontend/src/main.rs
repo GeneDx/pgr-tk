@@ -1,5 +1,4 @@
 // main.rs
-#[macro_use]
 use log;
 use wasm_logger;
 
@@ -7,17 +6,16 @@ use dioxus::prelude::*;
 use reqwest;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr, Map};
 use serde_json;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 use wasm_bindgen::JsCast;
 use web_sys::console;
 
 //use pgr_db::aln::{self, HitPair};
-type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
+//type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
 
-type SmpBundleTuple = ((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>);
-type SmpsWithBundleLabel = Vec<SmpBundleTuple>;
+//type SmpBundleTuple = ((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>);
+//type SmpsWithBundleLabel = Vec<SmpBundleTuple>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MatchSummary {
@@ -51,7 +49,6 @@ pub struct PrincipalBundleBedRecord {
     pub r_type: String,
 }
 
-#[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ShmmrSpec {
     pub w: u32,
@@ -61,7 +58,7 @@ pub struct ShmmrSpec {
     pub sketch: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
 pub struct SequenceQuerySpec {
     pub source: String,
     pub ctg: String,
@@ -103,28 +100,22 @@ fn app(cx: Scope) -> Element {
     let query = use_state(cx, || <Option<SequenceQuerySpec>>::None);
     let query_name = use_state(cx, || <Option<String>>::None);
     let targets = use_state(cx, || <Option<TargetMatchPrincipalBundles>>::None);
-    let query_state = use_state(cx, || "done".to_string());
+    let query_state = use_state(cx, || "Please send a query".to_string());
 
 
     let get_targets = move |_| {
         cx.spawn({
     
-            console::log_1(&"query".into());
-            //let window = web_sys::window().expect("global window does not exists");
-            //let document = window.document().expect("expecting a document on window");
-            //let query_result_div = document.get_element_by_id(&"query_results").unwrap();
-            //let _ = query_result_div.set_attribute("hidden", "true");
-
-            //let query_status_div = document.get_element_by_id(&"query_status").unwrap();
-            //let _ = query_status_div.remove_attribute("hidden");
-
-            //let query_button_div = document.get_element_by_id(&"query_button").unwrap();
-            //let _ = query_button_div.set_attribute("disabled", "true");
+            log::debug!("query");
+            
             let query_name = query_name.to_owned();
             let query = query.to_owned();
             let targets= targets.to_owned();
             let rois2: FxHashMap<String, SequenceQuerySpec> =
             serde_json::from_str(roi_json).unwrap();
+           
+            let query_state = query_state.to_owned();
+            query_state.set("Fetching query results".to_string());
             async move {
                 console::log_1(&"clicked".into()); 
                 let window = web_sys::window().expect("global window does not exists");    
@@ -132,16 +123,13 @@ fn app(cx: Scope) -> Element {
                 
                 let roi_selector: web_sys::HtmlSelectElement = document.get_element_by_id(&"ROI_selector").unwrap().dyn_into().unwrap();
                 let options =  roi_selector.options();
-                console::log_1(&options.selected_index().unwrap().into());
                 let selected_value = options.get_with_index(options.selected_index().unwrap() as u32).unwrap().get_attribute("value").unwrap();
-                console::log_1(&selected_value.clone().into());
                 let new_query =rois2.get(&selected_value).unwrap().clone(); 
                 query.modify(move |_| Some(new_query));
                 query_name.modify(move |_| Some(selected_value.clone()));
 
                 let client = reqwest::Client::new();
                 let qn: Option<String> = query_name.current().as_ref().clone();
-                //let qn = Some("".to_string());
                 let q = if qn.is_none() {
                     None
                 } else {
@@ -158,23 +146,11 @@ fn app(cx: Scope) -> Element {
                     .await;
                 match response {
                     Ok(val) => {
-                        //let window = web_sys::window().expect("global window does not exists");
-                        //let document = window.document().expect("expecting a document on window");
-                        //let query_result_div = document.get_element_by_id(&"query_results").unwrap();
-                        //let _ = query_result_div.remove_attribute("hidden");
-
-                        //let query_status_div = document.get_element_by_id(&"query_status").unwrap();
-                        //let _ = query_status_div.set_attribute("hidden", "true");
-
-                        //let query_button_div = document.get_element_by_id(&"query_button").unwrap();
-                        //let _ = query_button_div.remove_attribute("disabled");
-                        console::log_1(&"target modified".into());
                         targets.set(val);
-                        
+                        query_state.set("Query results fetched".into());
                     },
                     Err(e) => {
-                        log::info!("{:?}",e);
-                        console::log_1(&"target unavailable".into());
+                        log::debug!("{:?}",e);
                     }
                 };
             }
@@ -199,7 +175,7 @@ fn app(cx: Scope) -> Element {
                         id: "ROI_selector",
                         class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
                         
-                        kvs.iter().map(|(k, v)| {
+                        kvs.iter().map(|(k, _v)| {
                             rsx! { 
                                 option {
                                     value: "{k}",
@@ -217,62 +193,52 @@ fn app(cx: Scope) -> Element {
                         class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
                         onclick: get_targets ,
                         
-                        "Show" 
+                        "Query" 
                     }
                 }
             }
-            div { id: "query_status",
-                  class: "p-4",
-                  "waiting"
+
+            div { id: "query_status",     
+                cx.render(
+                    rsx! {
+                        div { 
+                        class: "p-4",
+                        "{query_state}"
+                        }
+                    }
+                ) 
             }
 
             div { id: "query_results",
-                query_results(cx, query.clone(), query_state.clone(), targets.clone())
+                query_results(cx, query.clone(), targets.clone())
     
             }
         }
     )
 }
 
+
 pub fn query_results(
     cx: Scope,
     query: UseState<Option<SequenceQuerySpec>>,
-    query_state: UseState<String>,
-    targets: UseState<Option<TargetMatchPrincipalBundles>>,
+    targets: UseState<Option<TargetMatchPrincipalBundles>>
 ) -> Element {
-    console::log_1(&"rendering query_results1".into());
 
-    let query_state = query_state.current().as_ref().clone();
-    console::log_1(&query_state.clone().into());
-    if query_state == "requesting".to_string() {
-        let r = rsx! { div { class: "p-4", "Requesting data" } };
-        return cx.render(r);
-    }
-
-    let query = query.current().as_ref().clone();
-    console::log_1(&"rendering query_results2".into());
-
+    let query = query.to_owned();
     if query.is_none() {
-        console::log_1(&"query none".into());
-        let r = rsx! { div { class: "p-4", "No query yet" } };
-
+        log::debug!("query none");
+        let r = rsx! { div { class: "p-4", id: "query_results_title" } };
         return cx.render(r);
     }
 
     let targets = targets.current().as_ref().clone();
     if targets.is_none() {
-        console::log_1(&"target none".into());
-        let r = rsx! { div { class: "p-4", "Query sent, waiting for targets" } };
-
+        log::debug!("target none");
+        let r = rsx! { div { class: "p-4", id: "query_results_title" } };
         return cx.render(r);
     }
 
-    console::log_1(&"rendering query_results3".into());
     let val = targets.unwrap();
-    console::log_1(&"rendering query_results4".into());
-
-    console::log_1(&query.clone().unwrap().ctg.into());
-    console::log_1(&val.match_summary.len().into());
 
     let sid_to_ctg_src = val
         .sid_ctg_src
@@ -283,14 +249,18 @@ pub fn query_results(
         })
         .collect::<HashMap<u32, (&String, &String)>>();
 
-    let query = query.unwrap().clone();
+    let query = query.as_ref().unwrap().clone();
     let qstr = serde_qs::to_string(&query.clone()).unwrap();
-    let ctg = query.ctg;
+    let ctg = query.ctg.clone();
     let bgn = query.bgn;
     let end = query.end;
     let query_url = base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..];
-    
-    console::log_1(&"rendering query_results2".into());
+    let query_url = use_state(cx, move || {query_url});
+    log::debug!("query: {:?}", query);
+    let query_spec = use_state(cx, || query.clone()); 
+
+    log::debug!("query_spec: {:?}", query_spec);
+    log::debug!("rendering query_results");
     cx.render (
     rsx!{
         div { class: "grid p-2  grid-cols-1 justify-center space-y-2",
@@ -355,16 +325,128 @@ pub fn query_results(
                     }
                 }
             }
-            div { class: "basis-1/4",
-                  
-            button { 
-                id: "get_html_button",
-                //disabled: "false",
-                class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
-                a { href: "{query_url}" , "Get Principal Bundle Decomposition HTML" }
-             
+
+            div {
+                span { "w:" }
+                input {
+                    value: "{query_spec.w}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.w = val.parse::<u32>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
             }
-        } 
+
+            div {
+                span { "k:" }
+                input {
+                    value: "{query_spec.k}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.k = val.parse::<u32>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "r:" }
+                input {
+                    value: "{query_spec.r}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.r = val.parse::<u32>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "min_span:" }
+                input {
+                    value: "{query_spec.min_span}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.min_span = val.parse::<u32>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "min_cov:" }
+                input {
+                    value: "{query_spec.min_cov}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.min_cov = val.parse::<usize>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "min_branch_size:" }
+                input {
+                    value: "{query_spec.min_branch_size}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.min_branch_size = val.parse::<usize>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "bundle_length_cutoff:" }
+                input {
+                    value: "{query_spec.bundle_length_cutoff}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.bundle_length_cutoff = val.parse::<usize>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+            div {
+                span { "bundle_merge_distance:" }
+                input {
+                    value: "{query_spec.bundle_merge_distance}",
+                    oninput: move |evt| query_spec.modify(|v| {let val = evt.value.clone();
+                        let mut v = v.clone();
+                        v.bundle_merge_distance = val.parse::<usize>().expect("not an integer");
+                        let qstr = serde_qs::to_string(&v.clone()).unwrap();
+                        query_url.set(base_url() + "/api/get_html_by_query/?" + &qstr.clone()[..]);
+                        v
+                    }),
+                }
+            }
+
+
+            div { class: "basis-1/4",
+                button { 
+                    id: "get_html_button",
+                    class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
+                    a { href: "{query_url}", target:"_blank", "Get Principal Bundle Decomposition HTML" }
+                
+                }
+            } 
         }
     )
 }

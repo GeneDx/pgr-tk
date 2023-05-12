@@ -357,7 +357,7 @@ pub fn get_target_and_principal_bundle_decomposition(
         let match_summary = aln_range
             .into_iter()
             .map(|(sid, rgns)| {
-                let (ctg, src, _ctg_len) = seq_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
+                let (ctg, _src, _ctg_len) = seq_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
                 let hits = rgns
                     .into_iter()
                     .map(|(b, e, _, orientation, mut aln)| {
@@ -523,13 +523,14 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     let mut target_lenths = targets
         .match_summary
         .iter()
-        .flat_map(|v| v.1.iter().map(|v| v.t_bgn - v.t_bgn).collect::<Vec<u32>>())
+        .flat_map(|v| v.1.iter().map(|v| v.t_end - v.t_bgn).collect::<Vec<u32>>())
         .collect::<Vec<u32>>();
 
     target_lenths.sort();
-    let median_length = target_lenths
-        .get(target_lenths.len() >> 1)
-        .unwrap_or(&100000);
+    let max_length = target_lenths
+        .get(target_lenths.len() - 1 )
+        .unwrap_or(&200000);
+
 
     let ctg_data_vec = targets.bundle_bed_records.iter().map(|v| {
         let b_segements = v
@@ -550,8 +551,8 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     let no_tooltips = false;
     let highlight_repeats = 1.2;
     let mut y_offset = 0.0_f32;
-    //let track_range = *median_length as f32 * 1.3;
-    let track_range = 1200000.0;
+    let track_range = *max_length as f32 * 1.05;
+    //let track_range = 1200000.0;
     let track_panel_width = 1200.0;
     let annotation_panel_width = 800.0;
     let tree_width = 0.0;
@@ -726,7 +727,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
             paths.into_iter().for_each(|path| document.append(path));
         });
 
-    let mut out_str = Vec::new();
+    let out_str = Vec::new();
     let mut out_file = BufWriter::new(out_str);
     let msg = "can't write the HTML doc";
     writeln!(out_file, "<html><body>").expect(msg);
@@ -773,7 +774,7 @@ document.addEventListener('readystatechange', event => {
     .expect(msg);
     writeln!(out_file, "</body></html>").expect(msg);
 
-    out_file.flush();
+    let _ = out_file.flush();
     let out_str = out_file.into_inner().unwrap();
     String::from_utf8_lossy(&out_str[..]).to_string()
 }

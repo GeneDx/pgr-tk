@@ -1,26 +1,17 @@
 use axum::{
     body::{boxed, Body},
-    extract::{Extension, Path, Query},
+    extract::Query,
     http::{
-        header::{self, HeaderMap, HeaderName},
-        HeaderValue, Method, Response, StatusCode,
+        Response, StatusCode,
     },
-    response::{Html, IntoResponse},
+    response::Html,
     routing::{get, post},
     Json, Router,
 };
 use clap::Parser;
 use pgr_db::ext::*;
-use pgr_db::{
-    aln::{self, HitPair},
-    fasta_io::reverse_complement,
-};
 use pgr_server::bundle_processing::*;
-use rayon::prelude::*;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::{collections::HashMap, net::SocketAddr};
+use std::net::SocketAddr;
 use std::{
     net::{IpAddr, Ipv6Addr},
     path::PathBuf,
@@ -33,7 +24,6 @@ use tower_http::cors::Any;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
-use tracing::Span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser, Debug)]
