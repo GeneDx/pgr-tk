@@ -11,3 +11,4 @@ pgr-tk-workstation/*.whl
 docker/github-build
 .vscode/settings.json
 .gitignore
+pgr-web/dist/*
