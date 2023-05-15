@@ -1,9 +1,7 @@
 use axum::{
     body::{boxed, Body},
     extract::Query,
-    http::{
-        Response, StatusCode,
-    },
+    http::{Response, StatusCode},
     response::Html,
     routing::{get, post},
     Json, Router,

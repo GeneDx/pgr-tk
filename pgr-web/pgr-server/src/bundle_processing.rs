@@ -33,9 +33,9 @@ pub struct MatchSummary {
     pub reversed: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct TargetMatchPrincipalBundles {
-    pub query_src_ctg: (String, String),
+    pub query: SequenceQuerySpec,
     pub match_summary: Vec<(u32, Vec<MatchSummary>)>, // (q_id, vec[(q_bgn, q_end, t_bgn, t_end, num_hits, reversed)])
     pub sid_ctg_src: Vec<(u32, String, String)>,
     pub bundle_bed_records: Vec<Vec<PrincipalBundleBedRecord>>,
@@ -54,7 +54,7 @@ pub struct PrincipalBundleBedRecord {
     pub r_type: String,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ShmmrSpec {
     pub w: u32,
     pub k: u32,
@@ -63,7 +63,7 @@ pub struct ShmmrSpec {
     pub sketch: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct SequenceQuerySpec {
     pub source: String,
     pub ctg: String,
@@ -512,7 +512,7 @@ pub fn get_target_and_principal_bundle_decomposition(
         .collect::<Vec<Vec<PrincipalBundleBedRecord>>>();
 
     Some(TargetMatchPrincipalBundles {
-        query_src_ctg: (sample_name, ctg_name),
+        query: (*seq_query_spec).clone(),
         match_summary,
         sid_ctg_src,
         bundle_bed_records,
