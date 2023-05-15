@@ -357,7 +357,6 @@ pub fn query_results(
 macro_rules! set_parameter {
     ($fn_name:ident, $field: ident, $type: ty) => {
         fn $fn_name(cx: Scope, query: UseState<SequenceQuerySpec>)  -> Element {
-            let query = query.to_owned();
             let val = query.$field.clone(); 
             cx.render ( 
                 rsx! { td {
