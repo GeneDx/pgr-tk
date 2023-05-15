@@ -142,13 +142,15 @@ fn app(cx: Scope) -> Element {
     cx.render(
         rsx! {
             div { class: "flex flex-row p-4",
-                div { class: "basis-2/4", h2 { "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" } }
-                div { class: "basis-1/4 mb-3 xl:w-96",
-                    select {
-                        name: "ROI_selector",
-                        id: "ROI_selector",
-                        class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
-                        kvs.iter().map(|(k, _v)| {
+                div { class: "basis-2/6", h2 { "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" } }
+                div { class: "basis-3/6",
+                    div { class: "flex flex-row p-4",
+                        div { "Query Preset:" }
+                        select {
+                            name: "ROI_selector",
+                            id: "ROI_selector",
+                            class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
+                            kvs.iter().map(|(k, _v)| {
                             rsx! { 
                                 option {
                                     value: "{k}",
@@ -156,23 +158,22 @@ fn app(cx: Scope) -> Element {
                                 }
                             }
                         })
-                    }
-                }
-
-                div { class: "basis-1/4",
-                    button {
-                        id: "query_button",
-                        //disabled: "false",
-                        class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
-                        onclick: move |_evt| {
-                            console::log_1(&"clicked".into());
-                            let query_name = get_seleted_query_name();
-                            let query0 = rois.get(&query_name).unwrap();
-                            get_targets(cx, query0, targets, query_state);
-                            query_state.set("getting query results".to_string());
-                            query.set(query0.clone());
-                        },
-                        "Query"
+                        }
+                        button {
+                            class: "basis-1/5 mb-3 xl:w-32",
+                            id: "query_button",
+                            //disabled: "false",
+                            class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
+                            onclick: move |_evt| {
+                                console::log_1(&"clicked".into());
+                                let query_name = get_seleted_query_name();
+                                let query0 = rois.get(&query_name).unwrap();
+                                get_targets(cx, query0, targets, query_state);
+                                query_state.set("getting query results".to_string());
+                                query.set(query0.clone());
+                            },
+                            "Query"
+                        }
                     }
                 }
             }
@@ -182,31 +183,25 @@ fn app(cx: Scope) -> Element {
                     rsx! {
                         div { 
                         class: "p-4",
-                        "{query_state}"
+                        "status: {query_state}"
                         }
                     }
                 )
             }
+            div { class: "flex flex-row p-4", id: "query_results", query_results(cx, targets.clone()) }
+            div { class: "flex flex-row p-4",
+                div { class: "basis-3/6" }
+                div { class: "basis-2/6", id: "set_parameters", set_parameters(cx, query.clone()) }
+                div { class: "basis-1/6",
+                    div { 
+                        update_query(cx, query.clone(),  targets.clone(),  query_state.clone())
+                    }
+                    
+                    br {}
 
-            div { id: "query_results", query_results(cx, targets.clone()) }
-
-            div { id: "set_parameters", set_parameters(cx, query.clone()) }
-
-            div { class: "basis-1/4",
-                button {
-                    id: "query_button",
-                    //disabled: "false",
-                    class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
-                    onclick: move |_evt| {
-                        let query0 = query.get();
-                        get_targets(cx, query0, targets, query_state);
-                        query_state.set("getting query results".to_string());
-                    },
-                    "Update"
+                    div { id: "get_html", get_html(cx, query.clone()) }
                 }
             }
-
-            div { id: "get_html", get_html(cx, query.clone()) }
         }
     )
 }
@@ -644,11 +639,39 @@ pub fn get_html( cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
                 button {
                     id: "get_html_button",
                     class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
-                    a { href: "{query_url}", target: "_blank", "Get Principal Bundle Decomposition HTML" }
+                    a { href: "{query_url}", target: "_blank", "Get HTML" }
                 }
             }
         }}
     )
 }
+
+
+pub fn update_query( cx: Scope, 
+    query: UseState<SequenceQuerySpec>,
+    targets: UseState<Option<TargetMatchPrincipalBundles>> ,
+    query_state: UseState<String>) -> Element {
+
+    let query = query.to_owned();
+    let targets = targets.to_owned();
+    let query_state = query_state.to_owned(); 
+
+    cx.render ( {
+        rsx!{
+            button {
+                id: "query_button",
+                //disabled: "false",
+                class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
+                onclick: move |_evt| {
+                    let query0 = query.get();
+                    get_targets(cx, query0, &targets, &query_state);
+                    query_state.set("getting query results".to_string());
+                },
+                "Update"
+            }
+        }}
+    )
+}
+
 
 
