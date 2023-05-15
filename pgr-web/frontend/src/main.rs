@@ -194,9 +194,7 @@ fn app(cx: Scope) -> Element {
                 div { class: "basis-3/6" }
                 div { class: "basis-2/6", id: "set_parameters", set_parameters(cx, query.clone()) }
                 div { class: "basis-1/6",
-                    div { 
-                        update_query(cx, query.clone(),  targets.clone(),  query_state.clone())
-                    }
+                    div { update_query(cx, query.clone(),  targets.clone(),  query_state.clone()) }
 
                     br {}
 
@@ -356,38 +354,48 @@ pub fn query_results(
     )
 }
 
+macro_rules! set_parameter {
+    ($fn_name:ident, $field: ident, $type: ty) => {
+        fn $fn_name(cx: Scope, query: UseState<SequenceQuerySpec>)  -> Element {
+            let query = query.to_owned();
+            let val = query.$field.clone(); 
+            cx.render ( 
+                rsx! { td {
+                    input {
+                        value: "{val}",
+                        oninput: move |evt| {
+                            let val = evt.value.clone().parse::<$type>();
+                            if let Ok(val) = val {
+                                let mut new_query = (*query.get()).clone();
+                                new_query.$field = val;
+                                query.set(new_query);
+                            }
+                        }
+                    }
+                }}
+            )
+        } 
+    };
+}
 
-pub fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
+set_parameter!(set_parameter_source, source, String);
+set_parameter!(set_parameter_ctg, ctg, String);
+set_parameter!(set_parameter_bgn, bgn, usize);
+set_parameter!(set_parameter_end, end, usize);
+set_parameter!(set_parameter_padding, padding, usize);
+//set_parameter!(set_parameter_merge_range_tol, merge_range_tol, usize);
 
-    // source: "hg19_tagged.fa".to_string(),
-    // ctg: "chr1_hg19".to_string(),
-    // bgn: 104198140,
-    // end: 104207173,
-    // padding: 150000,
-    // merge_range_tol: 120000,
-    // w: 48,
-    // k: 56,
-    // r: 4,
-    // min_span: 12,
-    // sketch: false,
-    // min_cov: 2,
-    // min_branch_size: 8,
-    // bundle_length_cutoff: 500,
-    // bundle_merge_distance: 10000
-    let query_source = query.to_owned();
-    let query_ctg = query.to_owned();
-    let query_bgn = query.to_owned();
-    let query_end = query.to_owned();
-    let query_padding = query.to_owned();
+set_parameter!(set_parameter_w, w, u32);
+set_parameter!(set_parameter_k, k, u32);
+set_parameter!(set_parameter_r, r, u32);
+set_parameter!(set_parameter_min_span, min_span, u32);
 
-    let query_w = query.to_owned();
-    let query_k = query.to_owned();
-    let query_r = query.to_owned();
-    let query_min_span = query.to_owned();
-    let query_min_cov = query.to_owned();
-    let query_min_branch_size = query.to_owned();
-    let query_bundle_length_cutoff = query.to_owned();
-    let query_bundle_merge_distance = query.to_owned();
+set_parameter!(set_parameter_min_cov, min_cov, usize);
+set_parameter!(set_parameter_min_branch_size, min_branch_size, usize);
+set_parameter!(set_parameter_bundle_length_cutoff, bundle_length_cutoff, usize);
+set_parameter!(set_parameter_bundle_merge_distance, bundle_merge_distance, usize);
+
+fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
  
     cx.render ( 
         rsx!{
@@ -403,226 +411,72 @@ pub fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element
 
                         tr {
                             td { "source" }
-                            td {
-                                input {
-                                    value: "{query.source}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().to_string();
-                                        let mut new_query = (*query_source.get()).clone();
-                                        new_query.source = val;
-                                        query_source.set(new_query);
-                                    }
-                                }
-                            }
+                            set_parameter_source(cx, query.to_owned())
                         }
 
                         tr {
                             td { "query_ctg" }
-                            td {
-                                input {
-                                    value: "{query.ctg}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().to_string();
-                                        let mut new_query = (*query_ctg.get()).clone();
-                                        new_query.source = val;
-                                        query_ctg.set(new_query);
-                                    }
-                                }
-                            }
+                            set_parameter_ctg(cx, query.to_owned())
                         }
 
                         tr {
                             td { "begin coordinate" }
-                            td {
-                                input {
-                                    value: "{query.bgn}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_bgn.get()).clone();
-                                            new_query.bgn = val;
-                                            query_bgn.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_bgn(cx, query.to_owned())
                         }
 
                         tr {
                             td { "end coordinate" }
-                            td {
-                                input {
-                                    value: "{query.end}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_end.get()).clone();
-                                            new_query.end = val;
-                                            query_end.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_end(cx, query.to_owned())
                         }
 
                         tr {
                             td { "flanking size" }
-                            td {
-                                input {
-                                    value: "{query.padding}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_padding.get()).clone();
-                                            new_query.padding = val;
-                                            query_padding.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_padding(cx, query.to_owned())
                         }
 
                         tr {
                             td { "w" }
-                            td {
-                                input {
-                                    value: "{query.w}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<u32>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_w.get()).clone();
-                                            new_query.w = val;
-                                            query_w.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_w(cx, query.to_owned())
                         }
 
                         tr {
                             td { "k" }
-                            td {
-                                input {
-                                    value: "{query.k}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<u32>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_k.get()).clone();
-                                            new_query.k = val;
-                                            query_k.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_k(cx, query.to_owned())
                         }
 
                         tr {
                             td { "r" }
-                            td {
-                                input {
-                                    value: "{query.r}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<u32>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_r.get()).clone();
-                                            new_query.r = val;
-                                            query_r.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_r(cx, query.to_owned())
                         }
 
                         tr {
                             td { "min span" }
-                            td {
-                                input {
-                                    value: "{query.min_span}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<u32>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_min_span.get()).clone();
-                                            new_query.min_span = val;
-                                            query_min_span.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_min_span(cx, query.to_owned())
                         }
 
                         tr {
                             td { "min cov" }
-                            td {
-                                input {
-                                    value: "{query.min_cov}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_min_cov.get()).clone();
-                                            new_query.min_cov = val;
-                                            query_min_cov.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_min_cov(cx, query.to_owned())
                         }
 
                         tr {
                             td { "min branch size" }
-                            td {
-                                input {
-                                    value: "{query.min_branch_size}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_min_branch_size.get()).clone();
-                                            new_query.min_branch_size = val;
-                                            query_min_branch_size.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_min_branch_size(cx, query.to_owned())
                         }
 
                         tr {
                             td { "bundle length cutoff" }
-                            td {
-                                input {
-                                    value: "{query.bundle_length_cutoff}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_bundle_length_cutoff.get()).clone();
-                                            new_query.bundle_length_cutoff = val;
-                                            query_bundle_length_cutoff.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_bundle_length_cutoff(cx, query.to_owned())
                         }
 
                         tr {
                             td { "bundle merge distance" }
-                            td {
-                                input {
-                                    value: "{query.bundle_merge_distance}",
-                                    oninput: move |evt| {
-                                        let val = evt.value.clone().parse::<usize>();
-                                        if let Ok(val) = val {
-                                            let mut new_query = (*query_bundle_merge_distance.get()).clone();
-                                            new_query.bundle_merge_distance = val;
-                                            query_bundle_merge_distance.set(new_query);
-                                        }
-                                    }
-                                }
-                            }
+                            set_parameter_bundle_merge_distance(cx, query.to_owned())
                         }
                     }
                 }
             }
-        }
-)
-
+        })
 } 
 
 
