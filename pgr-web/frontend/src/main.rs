@@ -67,6 +67,7 @@ pub struct SequenceQuerySpec {
     pub padding: usize,
     pub merge_range_tol: usize,
     //pub pb_shmmr_spec: ShmmrSpec,
+    // flatten this out, make it easier for URL query string
     pub w: u32,
     pub k: u32,
     pub r: u32,
@@ -196,7 +197,7 @@ fn app(cx: Scope) -> Element {
                     div { 
                         update_query(cx, query.clone(),  targets.clone(),  query_state.clone())
                     }
-                    
+
                     br {}
 
                     div { id: "get_html", get_html(cx, query.clone()) }
