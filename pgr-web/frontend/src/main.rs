@@ -8,7 +8,6 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
-use web_sys::console;
 
 //use pgr_db::aln::{self, HitPair};
 //type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
@@ -147,14 +146,11 @@ fn app(cx: Scope) -> Element {
                             //disabled: "false",
                             class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
                             onclick: move |_evt| {
-                                console::log_1(&"clicked".into());
                                 let query_name = selected_label.current().as_ref().clone();
                                 let query0 = rois.get(&query_name).unwrap();
-                                get_targets(cx, query0, targets, query_state);
-                                query_state.set("Getting query results".to_string());
                                 query.set(query0.clone());
                             },
-                            "Query"
+                            "Set Query Parameters"
                         }
                         div { class: "p-1", id: "set_parameters", set_parameters { query: query } }
                         div { class: "flex flex-row p-1",
@@ -208,7 +204,6 @@ fn get_targets<'a, T>(cx: Scope<'a, T>,
     
     cx.spawn({
             
-        log::debug!("query");
         async move {
             let client = reqwest::Client::new();
             let url = base_url() + "/api/post_query_for_json_data";
