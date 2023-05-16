@@ -129,50 +129,42 @@ fn app(cx: Scope) -> Element {
     
     cx.render(
         rsx! {
-            div { class: "flex flex-row p-4",
-                div { class: "basis-3/6", h2 { "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" } }
-                div { class: "basis-3/6",
-    
+            div { class: "flex justify-center p-5",
+                p { class: "text-2xl", "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" }
+            }
+            div { class: "container justify-center mx-auto w-full p-5",
 
-                    div { class: "flex flex-row p-1",
-                        div { class: "basis-3/5 mb-3 xl:w-32", query_preset {  labels: labels, selected_label: selected_label }}
+                div { class: "flex flex-row",
+
+                    div { class: "basis-4/6", id: "query_results", query_results { targets: targets } }
+
+                    div { class: "basis-2/6",
+                        div { class: "p-1", id: "query_status", "Status: {query_state}" }
+                        div { class: "p-1", query_preset { labels: labels, selected_label: selected_label } }
                         button {
-                            class: "basis-2/5 mb-3 xl:w-32",
+                            class: "p-1",
                             id: "query_button",
                             //disabled: "false",
-                            class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
+                            class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
                             onclick: move |_evt| {
                                 console::log_1(&"clicked".into());
                                 let query_name = selected_label.current().as_ref().clone();
                                 let query0 = rois.get(&query_name).unwrap();
                                 get_targets(cx, query0, targets, query_state);
-                                query_state.set("getting query results".to_string());
+                                query_state.set("Getting query results".to_string());
                                 query.set(query0.clone());
                             },
                             "Query"
                         }
-                    }
-                }
-            }
-
-            div { id: "query_status",
-                cx.render(
-                    rsx! {
-                        div { 
-                        class: "p-4",
-                        "status: {query_state}"
+                        div { class: "p-1", id: "set_parameters", set_parameters { query: query } }
+                        div { class: "flex flex-row p-1",
+                            div { class: "basis-1/2 p-1",
+                                update_query { query: query, targets: targets, query_state: query_state }
+                            }
+                            br {}
+                            div { class: "basis-1/2 p-1", id: "get_html", get_html { query: query } }
                         }
                     }
-                )
-            }
-            div { class: "flex flex-row p-4", id: "query_results", query_results { targets: targets } }
-            div { class: "flex flex-row p-4",
-                div { class: "basis-3/6" }
-                div { class: "basis-2/6", id: "set_parameters", set_parameters { query: query } }
-                div { class: "basis-1/6",
-                    div { update_query { query: query, targets: targets, query_state: query_state } }
-                    br {}
-                    div { id: "get_html", get_html { query: query } }
                 }
             }
         }
@@ -184,7 +176,7 @@ fn query_preset<'a>(cx: Scope<'a>, labels: Vec<String>, selected_label: &'a UseS
     cx.render(
         rsx! {
             div { class: "flex flex-row p-0",
-                div { class: "basis-2/4",  "Query Preset:" }
+                div { class: "basis-2/4", "Query Preset:" }
                 select {
                     class: "basis-2/4",
                     name: "ROI_selector",
@@ -274,52 +266,44 @@ pub fn query_results<'a>(
         
     rsx!{
         div { class: "grid p-2  grid-cols-1 justify-center space-y-2",
-            div { class: "overflow-x-auto sm:-mx-6 lg:-mx-8",
-                div { class: "flex flex-col min-w-[1280px]  max-h-screen",
-                    rsx!(
-                        h2 {class: "px-8 py-2", "Principal Bundle Decomposition, Query: {ctg}:{bgn}-{end}"}
-                        div {
-                            class: "px-8 content-center overflow-auto min-w-[1280px] max-h-[450px]",
-                            //val.principal_bundle_decomposition.iter().flat_map(|(sid, ctg_name, r)| {
-                            //    track(cx, ctg_name.clone(), track_size, (*sid, r.clone()))
-                            //}
-                        }
-                       )
-                }
-                hr { class: "my-2 h-px bg-gray-700 border-0 dark:bg-gray-700" }
-                div { class: "px-8 py-1",
-                    div { class: "flex-grow overflow-auto max-h-[250px]",
-                        table { class: "relative w-full",
-                            thead {
-                                tr {
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "sid"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "contig"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "source"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "hit count"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "query span"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "query len"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "target span"
-                                    }
-                                    th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
-                                        "target len"
-                                    }
+            div { class: "flex flex-col min-w-[1280px]  max-h-screen",
+                h2 { class: "px-8 py-2", p { "Returned Hits for Query: {ctg}:{bgn}-{end}" } }
+                div { class: "px-8 content-center overflow-auto min-w-[1280px] max-h-[60px]" }
+            }
+            //hr { class: "my-2 h-px bg-gray-700 border-0 dark:bg-gray-700" }
+            div { class: "flex flex-col px-8 py-1",
+                div { class: "flex-grow overflow-auto max-h-[650px]",
+                    table { class: "relative w-full",
+                        thead {
+                            tr {
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "sid"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "contig"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "source"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "hit count"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "query span"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "query len"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "target span"
+                                }
+                                th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
+                                    "target len"
                                 }
                             }
-                            tbody { class: "divide-y",
-                                rsx!(targets.match_summary.iter().map(|v| {
+                        }
+                        tbody { class: "divide-y",
+                            rsx!(targets.match_summary.iter().map(|v| {
                                         let sid = v.0;
                                         let (ctg, src) = *sid_to_ctg_src.get(&sid).unwrap();
                                         let style_classes = "px-1 py-2 text-center";
@@ -344,7 +328,6 @@ pub fn query_results<'a>(
                                             
                                     rsx!( hit_summary )
                                     }))
-                            }
                         }
                     }
                 }
@@ -492,12 +475,11 @@ pub fn get_html<'a>( cx: Scope<'a>, query: &'a UseState<SequenceQuerySpec> ) -> 
 
     cx.render ( {
         rsx!{
-            div { class: "basis-1/4",
-                button {
-                    id: "get_html_button",
-                    class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
-                    a { href: "{query_url}", target: "_blank", "Get HTML" }
-                }
+            button {
+                id: "get_html_button",
+                class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
+                
+                a { class: "w-full", href: "{query_url}", target: "_blank", p { "Get HTML" } }
             }
         }}
     )
@@ -517,8 +499,8 @@ pub fn update_query<'a>( cx: Scope<'a>,
         rsx!{
             button {
                 id: "query_button",
+                class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
                 //disabled: "false",
-                class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
                 onclick: move |_evt| {
                     let query0 = query.get();
                     get_targets(cx, query0, &targets, &query_state);
