@@ -8,7 +8,6 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
-use wasm_bindgen::JsCast;
 use web_sys::console;
 
 //use pgr_db::aln::{self, HitPair};
@@ -120,54 +119,31 @@ fn app(cx: Scope) -> Element {
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect::<Vec<_>>();
+
     kvs.sort_by_key(|v| v.0.clone());
+    let labels = kvs.iter().map(|(k, _v)| k.clone()).collect::<Vec<_>>(); 
 
-    let get_seleted_query_name = || {
-        let window = web_sys::window().expect("global window does not exists");
-        let document = window.document().expect("expecting a document on window");
-        let roi_selector: web_sys::HtmlSelectElement = document
-            .get_element_by_id(&"ROI_selector")
-            .unwrap()
-            .dyn_into()
-            .unwrap();
-        let options = roi_selector.options();
-        let selected_value = options
-            .get_with_index(options.selected_index().unwrap() as u32)
-            .unwrap()
-            .get_attribute("value")
-            .unwrap();
-        let query_name = selected_value.clone();
-        query_name
-    };
+    let selected_label = use_state(cx, || labels.get(0).unwrap_or(&"".to_string()).clone());
 
+   
+    
     cx.render(
         rsx! {
             div { class: "flex flex-row p-4",
-                div { class: "basis-2/6", h2 { "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" } }
+                div { class: "basis-3/6", h2 { "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" } }
                 div { class: "basis-3/6",
-                    div { class: "flex flex-row p-4",
-                        div { "Query Preset:" }
-                        select {
-                            name: "ROI_selector",
-                            id: "ROI_selector",
-                            class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
-                            kvs.iter().map(|(k, _v)| {
-                            rsx! { 
-                                option {
-                                    value: "{k}",
-                                    "{k}"
-                                }
-                            }
-                        })
-                        }
+    
+
+                    div { class: "flex flex-row p-1",
+                        div { class: "basis-3/5 mb-3 xl:w-32", query_preset {  labels: labels, selected_label: selected_label }}
                         button {
-                            class: "basis-1/5 mb-3 xl:w-32",
+                            class: "basis-2/5 mb-3 xl:w-32",
                             id: "query_button",
                             //disabled: "false",
                             class: "inline-block px-6 py-1.5 bg-blue-600 text-white rounded",
                             onclick: move |_evt| {
                                 console::log_1(&"clicked".into());
-                                let query_name = get_seleted_query_name();
+                                let query_name = selected_label.current().as_ref().clone();
                                 let query0 = rois.get(&query_name).unwrap();
                                 get_targets(cx, query0, targets, query_state);
                                 query_state.set("getting query results".to_string());
@@ -189,28 +165,51 @@ fn app(cx: Scope) -> Element {
                     }
                 )
             }
-            div { class: "flex flex-row p-4", id: "query_results", query_results(cx, targets.clone()) }
+            div { class: "flex flex-row p-4", id: "query_results", query_results { targets: targets } }
             div { class: "flex flex-row p-4",
                 div { class: "basis-3/6" }
-                div { class: "basis-2/6", id: "set_parameters", set_parameters(cx, query.clone()) }
+                div { class: "basis-2/6", id: "set_parameters", set_parameters { query: query } }
                 div { class: "basis-1/6",
-                    div { update_query(cx, query.clone(),  targets.clone(),  query_state.clone()) }
-
+                    div { update_query { query: query, targets: targets, query_state: query_state } }
                     br {}
-
-                    div { id: "get_html", get_html(cx, query.clone()) }
+                    div { id: "get_html", get_html { query: query } }
                 }
             }
         }
     )
 }
 
- 
+#[inline_props]
+fn query_preset<'a>(cx: Scope<'a>, labels: Vec<String>, selected_label: &'a UseState<String>) -> Element<'a> {
+    cx.render(
+        rsx! {
+            div { class: "flex flex-row p-0",
+                div { class: "basis-2/4",  "Query Preset:" }
+                select {
+                    class: "basis-2/4",
+                    name: "ROI_selector",
+                    id: "ROI_selector",
+                    class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
+                    oninput: |evt| {
+                        selected_label.set(evt.value.clone());
+                    },
+                    labels.iter().map(|k| {
+                        rsx! { 
+                            option {
+                                value: "{k}",
+                                "{k}"
+                            }
+                        }
+                    })
+                }
+            }
+        }) 
+}
 
-fn get_targets(cx: Scope, 
-    query: &SequenceQuerySpec,
-    targets: &UseState<Option<TargetMatchPrincipalBundles>>, 
-    query_state: &UseState<String>) -> (){
+fn get_targets<'a, T>(cx: Scope<'a, T>, 
+    query: &'a SequenceQuerySpec,
+    targets: &'a UseState<Option<TargetMatchPrincipalBundles>>, 
+    query_state: &'a UseState<String>) -> (){
     let query = query.clone();
     let targets = targets.to_owned(); 
     let query_state = query_state.to_owned(); 
@@ -242,10 +241,11 @@ fn get_targets(cx: Scope,
     })
 }
 
-pub fn query_results(
-    cx: Scope,
-    targets: UseState<Option<TargetMatchPrincipalBundles>>
-) -> Element {
+#[inline_props]
+pub fn query_results<'a>(
+    cx: Scope<'a>,
+    targets: &'a UseState<Option<TargetMatchPrincipalBundles>>
+) -> Element<'a> {
 
     let targets = targets.current().as_ref().clone();
     if targets.is_none() {
@@ -342,7 +342,7 @@ pub fn query_results(
                                                 } )
                                         });
                                             
-                                    rsx!( hit_summary)
+                                    rsx!( hit_summary )
                                     }))
                             }
                         }
@@ -356,7 +356,8 @@ pub fn query_results(
 
 macro_rules! set_parameter {
     ($fn_name:ident, $field: ident, $type: ty) => {
-        fn $fn_name(cx: Scope, query: UseState<SequenceQuerySpec>)  -> Element {
+        #[inline_props]
+        fn $fn_name<'a>(cx: Scope<'a>, query: &'a UseState<SequenceQuerySpec>)  -> Element<'a> {
             let val = query.$field.clone(); 
             cx.render ( 
                 rsx! { td {
@@ -394,7 +395,8 @@ set_parameter!(set_parameter_min_branch_size, min_branch_size, usize);
 set_parameter!(set_parameter_bundle_length_cutoff, bundle_length_cutoff, usize);
 set_parameter!(set_parameter_bundle_merge_distance, bundle_merge_distance, usize);
 
-fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
+#[inline_props]
+fn set_parameters<'a>(cx: Scope<'a>, query:&'a UseState<SequenceQuerySpec> ) -> Element<'a> {
  
     cx.render ( 
         rsx!{
@@ -410,67 +412,67 @@ fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
 
                         tr {
                             td { class: "px-5 py-1", "source" }
-                            set_parameter_source(cx, query.to_owned())
+                            set_parameter_source { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "query_ctg" }
-                            set_parameter_ctg(cx, query.to_owned())
+                            set_parameter_ctg { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "begin coordinate" }
-                            set_parameter_bgn(cx, query.to_owned())
+                            set_parameter_bgn { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "end coordinate" }
-                            set_parameter_end(cx, query.to_owned())
+                            set_parameter_end { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "flanking size" }
-                            set_parameter_padding(cx, query.to_owned())
+                            set_parameter_padding { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "w" }
-                            set_parameter_w(cx, query.to_owned())
+                            set_parameter_w { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "k" }
-                            set_parameter_k(cx, query.to_owned())
+                            set_parameter_k { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "r" }
-                            set_parameter_r(cx, query.to_owned())
+                            set_parameter_r { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "min span" }
-                            set_parameter_min_span(cx, query.to_owned())
+                            set_parameter_min_span { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "min cov" }
-                            set_parameter_min_cov(cx, query.to_owned())
+                            set_parameter_min_cov { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "min branch size" }
-                            set_parameter_min_branch_size(cx, query.to_owned())
+                            set_parameter_min_branch_size { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "bundle length cutoff" }
-                            set_parameter_bundle_length_cutoff(cx, query.to_owned())
+                            set_parameter_bundle_length_cutoff { query: query }
                         }
 
                         tr {
                             td { class: "px-5 py-1", "bundle merge distance" }
-                            set_parameter_bundle_merge_distance(cx, query.to_owned())
+                            set_parameter_bundle_merge_distance { query: query }
                         }
                     }
                 }
@@ -479,7 +481,8 @@ fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
 } 
 
 
-pub fn get_html( cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
+#[inline_props]
+pub fn get_html<'a>( cx: Scope<'a>, query: &'a UseState<SequenceQuerySpec> ) -> Element<'a> {
 
     let query = query.current().as_ref().clone();
     let query_url = {
@@ -500,11 +503,11 @@ pub fn get_html( cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
     )
 }
 
-
-pub fn update_query( cx: Scope, 
-    query: UseState<SequenceQuerySpec>,
-    targets: UseState<Option<TargetMatchPrincipalBundles>> ,
-    query_state: UseState<String>) -> Element {
+#[inline_props]
+pub fn update_query<'a>( cx: Scope<'a>, 
+    query: &'a UseState<SequenceQuerySpec>,
+    targets: &'a UseState<Option<TargetMatchPrincipalBundles>> ,
+    query_state: &'a UseState<String>) -> Element<'a> {
 
     let query = query.to_owned();
     let targets = targets.to_owned();
