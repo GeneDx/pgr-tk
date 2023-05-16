@@ -402,74 +402,74 @@ fn set_parameters(cx: Scope, query: UseState<SequenceQuerySpec> ) -> Element {
                 table {
                     thead {
                         tr {
-                            th { "parameter" }
-                            th { "value" }
+                            th { class: "px-5 py-2", "parameter" }
+                            th { class: "px-5 py-2", "value" }
                         }
                     }
                     tbody {
 
                         tr {
-                            td { "source" }
+                            td { class: "px-5 py-1", "source" }
                             set_parameter_source(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "query_ctg" }
+                            td { class: "px-5 py-1", "query_ctg" }
                             set_parameter_ctg(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "begin coordinate" }
+                            td { class: "px-5 py-1", "begin coordinate" }
                             set_parameter_bgn(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "end coordinate" }
+                            td { class: "px-5 py-1", "end coordinate" }
                             set_parameter_end(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "flanking size" }
+                            td { class: "px-5 py-1", "flanking size" }
                             set_parameter_padding(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "w" }
+                            td { class: "px-5 py-1", "w" }
                             set_parameter_w(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "k" }
+                            td { class: "px-5 py-1", "k" }
                             set_parameter_k(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "r" }
+                            td { class: "px-5 py-1", "r" }
                             set_parameter_r(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "min span" }
+                            td { class: "px-5 py-1", "min span" }
                             set_parameter_min_span(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "min cov" }
+                            td { class: "px-5 py-1", "min cov" }
                             set_parameter_min_cov(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "min branch size" }
+                            td { class: "px-5 py-1", "min branch size" }
                             set_parameter_min_branch_size(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "bundle length cutoff" }
+                            td { class: "px-5 py-1", "bundle length cutoff" }
                             set_parameter_bundle_length_cutoff(cx, query.to_owned())
                         }
 
                         tr {
-                            td { "bundle merge distance" }
+                            td { class: "px-5 py-1", "bundle merge distance" }
                             set_parameter_bundle_merge_distance(cx, query.to_owned())
                         }
                     }
