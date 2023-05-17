@@ -22,3 +22,7 @@ clap = "4.2.7"
 serde_qs = "0.12.0"
 use = "0.0.0"
 serde_with = "3.0.0"
+
+[features]
+default = ["with_agc"]
+with_agc = ["pgr-db/with_agc"]

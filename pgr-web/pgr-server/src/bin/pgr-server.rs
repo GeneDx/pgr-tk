@@ -46,6 +46,10 @@ struct Opt {
         default_value = "./pgr-tk-HGRP-y1-evaluation-set-v0"
     )]
     data_path_prefix: String,
+
+    /// set the listen port
+    #[clap(short = 'f', long = "frg-file")]
+    frg_file: bool,
 }
 
 #[tokio::main]
@@ -61,7 +65,18 @@ async fn main() {
         .init();
 
     let mut seq_db = SeqIndexDB::new();
-    let _ = seq_db.load_from_agc_index(opt.data_path_prefix);
+   
+    if opt.frg_file {
+        let _ = seq_db.load_from_frg_index(opt.data_path_prefix); 
+    } else {
+        #[cfg(feature = "with_agc")]
+        let _ = seq_db.load_from_agc_index(opt.data_path_prefix);
+
+        #[cfg(not(feature = "with_agc"))]
+        panic!("This command is compiled with only frg file support, please specify `--frg-file");
+    }
+
+
     let seq_db = Arc::new(seq_db);
     // build our application with a route
     let app = Router::new()
