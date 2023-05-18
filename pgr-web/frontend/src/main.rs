@@ -128,8 +128,8 @@ fn app(cx: Scope) -> Element {
     
     cx.render(
         rsx! {
-            div { class: "flex justify-center p-5",
-                p { class: "text-2xl", "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" }
+            div { class: "flex justify-center border-solid border-2 rounded-lg border-indigo-600 p-5",
+                p { class: "mb-2 mt-0 text-3xl font-medium leading-tight text-primary", "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" }
             }
             div { class: "container justify-center mx-auto w-full p-5",
 
