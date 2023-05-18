@@ -1,3 +1,5 @@
+pub mod bundle_processing;
+
 use axum::{
     body::{boxed, Body},
     extract::Query,
@@ -8,7 +10,7 @@ use axum::{
 };
 use clap::Parser;
 use pgr_db::ext::*;
-use pgr_server::bundle_processing::*;
+use bundle_processing::*;
 use std::net::SocketAddr;
 use std::{
     net::{IpAddr, Ipv6Addr},
@@ -65,9 +67,9 @@ async fn main() {
         .init();
 
     let mut seq_db = SeqIndexDB::new();
-   
+
     if opt.frg_file {
-        let _ = seq_db.load_from_frg_index(opt.data_path_prefix); 
+        let _ = seq_db.load_from_frg_index(opt.data_path_prefix);
     } else {
         #[cfg(feature = "with_agc")]
         let _ = seq_db.load_from_agc_index(opt.data_path_prefix);
@@ -75,7 +77,6 @@ async fn main() {
         #[cfg(not(feature = "with_agc"))]
         panic!("This command is compiled with only frg file support, please specify `--frg-file");
     }
-
 
     let seq_db = Arc::new(seq_db);
     // build our application with a route
@@ -101,6 +102,14 @@ async fn main() {
                 move |params| get_html_by_query(params, seq_db)
             }),
         )
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                //.allow_origin("http://127.0.0.1:8080".parse::<HeaderValue>().unwrap())
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
         .fallback(get(|req| async move {
             match ServeDir::new(&opt.static_dir).oneshot(req).await {
                 Ok(res) => {
@@ -126,20 +135,12 @@ async fn main() {
                         _ => res.map(boxed),
                     }
                 }
-                Err(err) => Response::builder()
+                Err(_err) => Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(boxed(Body::from(format!("error: {err}"))))
+                    .body(boxed(Body::from(format!("internal errors"))))
                     .expect("error response"),
             }
-        }))
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                //.allow_origin("http://127.0.0.1:8080".parse::<HeaderValue>().unwrap())
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()));
+        }));
 
     // run it
     let addr = SocketAddr::from((
