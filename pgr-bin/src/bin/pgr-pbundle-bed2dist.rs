@@ -19,7 +19,7 @@ struct CmdOptions {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-struct BundleSegement {
+struct BundleSegment {
     bgn: u32,
     end: u32,
     bundle_id: u32,
@@ -37,8 +37,8 @@ enum AlnType {
 }
 
 fn align_bundles(
-    q_bundles: &Vec<BundleSegement>,
-    t_bundles: &Vec<BundleSegement>,
+    q_bundles: &Vec<BundleSegment>,
+    t_bundles: &Vec<BundleSegment>,
 ) -> (f32, usize, usize) {
     let q_count = q_bundles.len();
     let t_count = t_bundles.len();
@@ -175,7 +175,7 @@ fn main() -> Result<(), std::io::Error> {
         let bundle_v_end: u32 = pbundle_fields[4].parse().expect(bed_file_parse_err_msg);
 
         let e = ctg_data.entry(ctg).or_default();
-        let b_seg = BundleSegement {
+        let b_seg = BundleSegment {
             bgn,
             end,
             bundle_id,
