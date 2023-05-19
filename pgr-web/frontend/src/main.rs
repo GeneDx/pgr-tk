@@ -128,37 +128,41 @@ fn app(cx: Scope) -> Element {
     
     cx.render(
         rsx! {
-            div { class: "flex justify-center border-solid border-2 rounded-lg border-indigo-600 p-5",
-                p { class: "mb-2 mt-0 text-3xl font-medium leading-tight text-primary", "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo" }
-            }
-            div { class: "container justify-center mx-auto w-full p-5",
+            div { class: "container p-8 justify-center",
+                div { class: "flex justify-center border-solid border-2 rounded-lg border-indigo-600 p-5",
+                    p { class: "mb-2 mt-0 text-3xl font-medium leading-tight text-primary",
+                        "PanGenome Research Tool Kit: Principal Bundle Decomposition Demo"
+                    }
+                }
+                div { class: "container justify-center mx-auto w-full p-5",
 
-                div { class: "flex flex-row",
+                    div { class: "flex flex-row",
 
-                    div { class: "basis-4/6", id: "query_results", query_results { targets: targets } }
+                        div { class: "basis-4/6", id: "query_results", query_results { targets: targets } }
 
-                    div { class: "basis-2/6",
-                        div { class: "p-1", id: "query_status", "Status: {query_state}" }
-                        div { class: "p-1", query_preset { labels: labels, selected_label: selected_label } }
-                        button {
-                            class: "p-1",
-                            id: "query_button",
-                            //disabled: "false",
-                            class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
-                            onclick: move |_evt| {
-                                let query_name = selected_label.current().as_ref().clone();
-                                let query0 = rois.get(&query_name).unwrap();
-                                query.set(query0.clone());
-                            },
-                            "Set Query Parameters"
-                        }
-                        div { class: "p-1", id: "set_parameters", set_parameters { query: query } }
-                        div { class: "flex flex-row p-1",
-                            div { class: "basis-1/2 p-1",
-                                update_query { query: query, targets: targets, query_state: query_state }
+                        div { class: "basis-2/6",
+                            div { class: "p-1", id: "query_status", "Status: {query_state}" }
+                            div { class: "p-1", query_preset { labels: labels, selected_label: selected_label } }
+                            button {
+                                class: "p-1",
+                                id: "query_button",
+                                //disabled: "false",
+                                class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
+                                onclick: move |_evt| {
+                                    let query_name = selected_label.current().as_ref().clone();
+                                    let query0 = rois.get(&query_name).unwrap();
+                                    query.set(query0.clone());
+                                },
+                                "Set Query Parameters"
                             }
-                            br {}
-                            div { class: "basis-1/2 p-1", id: "get_html", get_html { query: query } }
+                            div { class: "p-1", id: "set_parameters", set_parameters { query: query } }
+                            div { class: "flex flex-row p-1",
+                                div { class: "basis-1/2 p-1",
+                                    update_query { query: query, targets: targets, query_state: query_state }
+                                }
+                                br {}
+                                div { class: "basis-1/2 p-1", id: "get_html", get_html { query: query } }
+                            }
                         }
                     }
                 }
@@ -473,7 +477,6 @@ pub fn get_html<'a>( cx: Scope<'a>, query: &'a UseState<SequenceQuerySpec> ) -> 
             button {
                 id: "get_html_button",
                 class: "middle none center w-full rounded-lg px-2 py-1.5 bg-blue-600 text-white",
-                
                 a { class: "w-full", href: "{query_url}", target: "_blank", p { "Get HTML" } }
             }
         }}
