@@ -71,15 +71,15 @@ fn align_bundles(
                 )
             };
             if t_idx > 0 {
-                let insert_score = -2 * q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
-                if insert_score > best.1 {
-                    best = (AlnType::Insertion, insert_score)
+                let score = -2 * q_len + s_map.get(&(q_idx, t_idx - 1)).unwrap();
+                if score > best.1 {
+                    best = (AlnType::Deletion, score)
                 };
             };
             if q_idx > 0 {
-                let delete_score = -2 * t_len + s_map.get(&(q_idx - 1, t_idx)).unwrap();
-                if delete_score > best.1 {
-                    best = (AlnType::Deletion, delete_score)
+                let score = -2 * t_len + s_map.get(&(q_idx - 1, t_idx)).unwrap();
+                if score > best.1 {
+                    best = (AlnType::Insertion, score)
                 }
             }
             t_map.insert((q_idx, t_idx), best.0);
