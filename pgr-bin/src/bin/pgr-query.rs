@@ -352,17 +352,14 @@ fn main() -> Result<(), std::io::Error> {
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
-                            let target_seq_name = if args.fastx_file && args.bed_summary {
-                                format!("{}", ctg)
-                            } else {
-                                format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation)
-                            };
+                            let target_seq_name = 
+                                format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
 
                             if args.bed_summary {
                                 writeln!(
                                     hit_file,
-                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                    target_seq_name,
+                                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                    ctg,
                                     b,
                                     e,
                                     q_name,
@@ -374,6 +371,7 @@ fn main() -> Result<(), std::io::Error> {
                                     src,
                                     q_bgn,
                                     q_end,
+                                    target_seq_name 
                                 )
                                 .expect("writing hit summary fail\n");
                             } else {
