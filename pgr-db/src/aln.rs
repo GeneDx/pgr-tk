@@ -111,7 +111,7 @@ pub fn sparse_aln(
     out
 }
 
-pub type HitPairLists = Vec<(u32, Vec<(f32, Vec<HitPair>)>)>;
+pub type TargetHitPairLists = Vec<(u32, Vec<(f32, Vec<HitPair>)>)>; // target_id, Vec<(score, HitPairs)>
 
 #[allow(clippy::too_many_arguments)]
 pub fn query_fragment_to_hps(
@@ -120,72 +120,81 @@ pub fn query_fragment_to_hps(
     shmmr_spec: &ShmmrSpec,
     penalty: f32,
     max_count: Option<u32>,
-    max_count_query: Option<u32>,
-    max_count_target: Option<u32>,
+    query_max_count: Option<u32>,
+    target_max_count: Option<u32>,
     max_aln_span: Option<u32>,
-) -> HitPairLists {
+) -> TargetHitPairLists {
+    let mut shmmr_pair_hash_count = FxHashMap::<(u64, u64), u32>::default();
+    let mut query_shmmr_pair_hash_count = FxHashMap::<(u64, u64), u32>::default();
+    let mut target_shmer_pair_count = FxHashMap::<(u64, u64, u32), u32>::default();
 
-    let mut sp_count = FxHashMap::<(u64, u64), u32>::default();
-    let mut sp_count_query = FxHashMap::<(u64, u64), u32>::default();
-    let mut sp_count_target = FxHashMap::<(u64, u64, u32), u32>::default();
+    seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(0, frag, shmmr_spec, false))
+        .iter()
+        .for_each(|shmmr_pair| {
+            let entry = query_shmmr_pair_hash_count
+                .entry((shmmr_pair.0.hash(), shmmr_pair.1.hash()))
+                .or_insert(0);
+            *entry += 1;
+        });
 
-    seq_db::pair_shmmrs(&shmmrutils::sequence_to_shmmrs(
-        0,
-        frag,
-        shmmr_spec,
-        false,
-    ))
-    .iter()
-    .for_each(|sp| {
-        let e = sp_count_query
-            .entry((sp.0.hash(), sp.1.hash()))
-            .or_insert(0);
-        *e += 1;
-    });
+    raw_query_hits.iter().for_each(
+        |(shmmr_pair_hash, _query_position, frag_signature): &(
+            (u64, u64),
+            _,
+            Vec<seq_db::FragmentSignature>,
+        )| {
+            //let sp = d.0;
+            // count shimmer pair hits
+            let entry = shmmr_pair_hash_count.entry(*shmmr_pair_hash).or_insert(0);
+            *entry += 1;
 
-    raw_query_hits.iter().for_each(|d| {
-        let sp = d.0;
-        // count shimmer pair hits
-        let e = sp_count.entry(sp).or_insert(0);
-        *e += 1;
+            frag_signature
+                .iter()
+                .for_each(|(_frg_id, seq_id, _bgn, _end, _orientation)| {
+                    // count shimmer pair on target hits
+                    // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
+                    let key = (shmmr_pair_hash.0, shmmr_pair_hash.1, *seq_id);
+                    let entry = target_shmer_pair_count.entry(key).or_insert(0);
+                    *entry += 1;
+                })
+        },
+    );
 
-        d.2.iter().for_each(|v| {
-            // count shimmer pair on target hits
-            // v = frg_id, seq_id, bgn, end, orientation(to shimmer pair)
-            let key = (sp.0, sp.1, v.1);
-            let e = sp_count_target.entry(key).or_insert(0);
-            *e += 1;
-        })
-    });
-
-    let mut sid_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
-    raw_query_hits.into_iter().for_each(|d| {
-        let sp = d.0;
-        let count = *sp_count.get(&sp).unwrap_or(&0);
-        let max_count = max_count.unwrap_or(128);
-        if count > max_count {
-            return;
-        };
-        let max_count_query = max_count_query.unwrap_or(128);
-        if count > max_count_query {
-            return;
-        };
-        let left_frag_coordinate = d.1;
-        d.2.iter().for_each(|v| {
-            let count = *sp_count_target.get(&(sp.0, sp.1, v.1)).unwrap_or(&0);
-            let max_count_target = max_count_target.unwrap_or(128);
-            if count > max_count_target {
+    let mut target_squence_id_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
+    raw_query_hits.into_iter().for_each(
+        |(shmmr_pair, query_position, frag_signature): (
+            (u64, u64),
+            _,
+            Vec<seq_db::FragmentSignature>,
+        )| {
+            let count = *shmmr_pair_hash_count.get(&shmmr_pair).unwrap_or(&0);
+            let max_count = max_count.unwrap_or(128);
+            if count > max_count {
                 return;
             };
-            let e = sid_to_hits.entry(v.1).or_default();
-            let right_frag_coordinate = (v.2, v.3, v.4);
-            e.push((left_frag_coordinate, right_frag_coordinate));
-        });
-    });
+            let max_count_query = query_max_count.unwrap_or(128);
+            if count > max_count_query {
+                return;
+            };
+            let left_frag_coordinate = query_position;
+            frag_signature.iter().for_each(|&(_frg_id, sid, pos0, pos1, orientation)| {
+                let count = *target_shmer_pair_count
+                    .get(&(shmmr_pair.0, shmmr_pair.1, sid))
+                    .unwrap_or(&0);
+                let max_count_target = target_max_count.unwrap_or(128);
+                if count > max_count_target {
+                    return;
+                };
+                let e = target_squence_id_to_hits.entry(sid).or_default();
+                let right_frag_coordinate = (pos0, pos1, orientation);
+                e.push((left_frag_coordinate, right_frag_coordinate));
+            });
+        },
+    );
 
     let max_aln_span = max_aln_span.unwrap_or(8);
 
-    sid_to_hits
+    target_squence_id_to_hits
         .into_iter()
         .filter(|(_sid, hps)| hps.len() > 1)
         .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, max_aln_span, penalty)))
