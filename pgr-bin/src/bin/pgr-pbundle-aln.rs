@@ -4,6 +4,8 @@ use rustc_hash::FxHashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::{fs::File, path};
+use serde_json::json;
+use serde::*;
 
 /// Generate alignment between sequences using bundle decomposition from a principal bundle bed file
 #[derive(Parser, Debug)]
@@ -19,7 +21,7 @@ struct CmdOptions {
     output_prefix: String,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Serialize, Deserialize) ]
 struct BundleSegment {
     bgn: u32,
     end: u32,
@@ -30,13 +32,12 @@ struct BundleSegment {
     bundle_v_end: u32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 enum AlnType {
     Match,
     Insertion,
     Deletion,
 }
-
 type AlnPathElement = (usize, usize, AlnType, u32, u32, usize, usize);
 type AlnPath = Vec<AlnPathElement>;
 
@@ -162,7 +163,7 @@ fn align_bundles(
     )
 }
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> std::result::Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
     let bed_file_path = path::Path::new(&args.bed_file_path);
@@ -209,7 +210,7 @@ fn main() -> Result<(), std::io::Error> {
         ctg_of_interests.push(line);
     });
 
-    let mut ctg_data = ctg_of_interests
+    let ctg_data = ctg_of_interests
         .into_iter()
         .map(|k| {
             let v = ctg_data
@@ -221,63 +222,40 @@ fn main() -> Result<(), std::io::Error> {
 
     let n_ctg = ctg_data.len();
 
-    let out_path = Path::new(&args.output_prefix).with_extension("bdl.aln");
-    let mut out_file =
-        BufWriter::new(File::create(out_path).expect("can't create the bundle alignment file"));
 
+    let mut alignment_paths = Vec::<_>::new();
+    let ctg_idx0 = 0;
     (1..n_ctg).into_iter().for_each(|ctg_idx1| {
-        let ctg_idx0 = 0;
-
         // the first sequence is the "target"
         let (target_ctg, target_bundles) = &ctg_data[ctg_idx0];
         let (query_ctg, query_bundles) = &ctg_data[ctg_idx1];
         let (dist0, diff_len0, max_len0, aln_path) = align_bundles(query_bundles, target_bundles);
 
-        aln_path.into_iter().for_each(
+        let aln_path  = aln_path.into_iter().map(
             |(
                 qq_idx,
                 tt_idx,
                 aln_type,
-                q_bundle_id,
-                t_bundle_id,
-                diff_len_delta,
-                max_len_delta,
+                _q_bundle_id,
+                _t_bundle_id,
+                _diff_len_delta,
+                _max_len_delta,
             )| {
                 let target_data = target_bundles.get(tt_idx).unwrap();
                 let query_data = query_bundles.get(qq_idx).unwrap();
-                if aln_type == AlnType::Match
-                    && t_bundle_id == q_bundle_id
-                    && target_data.bundle_v_end == query_data.bundle_v_end
-                    && target_data.bundle_v_bgn == query_data.bundle_v_bgn
-                {
-                    println!(
-                        "* {} {} {:?} {} {} {:?} {:?} {} {}",
-                        tt_idx,
-                        qq_idx,
-                        aln_type,
-                        t_bundle_id,
-                        q_bundle_id,
-                        target_bundles.get(tt_idx).unwrap(),
-                        query_bundles.get(qq_idx).unwrap(),
-                        diff_len_delta,
-                        max_len_delta
-                    )
-                } else {
-                    println!(
-                        "- {} {} {:?} {} {} {:?} {:?} {} {}",
-                        tt_idx,
-                        qq_idx,
-                        aln_type,
-                        t_bundle_id,
-                        q_bundle_id,
-                        target_bundles.get(tt_idx).unwrap(),
-                        query_bundles.get(qq_idx).unwrap(),
-                        diff_len_delta,
-                        max_len_delta
-                    )
-                };
+                (qq_idx, tt_idx, aln_type, target_data, query_data)
             },
-        );
+        ).collect::<Vec<_>>();
+        alignment_paths.push( (target_ctg, query_ctg, aln_path))
     });
+
+    let out_path = Path::new(&args.output_prefix).with_extension("bln.json");
+    let mut out_file =
+        BufWriter::new(File::create(out_path).expect("can't create the bundle alignment file"));
+    
+    let out_json = json!(alignment_paths);
+    out_file.write(out_json.to_string().as_bytes())?;
+
+
     Ok(())
 }
