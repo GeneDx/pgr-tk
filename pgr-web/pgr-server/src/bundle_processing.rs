@@ -36,7 +36,7 @@ pub struct MatchSummary {
 #[derive(Serialize, Deserialize)]
 pub struct TargetMatchPrincipalBundles {
     pub query: SequenceQuerySpec,
-    pub match_summary: Vec<(u32, Vec<MatchSummary>)>, // (q_id, vec[(q_bgn, q_end, t_bgn, t_end, num_hits, reversed)])
+    pub match_summary: Vec<(u32, Vec<MatchSummary>)>, // (t_id, vec[(q_bgn, q_end, t_bgn, t_end, num_hits, reversed)])
     pub sid_ctg_src: Vec<(u32, String, String)>,
     pub bundle_bed_records: Vec<Vec<PrincipalBundleBedRecord>>,
 }
