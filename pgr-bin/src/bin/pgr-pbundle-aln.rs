@@ -9,7 +9,7 @@ use serde::*;
 
 /// Generate alignment between sequences using bundle decomposition from a principal bundle bed file
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-pbundle-bed2dist")]
+#[clap(name = "pgr-pbundle-aln")]
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
@@ -229,7 +229,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
         // the first sequence is the "target"
         let (target_ctg, target_bundles) = &ctg_data[ctg_idx0];
         let (query_ctg, query_bundles) = &ctg_data[ctg_idx1];
-        let (dist0, diff_len0, max_len0, aln_path) = align_bundles(query_bundles, target_bundles);
+        let (_dist0, _diff_len0, _max_len0, aln_path) = align_bundles(query_bundles, target_bundles);
 
         let aln_path  = aln_path.into_iter().map(
             |(
