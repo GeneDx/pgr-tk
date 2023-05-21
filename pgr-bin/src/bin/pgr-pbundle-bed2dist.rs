@@ -32,8 +32,8 @@ struct BundleSegment {
 #[derive(Clone, Copy, Debug)]
 enum AlnType {
     Match,
-    Deletion,
     Insertion,
+    Deletion,
 }
 
 fn align_bundles(
@@ -125,12 +125,12 @@ fn align_bundles(
                 t_idx -= 1;
                 (diff_len_delta, max_len_delata)
             }
-            AlnType::Deletion => {
+            AlnType::Insertion => {
                 let q_len = (q_bundles[q_idx].end as i64 - q_bundles[q_idx].bgn as i64).abs();
                 q_idx -= 1;
                 (q_len as usize, q_len as usize)
             }
-            AlnType::Insertion => {
+            AlnType::Deletion => {
                 let t_len = (t_bundles[t_idx].end as i64 - t_bundles[t_idx].bgn as i64).abs();
                 t_idx -= 1;
                 (t_len as usize, t_len as usize)
