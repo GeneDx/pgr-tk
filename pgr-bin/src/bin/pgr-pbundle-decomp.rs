@@ -12,7 +12,7 @@ use std::{
     path::Path,
 };
 
-/// Generat the principal bundle decomposition though MAP Graph from a fasta file
+/// Generate the principal bundle decomposition though MAP Graph from a fasta file
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-pbundle-decomp")]
 #[clap(author, version)]
