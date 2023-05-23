@@ -125,7 +125,6 @@ fn main() -> Result<(), std::io::Error> {
         GZFastaReader::RegularFile(reader) => set_shmmr_count(&mut reader.into_iter()),
     };
 
-
     let mut ref_seqs: Vec<SeqRec> = vec![];
     let mut ref_shmmr_location = Vec::<(usize, usize, u64)>::new();
     let mut sid_to_ctg = FxHashMap::<usize, Vec<u8>>::default();
@@ -178,8 +177,8 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|(counts, locations)| {
                 counts.for_each(|(k, v)| {
-                    let mut e = *shmmr_count.get(&k).unwrap();
-                    e.0 += v;
+                    let mut e = shmmr_count.entry(k).or_default();
+                    (*e).0 += v;
                 });
                 ref_shmmr_location.extend(locations);
             });
@@ -193,7 +192,7 @@ fn main() -> Result<(), std::io::Error> {
         GZFastaReader::RegularFile(reader) => count_ref_seq_shmmrs(&mut reader.into_iter()),
     };
 
-    let count_seq_group_shmmrs = |seqs: &Vec<SeqRec>| {
+    let mut count_seq_group_shmmrs = |seqs: &Vec<SeqRec>| {
         seqs.into_par_iter()
             .map(|seq_rec| {
                 let mut partial_shmmr_count = FxHashMap::<u64, usize>::default();
@@ -219,13 +218,13 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|counts| {
                 counts.for_each(|(k, v)| {
-                    let mut e = *shmmr_count.get(&k).unwrap();
-                    e.1 += v;
+                    let mut e = shmmr_count.entry(k).or_default();
+                    (*e).1 += v;
                 });
             });
     };
 
-    let count_read_seq_shmmrs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
+    let mut count_read_seq_shmmrs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         let mut read_seqs: Vec<SeqRec> = vec![];
         seq_iter.into_iter().for_each(|r| {
             if let Ok(r) = r {
@@ -236,6 +235,8 @@ fn main() -> Result<(), std::io::Error> {
                 }
             };
         });
+        count_seq_group_shmmrs(&read_seqs);
+        read_seqs.clear();
     };
 
     match get_fastx_reader(args.read_fastx)? {
@@ -259,7 +260,7 @@ fn main() -> Result<(), std::io::Error> {
 
     ref_shmmr_location.into_iter().for_each(|(sid, pos, hash)| {
         let ctg = String::from_utf8_lossy(sid_to_ctg.get(&sid).unwrap());
-        let (c0, c1) = shmmr_count.get(&hash).unwrap();
+        let (c0, c1) = *shmmr_count.get(&hash).unwrap();
         writeln!(out, "{} {} {} {}", ctg, pos, c0, c1).expect("writing output error");
     });
 
