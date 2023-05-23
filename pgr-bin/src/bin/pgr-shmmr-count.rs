@@ -3,7 +3,7 @@ use clap::{self, CommandFactory, Parser};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use std::fs::File;
-use std::io::{self,  BufReader, BufWriter, Read, Write};
+use std::io::{self, BufReader, BufWriter, Read, Write};
 
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::fasta_io::{FastaReader, SeqRec};
@@ -108,13 +108,16 @@ fn main() -> Result<(), std::io::Error> {
                     false,
                 )
                 .iter()
-                .map(|&mmer| mmer.hash()).collect::<Vec<_>>()
+                .map(|&mmer| mmer.hash())
+                .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>()
             .into_iter()
-            .for_each(|hashes| hashes.into_iter().for_each(|hash| {
-                shmmr_count.insert(hash, (0,0)); 
-            }));
+            .for_each(|hashes| {
+                hashes.into_iter().for_each(|hash| {
+                    shmmr_count.insert(hash, (0, 0));
+                })
+            });
     };
 
     match get_fastx_reader(args.shmmr_target_fastx)? {
@@ -261,7 +264,17 @@ fn main() -> Result<(), std::io::Error> {
     ref_shmmr_location.into_iter().for_each(|(sid, pos, hash)| {
         let ctg = String::from_utf8_lossy(sid_to_ctg.get(&sid).unwrap());
         let (c0, c1) = *shmmr_count.get(&hash).unwrap();
-        writeln!(out, "{} {} {} {}", ctg, pos, c0, c1).expect("writing output error");
+        writeln!(
+            out,
+            "{}\t{}\t{}\t{}\t{}\t{}",
+            ctg,
+            pos,
+            pos + args.k as usize,
+            c1 as f32 / c0 as f32,
+            c1,
+            c0
+        )
+        .expect("writing output error");
     });
 
     Ok(())
