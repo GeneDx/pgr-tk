@@ -38,11 +38,11 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 56)]
     k: u32,
     /// sparse minimizer (shimmer) reduction factor
-    #[clap(long, short, default_value_t = 4)]
+    #[clap(long, short, default_value_t = 1)]
     r: u32,
 
     /// min span for neighboring minimiers
-    #[clap(long, short, default_value_t = 64)]
+    #[clap(long, short, default_value_t = 8)]
     min_span: u32,
 }
 
