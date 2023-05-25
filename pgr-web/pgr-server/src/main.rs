@@ -41,7 +41,7 @@ struct Opt {
     #[clap(long = "static-dir", default_value = "./dist")]
     static_dir: String,
 
-    /// set the listen port
+    /// set data_path_prefix 
     #[clap(
         short = 'd',
         long = "data-path-prefix",
