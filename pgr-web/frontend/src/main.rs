@@ -1,12 +1,8 @@
 // main.rs
-use log;
-use wasm_logger;
 
 use dioxus::prelude::*;
-use reqwest;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::collections::HashMap;
 
 //use pgr_db::aln::{self, HitPair};
@@ -177,14 +173,20 @@ fn query_preset<'a>(cx: Scope<'a>, labels: Vec<String>, selected_label: &'a UseS
         rsx! {
             div { class: "flex flex-row p-0",
                 div { class: "basis-2/4", "Query Preset:" }
-                select {
+                input {
                     class: "basis-2/4",
                     name: "ROI_selector",
                     id: "ROI_selector",
+                    r#type: "text",
+                    list: "query_candidates",
                     class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
                     oninput: |evt| {
                         selected_label.set(evt.value.clone());
                     },
+             
+                },
+                datalist {
+                    id: "query_candidates",
                     labels.iter().map(|k| {
                         rsx! { 
                             option {
@@ -201,7 +203,7 @@ fn query_preset<'a>(cx: Scope<'a>, labels: Vec<String>, selected_label: &'a UseS
 fn get_targets<'a, T>(cx: Scope<'a, T>, 
     query: &'a SequenceQuerySpec,
     targets: &'a UseState<Option<TargetMatchPrincipalBundles>>, 
-    query_state: &'a UseState<String>) -> (){
+    query_state: &'a UseState<String>){
     let query = query.clone();
     let targets = targets.to_owned(); 
     let query_state = query_state.to_owned(); 
@@ -272,7 +274,7 @@ pub fn query_results<'a>(
             //hr { class: "my-2 h-px bg-gray-700 border-0 dark:bg-gray-700" }
             div { class: "flex flex-col px-8 py-1",
                 div { class: "flex-grow overflow-auto max-h-[650px]",
-                    table { class: "relative w-full",
+                    table { class: "table-fixed relative w-full",
                         thead {
                             tr {
                                 th { class: "px-1 py-2 sticky top-0 text-blue-900 bg-blue-300",
@@ -305,7 +307,7 @@ pub fn query_results<'a>(
                             rsx!(targets.match_summary.iter().map(|v| {
                                         let sid = v.0;
                                         let (ctg, src) = *sid_to_ctg_src.get(&sid).unwrap();
-                                        let style_classes = "px-1 py-2 text-center";
+                                        let style_classes = "px-1 py-2 text-center break-all";
                                         let hit_summary = v.1.iter().map(move |match_summary| {
                                             let ms = match_summary;
                                             let q_span = format!("{}-{}", ms.q_bgn, ms.q_end);
@@ -314,14 +316,14 @@ pub fn query_results<'a>(
                                             let t_len = if ms.t_end > ms.t_bgn { ms.t_end - ms.t_bgn } else { ms.t_bgn - ms.t_end };
                                             let n_hits = ms.num_hits;
                                             rsx!( tr {
-                                                td { class: "{style_classes}", "{sid}"}  
-                                                td { class: "{style_classes}", "{ctg}"} 
-                                                td { class: "{style_classes}", "{src}"}
-                                                td { class: "{style_classes}", "{n_hits}"} 
-                                                td { class: "{style_classes}", "{q_span}"} 
-                                                td { class: "{style_classes}", "{q_len}"} 
-                                                td { class: "{style_classes}", "{t_span}"}
-                                                td { class: "{style_classes}", "{t_len}"}
+                                                td { p {class: "{style_classes}", "{sid}"}}  
+                                                td { p {class: "{style_classes}", "{ctg}"}} 
+                                                td { p {class: "{style_classes}", "{src}"}}
+                                                td { p {class: "{style_classes}", "{n_hits}"}}
+                                                td { p {class: "{style_classes}", "{q_span}"}}
+                                                td { p {class: "{style_classes}", "{q_len}"}}
+                                                td { p {class: "{style_classes}", "{t_span}"}}
+                                                td { p {class: "{style_classes}", "{t_len}"}}
                                                 } )
                                         });
                                             
