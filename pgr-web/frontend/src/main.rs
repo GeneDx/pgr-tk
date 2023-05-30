@@ -503,7 +503,7 @@ pub fn update_query<'a>( cx: Scope<'a>,
                 //disabled: "false",
                 onclick: move |_evt| {
                     let query0 = query.get();
-                    get_targets(cx, query0, &targets, &query_state);
+                    get_targets(cx, query0, targets, query_state);
                     query_state.set("getting query results".to_string());
                 },
                 "Update"

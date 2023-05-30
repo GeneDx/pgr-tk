@@ -137,7 +137,7 @@ fn group_smps_by_principle_bundle_id(
         return rtn_partitions;
     }
     let mut partition = all_partitions[0].clone();
-    (1..all_partitions.len()).into_iter().for_each(|idx| {
+    (1..all_partitions.len()).for_each(|idx| {
         let p = all_partitions[idx].clone();
         let p_len = partition.len();
         let p_end = partition[p_len - 1].0 .3;
@@ -193,7 +193,7 @@ pub fn get_target_and_principal_bundle_decomposition(
     };
 
     let sub_seq = seq_db
-        .get_sub_seq(sample_name.clone(), ctg_name.clone(), q_seq_bgn, q_seq_end)
+        .get_sub_seq(sample_name, ctg_name, q_seq_bgn, q_seq_end)
         .unwrap();
 
     /*
@@ -206,7 +206,7 @@ pub fn get_target_and_principal_bundle_decomposition(
      */
 
     let query_results = seq_db.query_fragment_to_hps_from_mmap_file(
-        sub_seq.clone(),
+        sub_seq,
         0.25,
         Some(128),
         Some(128),
@@ -338,12 +338,11 @@ pub fn get_target_and_principal_bundle_decomposition(
         None
     };
 
-    let sid_ctg_src = if let Some(&ref aln_range) = aln_range.as_ref() {
+    let sid_ctg_src = if let Some(aln_range) = aln_range.as_ref() {
         aln_range
             .keys()
-            .into_iter()
             .map(|sid| {
-                let (ctg, src, _ctg_len) = seq_db.seq_info.as_ref().unwrap().get(&sid).unwrap();
+                let (ctg, src, _ctg_len) = seq_db.seq_info.as_ref().unwrap().get(sid).unwrap();
                 let src = (*src).as_ref().unwrap_or(&"N/A".to_string()).clone();
                 (*sid, ctg.clone(), src)
             })
@@ -462,7 +461,7 @@ pub fn get_target_and_principal_bundle_decomposition(
         .iter()
         .map(|(sid, sdata)| {
             let (ctg, _src, _len) = sdata;
-            let smps = sid_smps.get(&sid).unwrap();
+            let smps = sid_smps.get(sid).unwrap();
             let smp_partitions = group_smps_by_principle_bundle_id(
                 smps,
                 seq_query_spec.bundle_length_cutoff,
@@ -480,19 +479,18 @@ pub fn get_target_and_principal_bundle_decomposition(
                     let e = p[p.len() - 1].0 .3 + shmmr_spec.k;
                     let bid = p[0].1;
                     let direction = p[0].2;
-                    let is_repeat;
-                    if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
+                    let is_repeat = if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
                         repeat_count
                             .entry(*sid)
-                            .or_insert_with(|| vec![])
+                            .or_insert_with(Vec::new)
                             .push(e - b - shmmr_spec.k);
-                        is_repeat = "R";
+                        "R"
                     } else {
                         non_repeat_count
                             .entry(*sid)
-                            .or_insert_with(|| vec![])
+                            .or_insert_with(Vec::new)
                             .push(e - b - shmmr_spec.k);
-                        is_repeat = "U";
+                        "U"
                     };
                     PrincipalBundleBedRecord {
                         ctg: ctg.clone(),
@@ -520,15 +518,15 @@ pub fn get_target_and_principal_bundle_decomposition(
 }
 
 pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
-    let mut target_lenths = targets
+    let mut target_lengths = targets
         .match_summary
         .iter()
         .flat_map(|v| v.1.iter().map(|v| v.t_end - v.t_bgn).collect::<Vec<u32>>())
         .collect::<Vec<u32>>();
 
-    target_lenths.sort();
-    let max_length = target_lenths
-        .get(target_lenths.len() - 1 )
+    target_lengths.sort();
+    let max_length = target_lengths
+        .last()
         .unwrap_or(&200000);
 
 
@@ -542,7 +540,7 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
         } else {
             "NA".to_string()
         };
-        (ctg.clone(), ctg.clone(), b_segements)
+        (ctg.clone(), ctg, b_segements)
     });
 
     let track_scaling = 1.0;
@@ -557,7 +555,7 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
     let annotation_panel_width = 800.0;
     let tree_width = 0.0;
     let h_factor = 1.5;
-    let scaling_factor = track_panel_width as f32 / (track_range + 2.0 * left_padding) as f32;
+    let scaling_factor = track_panel_width as f32 / (track_range + 2.0 * left_padding);
     let delta_y = 16.0_f32 * track_scaling;
 
     let mut bundle_class_styles = FxHashMap::<String, String>::default();
@@ -581,19 +579,19 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
                         (bgn, end) = (end, bgn);
                     }
 
-                    let arror_end = end as f32;
+                    let arror_end = end;
                     let halfwidth = 5.0 * track_scaling;
                     let end =
                         if direction == 0 {
-                            if end as f32 - halfwidth < bgn {
+                            if end - halfwidth < bgn {
                                 bgn
                             } else {
-                                end as f32 - halfwidth
+                                end - halfwidth
                             }
-                        } else if end as f32 + halfwidth > bgn {
+                        } else if end + halfwidth > bgn {
                             bgn
                         } else {
-                            end as f32 + halfwidth
+                            end + halfwidth
                         };
 
                     let bottom0 = -halfwidth * 0.6;
@@ -632,7 +630,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
                 .collect();
 
             let text = element::Text::new()
-                .set("x", 20.0 + left_padding + track_range as f32 * scaling_factor)
+                .set("x", 20.0 + left_padding + track_range * scaling_factor)
                 .set("y", y_offset + 2.0)
                 .set("font-size", "10px")
                 .set("font-family", "monospace")
@@ -685,11 +683,11 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
         tick_interval
     } else {
         let mut tick_interval = 1_usize;
-        let mut tmp = track_range as f32;
-        tmp = tmp * 0.1;
+        let mut tmp = track_range;
+        tmp *= 0.1;
         while tmp > 1.01 {
             tick_interval *= 10;
-            tmp = tmp * 0.1;
+            tmp *= 0.1;
         }
         tick_interval
     };
