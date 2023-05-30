@@ -43,7 +43,7 @@ pub fn naive_dbg_consensus(
         });
         *kmer_count.entry(kidx0).or_insert(0) += 1;
         let mut kidx1 = 0;
-        (1..seq.len() - kmer_size + 1).into_iter().for_each(|p| {
+        (1..seq.len() - kmer_size + 1).for_each(|p| {
             let kmer1 = seq[p..p + kmer_size].to_vec();
             kidx1 = *kmer_idx.entry(kmer1.clone()).or_insert_with(|| {
                 let m = kmer_max_idx;
@@ -93,7 +93,6 @@ pub fn naive_dbg_consensus(
 
         let mut tgt_rev_path = FxHashMap::<usize, Option<usize>>::default();
         (0..tgt_seq.len() - kmer_size + 1)
-            .into_iter()
             .for_each(|p| {
                 if p != 0 {
                     let kmer0 = tgt_seq[p..p + kmer_size].to_vec();
@@ -169,7 +168,6 @@ pub fn shmmr_dbg_consensus(
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let seqs = (0..seqs.len())
-        .into_iter()
         .map(|sid| {
             (
                 sid as u32,
@@ -289,7 +287,6 @@ pub fn guided_shmmr_dbg_consensus(
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let seqs = (0..seqs.len())
-        .into_iter()
         .map(|sid| {
             (
                 sid as u32,
@@ -495,7 +492,6 @@ pub fn shmmr_sparse_aln_consensus(
     assert!(shmmr_spec.min_span == 0); // if min_span != 0, we don't get consistent path
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let seqs = (0..seqs.len())
-        .into_iter()
         .map(|sid| {
             (
                 sid as u32,
@@ -581,14 +577,14 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             if p_region.is_none() {
                 p_region = Some((r, c));
                 seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                (r.0..r.1).into_iter().for_each(|_| {
+                (r.0..r.1).for_each(|_| {
                     cov.push(c);
                 });
             } else {
                 // println!("DBG R PR : {:?} {:?}", r, p_region);
                 if r.0 == p_region.unwrap().0 .1 {
                     seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                    (r.0..r.1).into_iter().for_each(|_| {
+                    (r.0..r.1).for_each(|_| {
                         cov.push(c);
                     });
                 } else {
@@ -646,11 +642,10 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
 
                     if patch_cov >= min_cov {
                         (0..patch_seq.len())
-                            .into_iter()
                             .for_each(|_| cov.push(patch_cov));
                         seq.extend(patch_seq);
                         seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                        (r.0..r.1).into_iter().for_each(|_| {
+                        (r.0..r.1).for_each(|_| {
                             cov.push(c);
                         });
                     } else {
@@ -659,7 +654,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
                         cov.clear();
                         // seq.extend(s0);
                         seq.extend(seq0[r.0 as usize..r.1 as usize].to_vec());
-                        (r.0..r.1).into_iter().for_each(|_| {
+                        (r.0..r.1).for_each(|_| {
                             cov.push(c);
                         });
                     }
@@ -707,7 +702,6 @@ mod test {
         let mut sdb = CompactSeqDB::new(spec);
         let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
         let seqs = (0..sdb.seqs.len())
-            .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
             .collect::<Vec<Vec<u8>>>();
 
@@ -727,7 +721,6 @@ mod test {
         let mut sdb = CompactSeqDB::new(spec);
         let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test3.fa".to_string());
         let seqs = (0..sdb.seqs.len())
-            .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
             .collect::<Vec<Vec<u8>>>();
 
@@ -750,7 +743,6 @@ mod test {
         let mut sdb = CompactSeqDB::new(spec);
         let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test.fa".to_string());
         let seqs = (0..sdb.seqs.len())
-            .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
             .collect::<Vec<Vec<u8>>>();
 
@@ -771,7 +763,6 @@ mod test {
         let mut sdb = CompactSeqDB::new(spec);
         let _ = sdb.load_seqs_from_fastx("test/test_data/consensus_test5.fa".to_string());
         let seqs = (0..sdb.seqs.len())
-            .into_iter()
             .map(|sid| sdb.get_seq_by_id(sid as u32))
             .collect::<Vec<Vec<u8>>>();
 

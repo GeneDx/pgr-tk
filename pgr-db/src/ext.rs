@@ -111,7 +111,6 @@ impl SeqIndexDB {
         let midx_file = BufReader::new(File::open(prefix + ".midx")?);
         midx_file
             .lines()
-            .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
                 let mut line = line.as_str().split('\t');
@@ -488,7 +487,7 @@ impl SeqIndexDB {
         keeps: Option<Vec<u32>>,
     ) -> PrincipalBundles {
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize, keeps);
+            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
 
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
                 .0
@@ -592,7 +591,6 @@ impl SeqIndexDB {
 
         // determine the bundles' overall orders and directions by consensus voting
         let mut bundle_mean_order_direction = (0..pb.len())
-            .into_iter()
             .map(|bid| {
                 if let Some(orders) = bundle_id_to_orders.get(&bid) {
                     let sum: f32 = orders.iter().sum();
@@ -692,7 +690,6 @@ impl SeqIndexDB {
                 .as_ref()
                 .unwrap()
                 .keys()
-                .into_iter()
                 .copied()
                 .collect::<Vec<u32>>()
                 .into_par_iter()

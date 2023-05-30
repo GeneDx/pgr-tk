@@ -21,7 +21,7 @@ pub fn sparse_aln(
     v_s.insert(first_hp, first_hp.0 .1 as f32 - first_hp.0 .0 as f32); // the score of the first node is just its length
     best_pre_v.insert(first_hp, None);
 
-    (1..sp_hits.len()).into_iter().for_each(|i| {
+    (1..sp_hits.len()).for_each(|i| {
         let hp = sp_hits[i];
         let mut best_v = Option::<HitPair>::None;
         let mut best_s = 0_f32;
@@ -39,7 +39,7 @@ pub fn sparse_aln(
             }; // don't connect node with the same left coordinate
             span_set.insert(pre_hp.0);
             let p_s = v_s.get(&pre_hp).unwrap_or(&0_f32);
-            let mut s: f32 = *p_s as f32 + (hp.0 .1 as f32 - hp.0 .0 as f32);
+            let mut s: f32 = *p_s + (hp.0 .1 as f32 - hp.0 .0 as f32);
 
             if hp.0 .2 == hp.1 .2 {
                 // same orientation
@@ -209,7 +209,7 @@ fn sparse_aln_test() {
     use std::io::{BufRead, BufReader};
     let f = BufReader::new(File::open("./test/test_data/test_hits").unwrap());
     let mut hp = Vec::<HitPair>::new();
-    f.lines().into_iter().for_each(|s| {
+    f.lines().for_each(|s| {
         if let Ok(s) = s {
             let s = s.split_ascii_whitespace();
             let out = s

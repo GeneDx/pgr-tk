@@ -155,7 +155,7 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file = BufReader::new(File::open(bed_file_path).expect("can't open the bed file"));
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
-    bed_file.lines().into_iter().for_each(|line| {
+    bed_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return;

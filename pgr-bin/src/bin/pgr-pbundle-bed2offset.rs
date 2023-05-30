@@ -154,7 +154,7 @@ fn align_bundles(
         aln_path.push((
             qq_idx,
             tt_idx,
-            aln_type.clone(),
+            *aln_type,
             q_bundles[qq_idx].bundle_id,
             t_bundles[tt_idx].bundle_id,
             *score,
@@ -176,7 +176,7 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file = BufReader::new(File::open(bed_file_path).expect("can't open the bed file"));
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
-    bed_file.lines().into_iter().for_each(|line| {
+    bed_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return;
@@ -215,7 +215,7 @@ fn main() -> Result<(), std::io::Error> {
         let ctg_of_interest_file = BufReader::new(File::open(path)?);
         let ctg_data_vec: Vec<_> = ctg_of_interest_file
             .lines()
-            .map(|line| {
+            .filter_map(|line| {
                 let line = line.unwrap().trim().to_string();
                 if line.is_empty() {
                     return None;
@@ -241,12 +241,11 @@ fn main() -> Result<(), std::io::Error> {
                     Some((ctg, "".to_string(), data))
                 }
             })
-            .flatten()
             .collect();
         ctg_data_vec
     } else {
         let mut ctg_data_vec = ctg_data.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
-        ctg_data.keys().into_iter().for_each(|ctg| {
+        ctg_data.keys().for_each(|ctg| {
             ctg_to_annotation.insert(ctg.clone(), ctg.clone());
         });
         ctg_data_vec.sort();
@@ -306,12 +305,10 @@ fn main() -> Result<(), std::io::Error> {
             } else {
                 0
             }
+        } else if let Some(anchor_point) = best_anchor_point {
+            bundles0[anchor_point.0].bgn
         } else {
-            if let Some(anchor_point) = best_anchor_point {
-                bundles0[anchor_point.0].bgn
-            } else {
-                0
-            }
+            0
         };
         let b1 = if args.alt_anchoring_mode {
             if let Some(anchor_point) = best_single_match_anchor_point {
@@ -319,12 +316,10 @@ fn main() -> Result<(), std::io::Error> {
             } else {
                 0
             }
+        } else if let Some(anchor_point) = best_anchor_point {
+            bundles1[anchor_point.1].bgn
         } else {
-            if let Some(anchor_point) = best_anchor_point {
-                bundles1[anchor_point.1].bgn
-            } else {
-                0
-            }
+            0
         };
         let offset = b1 as i64 - b0 as i64;
         //println!("XXX {} {} {} {:?} {:?}", best_score, best_anchor_point.0, best_anchor_point.1, bundles0[best_anchor_point.0], bundles1[best_anchor_point.1]);

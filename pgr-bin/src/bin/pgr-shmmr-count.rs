@@ -181,7 +181,7 @@ fn main() -> Result<(), std::io::Error> {
             .for_each(|(counts, locations)| {
                 counts.for_each(|(k, v)| {
                     let mut e = shmmr_count.entry(k).or_default();
-                    (*e).0 += v;
+                    e.0 += v;
                 });
                 ref_shmmr_location.extend(locations);
             });

@@ -147,7 +147,7 @@ fn align_bundles(
         aln_path.push((
             qq_idx,
             tt_idx,
-            aln_type.clone(),
+            *aln_type,
             q_bundles[qq_idx].bundle_id,
             t_bundles[tt_idx].bundle_id,
             diff_len_delta,
@@ -170,7 +170,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let bed_file = BufReader::new(File::open(bed_file_path).expect("can't open the bed file"));
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
-    bed_file.lines().into_iter().for_each(|line| {
+    bed_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return;
@@ -205,7 +205,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
     let aln_spec = path::Path::new(&args.aln_spec);
     let spec_file = BufReader::new(File::open(aln_spec).expect("can't open the aln_spec file"));
     let mut ctg_of_interests = Vec::<String>::new();
-    spec_file.lines().into_iter().for_each(|line| {
+    spec_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         ctg_of_interests.push(line);
     });
@@ -215,7 +215,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
         .map(|k| {
             let v = ctg_data
                 .get(&k)
-                .expect(format!("ctg name nof found: {}", k).as_str());
+                .unwrap_or_else(|| panic!("ctg name nof found: {}", k));
             (k, v)
         })
         .collect::<Vec<_>>();
@@ -225,7 +225,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
 
     let mut alignment_paths = Vec::<_>::new();
     let ctg_idx0 = 0;
-    (1..n_ctg).into_iter().for_each(|ctg_idx1| {
+    (1..n_ctg).for_each(|ctg_idx1| {
         // the first sequence is the "target"
         let (target_ctg, target_bundles) = &ctg_data[ctg_idx0];
         let (query_ctg, query_bundles) = &ctg_data[ctg_idx1];

@@ -111,7 +111,7 @@ fn group_smps_by_principle_bundle_id(
         return rtn_partitions;
     }
     let mut partition = all_partitions[0].clone();
-    (1..all_partitions.len()).into_iter().for_each(|idx| {
+    (1..all_partitions.len()).for_each(|idx| {
         let p = all_partitions[idx].clone();
         let p_len = partition.len();
         let p_end = partition[p_len - 1].0 .3;
@@ -260,7 +260,7 @@ fn main() -> Result<(), std::io::Error> {
         decomp_seq_index_db
             .load_from_fastx(fastx_path.clone(), args.w, args.k, args.r, args.min_span)
             .unwrap_or_else(|_| panic!("can't read file {}", fastx_path));
-        decomp_fastx_path = fastx_path.clone();
+        decomp_fastx_path = fastx_path;
         decomp_seq_index_db
     };
 
@@ -383,7 +383,7 @@ fn main() -> Result<(), std::io::Error> {
 
     seq_info.iter().for_each(|(sid, sdata)| {
         let (ctg, _src, _len) = sdata;
-        let smps = sid_smps.get(&sid).unwrap();
+        let smps = sid_smps.get(sid).unwrap();
         let smp_partitions = group_smps_by_principle_bundle_id(
             smps,
             args.bundle_length_cutoff,
@@ -399,20 +399,20 @@ fn main() -> Result<(), std::io::Error> {
             let e = p[p.len() - 1].0 .3 + args.k;
             let bid = p[0].1;
             let direction = p[0].2;
-            let is_repeat;
+            let is_repeat =
             if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
                 repeat_count
                     .entry(*sid)
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(Vec::new)
                     .push(e - b - args.k);
-                is_repeat = "R";
+                "R"
             } else {
                 non_repeat_count
                     .entry(*sid)
-                    .or_insert_with(|| vec![])
+                    .or_insert_with(Vec::new)
                     .push(e - b - args.k);
-                is_repeat = "U";
-            }
+                "U"
+            };
             let _ = writeln!(
                 outpu_bed_file,
                 "{}\t{}\t{}\t{}:{}:{}:{}:{}:{}",
@@ -452,35 +452,35 @@ fn main() -> Result<(), std::io::Error> {
         let (ctg, _src, len) = sdata;
         let repeat_bundle_count = repeat_count.get(&sid).unwrap_or(&vec![]).len();
         let non_repeat_bundle_count = non_repeat_count.get(&sid).unwrap_or(&vec![]).len();
-        let repeat_sum = repeat_count
+        let repeat_sum: u32 = repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
             .iter()
-            .fold(0, |acc, x| acc + x);
-        let repeat_bundle_max = repeat_count
+            .sum();
+        let repeat_bundle_max: u32 = repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
-            .into_iter()
+            .iter()
             .fold(0, |x, &y| if x > y { x } else { y });
         let repeat_bundle_min = repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
-            .into_iter()
+            .iter()
             .fold(len, |x, &y| if x < y { x } else { y });
-        let non_repeat_sum = non_repeat_count
+        let non_repeat_sum: u32 = non_repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
-            .into_iter()
-            .fold(0, |acc, x| acc + x);
+            .iter()
+            .sum();
         let non_repeat_bundle_max = non_repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
-            .into_iter()
+            .iter()
             .fold(0, |x, &y| if x > y { x } else { y });
         let non_repeat_bundle_min = non_repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
-            .into_iter()
+            .iter()
             .fold(len, |x, &y| if x < y { x } else { y });
         let repeat_bundle_mean = if repeat_bundle_count > 0 {
             format!("{}", repeat_sum as f32 / repeat_bundle_count as f32)

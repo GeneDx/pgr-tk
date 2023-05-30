@@ -60,7 +60,7 @@ fn load_write_index_from_agcfile(
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let filelist = File::open(path)?;
 
-    BufReader::new(filelist).lines().into_iter().try_for_each(
+    BufReader::new(filelist).lines().try_for_each(
         |fp| -> Result<(), std::io::Error> {
             let fp = fp.unwrap();
             //println!("load file {}", fp);

@@ -218,7 +218,7 @@ impl CompactSeqDB {
                 source,
                 name,
                 id,
-                seq_frag_range: (seq_frags[0] as u32, seq_frags.len() as u32),
+                seq_frag_range: (seq_frags[0], seq_frags.len() as u32),
                 len: seq.len(),
             };
         }
@@ -275,7 +275,7 @@ impl CompactSeqDB {
                                     &deltas,
                                     m.end0 as usize,
                                     m.end1 as usize,
-                                    &base_frg,
+                                    base_frg,
                                     &frg,
                                 );
 
@@ -351,7 +351,7 @@ impl CompactSeqDB {
             source,
             name,
             id,
-            seq_frag_range: (seq_frags[0] as u32, seq_frags.len() as u32),
+            seq_frag_range: (seq_frags[0], seq_frags.len() as u32),
             len: seq.len(),
         }
     }
@@ -403,7 +403,7 @@ impl CompactSeqDB {
         let seq_frag_range = if seq_frags.is_empty() {
             (0, 0)
         } else {
-            (seq_frags[0] as u32, seq_frags.len() as u32)
+            (seq_frags[0], seq_frags.len() as u32)
         };
         (
             CompactSeq {
@@ -730,7 +730,7 @@ impl CompactSeqDB {
 
     pub fn get_seq(&self, seq: &CompactSeq) -> Vec<u8> {
         self.reconstruct_seq_from_frags(
-            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+            seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1
         )
     }
 
@@ -746,7 +746,7 @@ impl GetSeq for CompactSeqDB {
     fn get_seq_by_id(&self, sid: u32) -> Vec<u8> {
         let seq = self.seqs.get(sid as usize).unwrap();
         self.reconstruct_seq_from_frags(
-            (seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1).into_iter(),
+            seq.seq_frag_range.0..seq.seq_frag_range.0 + seq.seq_frag_range.1
         )
     }
 
@@ -920,7 +920,6 @@ pub fn frag_map_to_adj_list(
 
     (0..out.len() - 1)
         //.into_par_iter()
-        .into_iter()
         .flat_map(|i| {
             if let (Some(v), Some(w)) = (out[i], out[i + 1]) {
                 // println!("DBG v: {} {} {} {:?} w: {} {} {} {:?}", v.0, v.1, v.2, v.3, w.0, w.1, w.2, w.3); // XXX
@@ -940,8 +939,7 @@ pub fn frag_map_to_adj_list(
                 vec![None]
             }
         })
-        .filter(|v| v.is_some())
-        .map(|v| v.unwrap())
+        .flatten()
         .collect::<AdjList>() // seq_id, node0, node1
 }
 
@@ -972,7 +970,6 @@ pub fn generate_smp_adj_list_for_seq(
         vec![]
     } else {
         (0..res.len() - 1)
-            .into_iter()
             .flat_map(|i| {
                 let v = res[i];
                 let w = res[i + 1];
@@ -1088,7 +1085,7 @@ pub fn get_principal_bundles_from_adj_list(
 
     let long_paths = paths
         .into_iter()
-        .filter(|p| p.len() > path_len_cutoff as usize);
+        .filter(|p| p.len() > path_len_cutoff);
 
     let mut main_bundle_path_vertices = FxHashSet::<(u64, u64)>::default();
 
@@ -1265,7 +1262,7 @@ pub fn get_shmmr_matches_from_mmap_file(
     frag_map_mmap_file: &Mmap,
 ) -> Vec<(u32, u32, u32, u32, u8)> {
     if let Some(&(start, vec_len)) = frag_map_location.get(&(s0, s1)) {
-        get_fragment_signatures_from_mmap_file(&frag_map_mmap_file, start, vec_len)
+        get_fragment_signatures_from_mmap_file(frag_map_mmap_file, start, vec_len)
     } else {
         vec![]
     }
@@ -1302,10 +1299,10 @@ pub fn write_shmmr_map_file(
 
     buf.extend("mdb".to_string().into_bytes());
 
-    buf.write_u32::<LittleEndian>(shmmr_spec.w as u32)?;
-    buf.write_u32::<LittleEndian>(shmmr_spec.k as u32)?;
-    buf.write_u32::<LittleEndian>(shmmr_spec.r as u32)?;
-    buf.write_u32::<LittleEndian>(shmmr_spec.min_span as u32)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.w)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.k)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.r)?;
+    buf.write_u32::<LittleEndian>(shmmr_spec.min_span)?;
     buf.write_u32::<LittleEndian>(shmmr_spec.sketch as u32)?;
 
     buf.write_u64::<LittleEndian>(shmmr_map.len() as u64)?;
@@ -1363,7 +1360,7 @@ pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::
     let shmmr_key_len = usize::from_le_bytes(u64bytes);
     cursor += 8;
     let mut shmmr_map = ShmmrToFrags::default();
-    (0..shmmr_key_len).into_iter().for_each(|_| {
+    (0..shmmr_key_len).for_each(|_| {
         u64bytes.clone_from_slice(&buf[cursor..cursor + 8]);
         let k1 = u64::from_le_bytes(u64bytes);
         cursor += 8;
@@ -1377,7 +1374,6 @@ pub fn read_mdb_file(filepath: String) -> Result<(ShmmrSpec, ShmmrToFrags), io::
         cursor += 8;
 
         let value = (0..vec_len)
-            .into_iter()
             .map(|_| {
                 let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
 
@@ -1481,7 +1477,6 @@ pub fn get_fragment_signatures_from_mmap_file(
 ) -> Vec<FragmentSignature> {
     let mut cursor = start;
     (0..vec_len)
-        .into_iter()
         .map(|_| {
             let mut u32bytes = [0_u8; 4];
             let mut v = (0_u32, 0_u32, 0_u32, 0_u32, 0_u8);
