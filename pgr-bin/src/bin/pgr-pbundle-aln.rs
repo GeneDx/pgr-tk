@@ -254,7 +254,7 @@ fn main() -> std::result::Result<(), std::io::Error> {
         BufWriter::new(File::create(out_path).expect("can't create the bundle alignment file"));
     
     let out_json = json!(alignment_paths);
-    out_file.write(out_json.to_string().as_bytes())?;
+    out_file.write_all(out_json.to_string().as_bytes())?;
 
 
     Ok(())
