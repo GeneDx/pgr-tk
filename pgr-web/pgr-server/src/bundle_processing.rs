@@ -580,24 +580,24 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
                     }
 
                     let arror_end = end;
-                    let halfwidth = 5.0 * track_scaling;
+                    let half_width = 5.0 * track_scaling;
                     let end =
                         if direction == 0 {
-                            if end - halfwidth < bgn {
+                            if end - half_width < bgn {
                                 bgn
                             } else {
-                                end - halfwidth
+                                end - half_width
                             }
-                        } else if end + halfwidth > bgn {
+                        } else if end + half_width > bgn {
                             bgn
                         } else {
-                            end + halfwidth
+                            end + half_width
                         };
 
-                    let bottom0 = -halfwidth * 0.6;
-                    let top0 = halfwidth * 0.6;
-                    let bottom1 = -halfwidth * 0.8;
-                    let top1 = halfwidth * 0.8;
+                    let bottom0 = -half_width * 0.6;
+                    let top0 = half_width * 0.6;
+                    let bottom1 = -half_width * 0.8;
+                    let top1 = half_width * 0.8;
                     let center = 0 as f32;
 
                     let bundle_class = format!("bundle_{bundle_id:05}");
