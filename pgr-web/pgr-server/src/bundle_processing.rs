@@ -196,14 +196,12 @@ pub fn get_target_and_principal_bundle_decomposition(
         .get_sub_seq(sample_name, ctg_name, q_seq_bgn, q_seq_end)
         .unwrap();
 
-    /*
-    println!(
-        "DBG: sub_seq_len {:?} {} {}",
-        sub_seq.len(),
-        q_seq_bgn,
-        q_seq_end
-    );
-     */
+    // println!(
+    //     "DBG: sub_seq_len {:?} {} {}",
+    //     sub_seq.len(),
+    //     q_seq_bgn,
+    //     q_seq_end
+    // );
 
     let query_results = seq_db.query_fragment_to_hps_from_mmap_file(
         sub_seq,
