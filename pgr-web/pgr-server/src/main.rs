@@ -2,15 +2,18 @@ pub mod bundle_processing;
 
 use axum::{
     body::{boxed, Body},
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::Query,
     http::{Response, StatusCode},
+    response,
     response::Html,
     routing::{get, post},
     Json, Router,
 };
+use bundle_processing::*;
 use clap::Parser;
 use pgr_db::ext::*;
-use bundle_processing::*;
+use rustc_hash::FxHashMap;
 use std::net::SocketAddr;
 use std::{
     net::{IpAddr, Ipv6Addr},
@@ -41,7 +44,7 @@ struct Opt {
     #[clap(long = "static-dir", default_value = "./dist")]
     static_dir: String,
 
-    /// set data_path_prefix 
+    /// set data_path_prefix
     #[clap(
         short = 'd',
         long = "data-path-prefix",
@@ -102,6 +105,7 @@ async fn main() {
                 move |params| get_html_by_query(params, seq_db)
             }),
         )
+        .route("/ws", get(ws_handler))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -201,4 +205,50 @@ async fn get_html_by_query(
     let output = pb_data_to_html_string(&data.unwrap());
 
     Html(output)
+}
+
+async fn ws_handler(ws: WebSocketUpgrade) -> response::Response {
+    ws.on_upgrade(ws_handle_socket)
+}
+
+use std::cell::OnceCell;
+static ROI_JSON: &str = include_str!("ROIs.json");
+
+async fn ws_handle_socket(mut socket: WebSocket) {
+    let ROI: OnceCell<FxHashMap<String, SequenceQuerySpec>> = OnceCell::new();
+    let _ = ROI.set(serde_json::from_str(ROI_JSON).unwrap());
+
+    while let Some(msg) = socket.recv().await {
+        let msg = if let Ok(msg) = msg {
+            println!("WS msg: {:?}", msg);
+            if let axum::extract::ws::Message::Text(msg) = msg {
+                if !msg.is_empty() {
+                    let roi = ROI.get().unwrap();
+                    let keys = roi.keys();
+                    let mut keys = keys.filter(|&s| (*s).starts_with(&msg)).collect::<Vec<_>>();
+                    keys.sort();
+                    let json = serde_json::to_string(
+                        &keys
+                            .iter()
+                            .map(|&k| ((*k).clone(), roi.get(k).unwrap().clone()))
+                            .collect::<FxHashMap<_, _>>(),
+                    )
+                    .unwrap();
+                    axum::extract::ws::Message::Text(json)
+                } else {
+                    axum::extract::ws::Message::Text("{}".to_string())
+                }
+            } else {
+                axum::extract::ws::Message::Text("{}".to_string())
+            }
+        } else {
+            // client disconnected
+            return;
+        };
+
+        if socket.send(msg).await.is_err() {
+            // client disconnected
+            return;
+        }
+    }
 }

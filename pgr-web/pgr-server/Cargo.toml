@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = "0.5.13"
+axum = { version="0.5.13", features = ["ws"] }
 tokio = { version = "1.0", features = ["full"] }
 pgr-db = { path = "../../pgr-db/", default-features = false}
 rustc-hash = "1.1.0"
