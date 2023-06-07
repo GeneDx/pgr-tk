@@ -488,7 +488,9 @@ impl SeqIndexDB {
     ) -> PrincipalBundles {
         if let Some(frag_map) = self.get_shmmr_map_internal() {
             let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
-
+            if adj_list.is_empty() {
+                return vec![];
+            } 
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
                 .0
                 .into_iter()
