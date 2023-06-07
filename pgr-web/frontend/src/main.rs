@@ -5,6 +5,7 @@ use futures_lite::stream::StreamExt;
 use futures_util::sink::SinkExt;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::JsCast;
 use std::collections::HashMap;
 use itertools::Itertools;
 use {pharos::*, wasm_bindgen::UnwrapThrowExt, ws_stream_wasm::*};
@@ -191,8 +192,9 @@ fn query_preset<'a>(
                     autocomplete: "on",
                     class: "form-select appearance-none  w-full px-3 py-1.5 focus:text-gray-700 focus:bg-white focus:border-blue-600 focus:outline-none",
                     oninput: |evt| {
-                        selected_label.set(evt.value.clone());
                         get_preset_list(cx, &evt.value.clone(), rois);
+                        selected_label.set(evt.value.clone());
+       
                     },
                 }
                 data_list { rois: rois }
@@ -209,7 +211,7 @@ fn data_list<'a>(
 ) -> Element<'a> {
     let rois = rois.to_owned();
     cx.render(
-        rsx! {
+        rsx! {div { id: "query_candidates0",
             datalist { id: "query_candidates",
                 rois.get().iter().map(|(k, _)| k).sorted().map(|k|
                 {
@@ -221,6 +223,7 @@ fn data_list<'a>(
                     }
                 })
             }
+        }
         }
     )
     // cx.render( 
@@ -248,8 +251,16 @@ fn get_preset_list<'a, T>(cx: Scope<'a, T>, message: &'a str, rois: &'a UseState
         if let WsMessage::Text(result) = result.clone() {
             rois.set(serde_json::from_str(&result[..]).unwrap());
         }
-        log::debug!("WS res: {:?}", result);
-        //assert_eq!(WsErr::ConnectionNotOpen, res.unwrap_err());
+
+        // let window = web_sys::window().expect("global window does not exists");    
+		// let document = window.document().expect("expecting a document on window");
+		// let val = document.get_element_by_id("ROI_selector")
+		// .unwrap()
+		// .dyn_into::<web_sys::HtmlElement>()
+		// .unwrap();
+        // let h = val.offset_height();
+        //  log::debug!("WS res: {} {:?}", h, result);
+        // . assert_eq!(WsErr::ConnectionNotOpen, res.unwrap_err());
     });
 }
 
