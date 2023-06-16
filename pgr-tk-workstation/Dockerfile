@@ -42,9 +42,9 @@ RUN apt-get update
 RUN apt-get install -y libc6 libstdc++6
 RUN ln -sf /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /opt/conda/bin/../lib/libstdc++.so.6
 
-COPY pgrtk-0.4.0-cp310-cp310-linux_x86_64.whl /tmp
-RUN pip install /tmp/pgrtk-0.4.0-cp310-cp310-linux_x86_64.whl
-RUN rm /tmp/pgrtk-0.4.0-cp310-cp310-linux_x86_64.whl
+COPY pgrtk-0.5.1-cp310-cp310-linux_x86_64.whl /tmp
+RUN pip install /tmp/pgrtk-0.5.1-cp310-cp310-linux_x86_64.whl
+RUN rm /tmp/pgrtk-0.5.1-cp310-cp310-linux_x86_64.whl
 RUN mkdir -p /opt/bin/ /wd/
 COPY jupyterlab.sh /opt/bin/
 CMD /bin/bash /opt/bin/jupyterlab.sh
