@@ -114,7 +114,7 @@ fn main() -> Result<(), std::io::Error> {
         let stderr = io::stderr();
         let mut handle = stderr.lock();
         let _ = handle.write_all(
-            b"the option `--fastx_file` is specified, read the input file as a file file.\n",
+            b"the option `--fastx_file` is specified, read the input file as a fastx file.\n",
         );
         let _ =
             seq_index_db.load_from_fastx(args.pgr_db_prefix, args.w, args.k, args.r, args.min_span);
