@@ -323,23 +323,22 @@ fn main() -> Result<(), std::io::Error> {
                     writeln!(
                         hit_file,
                         "#{}",
-                        [
-                            "out_seq_name",
+                        [   "idx",
+                            "q_ctg_name",
+                            "q_ctg_bgn",
+                            "q_ctg_end",
+                            "q_ctg_len",
+                            "aln_anchor_count",
+                            "src",
+                            "ctg",
                             "ctg_bgn",
                             "ctg_end",
-                            "color",
-                            "q_name",
                             "orientation",
-                            "idx",
-                            "q_idx",
-                            "query_bgn",
-                            "query_end",
-                            "q_len",
-                            "aln_anchor_count",
+                            "ctg_name"
                         ]
                         .join("\t")
                     )
-                    .expect("writing bed summary fail\n");
+                    .expect("writing hit summary fail\n");
                 };
                 aln_range.into_iter().for_each(|(sid, rgns)| {
                     let (ctg, src, _ctg_len) =
