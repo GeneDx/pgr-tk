@@ -2,7 +2,9 @@ import gzip
 import json
 
 
-gene2query = {}
+#gene2query = {}
+gene2query = json.loads(open("ROIs_examples.json").read())
+## we need the file of the coordinate of genes from https://s3.amazonaws.com/igv.org.genomes/hg38/ncbiRefSeq.sorted.txt.gz
 with gzip.open("ncbiRefSeq.sorted.txt.gz") as f:
     for row in f:
         row = row.decode("utf-8")
