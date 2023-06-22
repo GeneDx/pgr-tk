@@ -11,14 +11,14 @@ use std::{fs::File, path};
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// the path to the pricipal bundle bed file
+    /// the path to the principal bundle bed file
     bed_file_path: String,
     /// the prefix of the output file
     output_prefix: String,
     /// the path the annotation files
     #[clap(long)]
     ctgs_of_interest: Option<String>,
-    /// specify the bundle to anchor on
+    /// use alternate anchoring method 
     #[clap(long, default_value_t = false)]
     alt_anchoring_mode: bool,
 }
@@ -226,7 +226,7 @@ fn main() -> Result<(), std::io::Error> {
                 let mut ctg_annotation = line.split('\t');
                 let ctg = ctg_annotation
                     .next()
-                    .expect("error parsthe ctgs_of_interest file")
+                    .expect("error parsing the ctgs_of_interest file")
                     .to_string();
 
                 // println!("{:?} {:?}", line, ctg);
@@ -261,7 +261,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut out_file =
         BufWriter::new(File::create(out_path).expect("can't create the bundle offset file"));
 
-    let (ctg1, _anootation, bundles1) = &ctg_data_vec[0];
+    let (ctg1, _anotation, bundles1) = &ctg_data_vec[0];
     let _ = writeln!(out_file, "{}\t{}", ctg1, 0);
     (1..n_ctg).for_each(|ctg_idx| {
         let (ctg0, _annotation, bundles0) = &ctg_data_vec[ctg_idx];
