@@ -1,6 +1,6 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
-use pgr_bin::SeqIndexDB;
+use pgr_db::ext::SeqIndexDB;
 use pgr_db::fasta_io;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
@@ -15,7 +15,7 @@ struct CmdOptions {
     /// the prefix to a PGR-TK sequence database
     pgr_db_prefix: String,
 
-    /// using the frg format for the sequence database (default to the AGC backend databse if not specified)
+    /// using the frg format for the sequence database (default to the AGC backend database if not specified)
     #[clap(long, default_value_t = false)]
     frg_file: bool,
 
@@ -37,10 +37,18 @@ fn main() -> Result<(), std::io::Error> {
     let args = CmdOptions::parse();
 
     let mut seq_index_db = SeqIndexDB::new();
+
+    #[cfg(feature = "with_agc")]
     if args.frg_file {
         let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
     } else {
         let _ = seq_index_db.load_from_agc_index(args.pgr_db_prefix);
+    }
+    #[cfg(not(feature = "with_agc"))]
+    if args.frg_file {
+        let _ = seq_index_db.load_from_frg_index(args.pgr_db_prefix);
+    } else {
+        panic!("This command is compiled with only frg file support, please specify `--frg-file");
     }
 
     if args.list {
@@ -74,14 +82,14 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out = if args.output_file.is_some() {
         let f = BufWriter::new(
-            File::create(args.output_file.clone().unwrap()).expect("can't open the ouptfile"),
+            File::create(args.output_file.unwrap()).expect("can't open the ouptfile"),
         );
         Box::new(f) as Box<dyn Write>
     } else {
         Box::new(io::stdout())
     };
-    
-    region_file.lines().into_iter().for_each(|line| {
+
+    region_file.lines().for_each(|line| {
         let line = line.expect("fail to get a line in the region file");
         let fields = line.split('\t').collect::<Vec<&str>>();
         let label = fields[0].to_string();

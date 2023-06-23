@@ -1,13 +1,13 @@
 [package]
 name = "pgr-bin"
-version = "0.4.0"
+version = "0.5.1"
 edition = "2021"
 authors = ["Jason Chin <cschin@infoecho.net>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pgr-db = {path = "../pgr-db"}
+pgr-db = {path = "../pgr-db", default-features = false }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
 log = { version = "^0.4.5", features = ["std"] }
 clap = { version = "4.0.30", features = ["derive"] }
@@ -16,3 +16,11 @@ rayon = "1.5.2"
 regex = "1"
 svg = "*"
 kodama = "0.2.3"
+memmap2 = "0.5.10"
+bincode = { version = "2.0.0-rc.1", features = ["alloc"] }
+serde_json = "1.0.96"
+serde = "1.0.163"
+
+[features]
+default = ["with_agc"]
+with_agc = ["pgr-db/with_agc"]

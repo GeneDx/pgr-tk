@@ -1,16 +1,18 @@
 pub const VERSION_STRING: &str = env!("VERSION_STRING");
 
+#[cfg(feature = "with_agc")]
 pub mod agc_io;
 pub mod aln;
 pub mod bindings;
 pub mod ec;
 pub mod fasta_io;
 pub mod frag_file_io;
-pub mod gff_db;
+//pub mod gff_db;
 pub mod graph_utils;
 pub mod kmer_filter;
 pub mod seq_db;
-pub mod seqs2variants;
+//pub mod seqs2variants;
+pub mod ext;
 pub mod shmmrutils;
 
 #[cfg(test)]
@@ -27,7 +29,7 @@ mod tests {
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
         let filepath = "test/test_data/test_seqs.fa";
-        let file = File::open(filepath.to_string()).unwrap();
+        let file = File::open(filepath).unwrap();
         let mut reader = BufReader::new(file);
         let mut is_gzfile = false;
         {
@@ -41,20 +43,20 @@ mod tests {
         }
         drop(reader);
 
-        let file = File::open(&filepath).unwrap();
+        let file = File::open(filepath).unwrap();
         let mut reader = BufReader::new(file);
-        let gz_buf = &mut BufReader::new(MultiGzDecoder::new(&mut reader));
+        let mut gz_buf = BufReader::new(MultiGzDecoder::new(&mut reader));
 
-        let file = File::open(&filepath).unwrap();
+        let file = File::open(filepath).unwrap();
         let reader = BufReader::new(file);
-        let std_buf = &mut BufReader::new(reader);
+        let mut std_buf = BufReader::new(reader);
 
         let fastx_buf: &mut dyn BufRead = if is_gzfile {
             drop(std_buf);
-            gz_buf
+            &mut gz_buf
         } else {
             drop(gz_buf);
-            std_buf
+            &mut std_buf
         };
 
         let mut fastx_reader =
@@ -113,9 +115,10 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
+            let aln_segs =
+                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
-            if frg != re_seq || true {
+            if frg != re_seq {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
@@ -142,9 +145,10 @@ mod tests {
         let m = match_reads(&base_frg, &frg, true, 0.1, 0, 0, 32);
         if let Some(m) = m {
             let deltas: Vec<DeltaPoint> = m.deltas.unwrap();
-            let aln_segs = deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
+            let aln_segs =
+                deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
-            if frg != re_seq || true {
+            if frg != re_seq {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
@@ -171,11 +175,12 @@ mod tests {
         let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec, false);
         let shmmr0 = shmmr0.iter().map(|m| m.hash()).collect::<Vec<u64>>();
         let shmmr1 = shmmr1.iter().rev().map(|m| m.hash()).collect::<Vec<u64>>();
-        assert!(shmmr0.len() > 0);
+        assert!(!shmmr0.is_empty());
         assert_eq!(shmmr0, shmmr1);
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn raw_agc_test() {
         use crate::bindings::{
             agc_get_ctg_len, agc_get_ctg_seq, agc_list_ctg, agc_list_sample, agc_n_ctg,
@@ -226,6 +231,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn act_io_test() -> Result<(), Box<dyn std::error::Error>> {
         use crate::agc_io::AGCFile;
 
@@ -253,9 +259,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn query_frag_test() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
-        use seq_db::query_fragment;
+        use seq_db::raw_query_fragment;
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
 
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
@@ -265,7 +272,7 @@ mod tests {
         let mut agc_iter = agcfile.into_iter();
         let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
-        let r_frags = query_fragment(&sdb.frag_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
+        let r_frags = raw_query_fragment(&sdb.frag_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];
         for res in r_frags {
             for v in res.2 {
@@ -282,13 +289,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn test_shmmrmap_read_write() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
-        use seq_db::{query_fragment, read_mdb_file, write_shmr_map_file};
+        use seq_db::{raw_query_fragment, read_mdb_file, write_shmmr_map_file};
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
         let mut sdb = seq_db::CompactSeqDB::new(seq_db::SHMMRSPEC);
         let _ = sdb.load_index_from_agcfile(agcfile);
-        write_shmr_map_file(
+        write_shmmr_map_file(
             &sdb.shmmr_spec,
             &sdb.frag_map,
             "test/test_data/test_shmmr.db".to_string(),
@@ -300,7 +308,7 @@ mod tests {
         let mut agc_iter = agcfile.into_iter();
         let seq = agc_iter.next();
         let shmmr_spec = crate::seq_db::SHMMRSPEC;
-        let r_frags = query_fragment(&new_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
+        let r_frags = raw_query_fragment(&new_map, &seq.unwrap().unwrap().seq, &shmmr_spec);
         let mut out = vec![];
         for res in r_frags {
             for v in res.2 {
@@ -316,6 +324,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "with_agc")]
     fn test_frag_map_to_adj_list() -> Result<(), std::io::Error> {
         use crate::agc_io::AGCFile;
         let agcfile = AGCFile::new(String::from("test/test_data/test.agc"))?;
@@ -355,9 +364,10 @@ mod tests {
 
     #[test]
     fn test_open_compact_seq_db_storage() {
+        use crate::frag_file_io::CompactSeqFragFileStorage;
         use seq_db::GetSeq;
-        use crate::frag_file_io::CompactSeqDBStorage;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        let seq_storage =
+            CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let seq = seq_storage.get_seq_by_id(0);
         println!("{}", String::from_utf8_lossy(&seq[..]));
         let seq = seq_storage.get_sub_seq_by_id(0, 100, 200);
@@ -366,9 +376,10 @@ mod tests {
 
     #[test]
     fn test_seq_db_storage_get_sub_read() {
-        use crate::frag_file_io::CompactSeqDBStorage;
+        use crate::frag_file_io::CompactSeqFragFileStorage;
         use seq_db::GetSeq;
-        let seq_storage = CompactSeqDBStorage::new("test/test_data/test_seqs_frag".to_string());
+        let seq_storage =
+            CompactSeqFragFileStorage::new("test/test_data/test_seqs_frag".to_string());
         let sid = 0;
 
         let seq = seq_storage.get_seq_by_id(sid);

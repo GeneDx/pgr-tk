@@ -1,15 +1,33 @@
 use flate2::bufread::MultiGzDecoder;
-use pgr_db::aln;
-use pgr_db::fasta_io::FastaReader;
-use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
-pub use pgr_db::seq_db::pair_shmmrs;
-use pgr_db::seq_db::{self, GetSeq};
-pub use pgr_db::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
-use pgr_db::{agc_io, frag_file_io};
+
+#[cfg(feature = "with_agc")]
+use memmap2::Mmap;
+
+use crate::fasta_io::FastaReader;
+use crate::frag_file_io;
+use crate::graph_utils::{AdjList, ShmmrGraphNode};
+pub use crate::seq_db::pair_shmmrs;
+use crate::seq_db::{self, raw_query_fragment, raw_query_fragment_from_mmap_midx, GetSeq};
+pub use crate::shmmrutils::{sequence_to_shmmrs, ShmmrSpec};
+use crate::{aln, frag_file_io::CompactSeqFragFileStorage};
+
+#[cfg(feature = "with_agc")]
+use crate::agc_io::{self, AGCSeqDB};
+
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+
+#[cfg(feature = "with_agc")]
+use std::io::BufRead;
+
+use std::io::{BufReader, BufWriter, Read, Write};
+
+pub type PrincipalBundles = Vec<Vec<(u64, u64, u8)>>; //shimmer pair vector
+pub type PrincipalBundlesWithId = Vec<(usize, usize, Vec<(u64, u64, u8)>)>; //vector of "bundle_id, mean_order, shimmer pair vector"
+type ShmmrPair = (u64, u64);
+type ShmmrPairAndBundleVertices = Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>; // Vector of ( sequence_id, vector of (shimmer pair, optional bundle vertex)
+pub type VertexToBundleIdMap = FxHashMap<ShmmrPair, (usize, u8, usize)>;
 
 #[allow(clippy::large_enum_variant)]
 pub enum GZFastaReader {
@@ -19,6 +37,7 @@ pub enum GZFastaReader {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Backend {
+    #[cfg(feature = "with_agc")]
     AGC,
     FRG,
     FASTX,
@@ -27,13 +46,14 @@ pub enum Backend {
 }
 
 pub struct SeqIndexDB {
-    /// Rust internal: store the specification of the shmmr specifcation
+    /// Rust internal: store the specification of the shmmr_spec
     pub shmmr_spec: Option<ShmmrSpec>,
     /// Rust internal: store the sequences
     pub seq_db: Option<seq_db::CompactSeqDB>,
+    #[cfg(feature = "with_agc")]
     /// Rust internal: store the agc file and the index
-    pub agc_db: Option<(agc_io::AGCFile, seq_db::ShmmrToFrags)>,
-    pub frg_db: Option<frag_file_io::CompactSeqDBStorage>,
+    pub agc_db: Option<AGCSeqDB>,
+    pub frg_db: Option<CompactSeqFragFileStorage>,
     /// a dictionary maps (ctg_name, source) -> (id, len)
     #[allow(clippy::type_complexity)]
     pub seq_index: Option<FxHashMap<(String, Option<String>), (u32, u32)>>,
@@ -54,6 +74,7 @@ impl SeqIndexDB {
         SeqIndexDB {
             seq_db: None,
             frg_db: None,
+            #[cfg(feature = "with_agc")]
             agc_db: None,
             shmmr_spec: None,
             seq_index: None,
@@ -62,11 +83,25 @@ impl SeqIndexDB {
         }
     }
 
+    #[cfg(feature = "with_agc")]
     pub fn load_from_agc_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
-        let (shmmr_spec, new_map) =
-            seq_db::read_mdb_file_parallel(prefix.to_string() + ".mdb").unwrap();
+        let (shmmr_spec, frag_location_map) =
+            seq_db::read_mdb_file_to_frag_locations(prefix.to_string() + ".mdb").unwrap();
+
+        let frag_location_map =
+            FxHashMap::<(u64, u64), (usize, usize)>::from_iter(frag_location_map);
+
         let agc_file = agc_io::AGCFile::new(prefix.to_string() + ".agc")?;
-        self.agc_db = Some((agc_file, new_map));
+
+        let fmap_file = File::open(prefix.clone() + ".mdb").expect("frag map file open fail");
+        let frag_map_file =
+            unsafe { Mmap::map(&fmap_file).expect("frag map file memory map creation fail") };
+
+        self.agc_db = Some(agc_io::AGCSeqDB {
+            agc_file,
+            frag_location_map,
+            frag_map_file,
+        });
         self.backend = Backend::AGC;
         self.shmmr_spec = Some(shmmr_spec);
 
@@ -76,7 +111,6 @@ impl SeqIndexDB {
         let midx_file = BufReader::new(File::open(prefix + ".midx")?);
         midx_file
             .lines()
-            .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
                 let mut line = line.as_str().split('\t');
@@ -95,7 +129,7 @@ impl SeqIndexDB {
     }
 
     pub fn load_from_frg_index(&mut self, prefix: String) -> Result<(), std::io::Error> {
-        let mut frag_db = pgr_db::frag_file_io::CompactSeqDBStorage::new(prefix);
+        let mut frag_db = frag_file_io::CompactSeqFragFileStorage::new(prefix);
 
         let seq_index = frag_db.seq_index.into_iter().map(|(k, v)| (k, v)).collect();
 
@@ -149,7 +183,7 @@ impl SeqIndexDB {
     pub fn append_from_fastx(&mut self, filepath: String) -> Result<(), std::io::Error> {
         assert!(
             self.backend == Backend::FASTX,
-            "Only DB created with load_from_fastx() can add data from anothe fastx file"
+            "Only DB created with load_from_fastx() can add data from another fastx file"
         );
         let sdb = self.seq_db.as_mut().unwrap();
         sdb.load_seqs_from_fastx(filepath)?;
@@ -168,9 +202,9 @@ impl SeqIndexDB {
         if self.seq_db.is_some() {
             let internal = self.seq_db.as_ref().unwrap();
 
-            internal.write_to_frag_files(file_prefix.clone());
+            internal.write_to_frag_files(file_prefix.clone(), None);
             internal
-                .write_shmr_map_index(file_prefix)
+                .write_shmmr_map_index(file_prefix)
                 .expect("write mdb file fail");
         };
     }
@@ -218,19 +252,20 @@ impl SeqIndexDB {
     pub fn query_fragment_to_hps(
         &self,
         seq: Vec<u8>,
-        penality: f32,
+        penalty: f32,
         max_count: Option<u32>,
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
     ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
-        if let Some(shmmr_to_frags) = self.get_shmmr_map_internal() {
+        if let Some(frag_map) = self.get_shmmr_map_internal() {
+            let raw_query_hits = raw_query_fragment(frag_map, &seq, shmmr_spec);
             let res = aln::query_fragment_to_hps(
-                shmmr_to_frags,
+                raw_query_hits,
                 &seq,
                 shmmr_spec,
-                penality,
+                penalty,
                 max_count,
                 max_count_query,
                 max_count_target,
@@ -242,6 +277,62 @@ impl SeqIndexDB {
         }
     }
 
+    #[allow(clippy::type_complexity)]
+    pub fn query_fragment_to_hps_from_mmap_file(
+        &self,
+        seq: Vec<u8>,
+        penalty: f32,
+        max_count: Option<u32>,
+        max_count_query: Option<u32>,
+        max_count_target: Option<u32>,
+        max_aln_span: Option<u32>,
+    ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
+        let shmmr_spec = self.shmmr_spec.as_ref().unwrap();
+
+        #[cfg(feature = "with_agc")]
+        let (frag_location_map, frag_map_file) = if self.backend == Backend::AGC {
+            (
+                &self.agc_db.as_ref().unwrap().frag_location_map,
+                &self.agc_db.as_ref().unwrap().frag_map_file,
+            )
+        } else if self.backend == Backend::FRG {
+            (
+                &self.frg_db.as_ref().unwrap().frag_location_map,
+                &self.frg_db.as_ref().unwrap().frag_map_file,
+            )
+        } else {
+            panic!(
+                "the call query_fragment_to_hps_from_mmap_file() needs AGC or FRAG backend file"
+            );
+        };
+
+        #[cfg(not(feature = "with_agc"))]
+        let (frag_location_map, frag_map_file) = if self.backend == Backend::FRG {
+            (
+                &self.frg_db.as_ref().unwrap().frag_location_map,
+                &self.frg_db.as_ref().unwrap().frag_map_file,
+            )
+        } else {
+            panic!(
+                "the call query_fragment_to_hps_from_mmap_file() needs AGC or FRAG backend file"
+            );
+        };
+
+        let raw_query_hits =
+            raw_query_fragment_from_mmap_midx(frag_location_map, frag_map_file, &seq, shmmr_spec);
+        let res = aln::query_fragment_to_hps(
+            raw_query_hits,
+            &seq,
+            shmmr_spec,
+            penalty,
+            max_count,
+            max_count_query,
+            max_count_target,
+            max_aln_span,
+        );
+        Some(res)
+    }
+
     pub fn get_sub_seq(
         &self,
         sample_name: String,
@@ -250,14 +341,13 @@ impl SeqIndexDB {
         end: usize,
     ) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
-            Backend::AGC => {
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
-            }
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                sample_name,
+                ctg_name,
+                bgn,
+                end,
+            )),
             Backend::MEMORY | Backend::FASTX => {
                 let &(sid, _) = self
                     .seq_index
@@ -286,7 +376,7 @@ impl SeqIndexDB {
             }
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -297,11 +387,12 @@ impl SeqIndexDB {
         ctg_name: String,
     ) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => Ok(self
                 .agc_db
                 .as_ref()
                 .unwrap()
-                .0
+                .agc_file
                 .get_seq(sample_name, ctg_name)),
             Backend::MEMORY | Backend::FASTX => {
                 let &(sid, _) = self
@@ -323,13 +414,14 @@ impl SeqIndexDB {
             }
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
 
     pub fn get_seq_by_id(&self, sid: u32) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
@@ -338,7 +430,7 @@ impl SeqIndexDB {
                     .agc_db
                     .as_ref()
                     .unwrap()
-                    .0
+                    .agc_file
                     .get_seq(sample_name, ctg_name))
             }
             Backend::MEMORY | Backend::FASTX => {
@@ -347,7 +439,7 @@ impl SeqIndexDB {
             Backend::FRG => Ok(self.frg_db.as_ref().unwrap().get_seq_by_id(sid)),
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -359,16 +451,17 @@ impl SeqIndexDB {
         end: usize,
     ) -> Result<Vec<u8>, std::io::Error> {
         match self.backend {
+            #[cfg(feature = "with_agc")]
             Backend::AGC => {
                 let (ctg_name, sample_name, _) = self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
                 let ctg_name = ctg_name.clone();
                 let sample_name = sample_name.as_ref().unwrap().clone();
-                Ok(self
-                    .agc_db
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .get_sub_seq(sample_name, ctg_name, bgn, end))
+                Ok(self.agc_db.as_ref().unwrap().agc_file.get_sub_seq(
+                    sample_name,
+                    ctg_name,
+                    bgn,
+                    end,
+                ))
             }
             Backend::MEMORY | Backend::FASTX => Ok(self
                 .seq_db
@@ -382,7 +475,7 @@ impl SeqIndexDB {
                 .get_sub_seq_by_id(sid, bgn as u32, end as u32)),
             Backend::UNKNOWN => Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "feteching sequnece fail, database type in not determined",
+                "fetching sequence fail, database type in not determined",
             )),
         }
     }
@@ -392,25 +485,24 @@ impl SeqIndexDB {
         min_count: usize,
         path_len_cutoff: usize,
         keeps: Option<Vec<u32>>,
-    ) -> Vec<Vec<(u64, u64, u8)>> {
+    ) -> PrincipalBundles {
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count as usize, keeps);
-
+            let adj_list = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps);
+            if adj_list.is_empty() {
+                return vec![];
+            } 
             seq_db::get_principal_bundles_from_adj_list(frag_map, &adj_list, path_len_cutoff)
                 .0
                 .into_iter()
                 .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
-                .collect::<Vec<Vec<(u64, u64, u8)>>>()
+                .collect::<PrincipalBundles>()
         } else {
             vec![]
         }
     }
 
-    fn get_vertex_map_from_priciple_bundles(
-        &self,
-        pb: Vec<Vec<(u64, u64, u8)>>,
-    ) -> FxHashMap<(u64, u64), (usize, u8, usize)> {
-        // conut segment for filtering, some undirectional seg may have both forward and reverse in the principle bundles
+    fn get_vertex_map_from_principal_bundles(&self, pb: PrincipalBundles) -> VertexToBundleIdMap {
+        // count segment for filtering, some unidirectional seg may have both forward and reverse in the principle bundles
         // let mut seg_count = FxHashMap::<(u64, u64), usize>::default();
         // pb.iter().for_each(|bundle| {
         //    bundle.iter().for_each(|v| {
@@ -425,50 +517,43 @@ impl SeqIndexDB {
                     .enumerate()
                     //.filter(|(_, &v)| *seg_count.get(&(v.0, v.1)).unwrap_or(&0) == 1)
                     .map(|(p, v)| ((v.0, v.1), (bundle_id, v.2, p)))
-                    .collect::<Vec<((u64, u64), (usize, u8, usize))>>()
+                    .collect::<Vec<(ShmmrPair, (usize, u8, usize))>>()
             })
             .collect()
     }
 
+    fn get_smps(&self, seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
+        let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
+        seq_db::pair_shmmrs(&shmmrs)
+            .par_iter()
+            .map(|(s0, s1)| {
+                let p0 = s0.pos() + 1;
+                let p1 = s1.pos() + 1;
+                let s0 = s0.x >> 8;
+                let s1 = s1.x >> 8;
+                if s0 < s1 {
+                    (s0, s1, p0, p1, 0_u8)
+                } else {
+                    (s1, s0, p0, p1, 1_u8)
+                }
+            })
+            .collect::<Vec<(u64, u64, u32, u32, u8)>>()
+    }
+
     #[allow(clippy::type_complexity)] // TODO: Define the type for readability
-    pub fn get_principal_bundle_decomposition(
+    pub fn get_principal_bundles_with_id(
         &self,
         min_count: usize,
         path_len_cutoff: usize,
-        decomp_fasta_db: Option<&SeqIndexDB>,
         keeps: Option<Vec<u32>>,
-    ) -> (
-        Vec<(usize, usize, Vec<(u64, u64, u8)>)>,
-        Vec<(
-            u32,
-            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
-        )>,
-    ) {
-        fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
-            let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
-            seq_db::pair_shmmrs(&shmmrs)
-                .par_iter()
-                .map(|(s0, s1)| {
-                    let p0 = s0.pos() + 1;
-                    let p1 = s1.pos() + 1;
-                    let s0 = s0.x >> 8;
-                    let s1 = s1.x >> 8;
-                    if s0 < s1 {
-                        (s0, s1, p0, p1, 0_u8)
-                    } else {
-                        (s1, s0, p0, p1, 1_u8)
-                    }
-                })
-                .collect::<Vec<(u64, u64, u32, u32, u8)>>()
-        }
-
+    ) -> (PrincipalBundlesWithId, VertexToBundleIdMap) {
         let pb = self.get_principal_bundles(min_count, path_len_cutoff, keeps);
         //println!("DBG: # bundles {}", pb.len());
 
         let mut vertex_to_bundle_id_direction_pos =
-            self.get_vertex_map_from_priciple_bundles(pb.clone()); //not efficient but it is PyO3 limit now
+            self.get_vertex_map_from_principal_bundles(pb.clone()); //not efficient but it is PyO3 limit now
 
-        let mut seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
+        let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = self
             .seq_info
             .clone()
             .unwrap_or_default()
@@ -477,11 +562,10 @@ impl SeqIndexDB {
                 let (ctg_name, source, _) = data;
                 let source = source.clone().unwrap();
                 let seq = self.get_seq(source, ctg_name.clone()).unwrap();
-                (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
+                (*sid, self.get_smps(seq, &self.shmmr_spec.clone().unwrap()))
             })
             .collect();
-
-        // data for reordering the bundles and for re-ordering them along the sequnces
+        // data for reordering the bundles and for re-ordering them along the sequences
         let mut bundle_id_to_directions = FxHashMap::<usize, Vec<u32>>::default();
         let mut bundle_id_to_orders = FxHashMap::<usize, Vec<f32>>::default();
         seqid_smps.iter().for_each(|(_sid, smps)| {
@@ -509,7 +593,6 @@ impl SeqIndexDB {
 
         // determine the bundles' overall orders and directions by consensus voting
         let mut bundle_mean_order_direction = (0..pb.len())
-            .into_iter()
             .map(|bid| {
                 if let Some(orders) = bundle_id_to_orders.get(&bid) {
                     let sum: f32 = orders.iter().sum();
@@ -534,7 +617,7 @@ impl SeqIndexDB {
 
         bundle_mean_order_direction.sort();
         // re-order the principal bundles
-        let principal_bundles = bundle_mean_order_direction
+        let principal_bundles_with_id = bundle_mean_order_direction
             .iter()
             .map(|(ord, bid, direction)| {
                 let bundle = if *direction == 1 {
@@ -545,7 +628,7 @@ impl SeqIndexDB {
                         .collect::<Vec<(u64, u64, u8)>>();
                     rpb.iter().enumerate().for_each(|(p, v)| {
                         vertex_to_bundle_id_direction_pos.insert((v.0, v.1), (*bid, v.2, p));
-                        // overide what in the hashpmap
+                        // override what in the hashmap
                     });
                     rpb
                 } else {
@@ -554,42 +637,8 @@ impl SeqIndexDB {
 
                 (*bid, *ord, bundle)
             })
-            .collect::<Vec<(usize, usize, Vec<(u64, u64, u8)>)>>();
-
-        if let Some(seq_db) = decomp_fasta_db {
-            seqid_smps = seq_db
-                .seq_info
-                .clone()
-                .unwrap_or_default()
-                .iter()
-                .map(|(sid, data)| {
-                    let (ctg_name, source, _) = data;
-                    let source = source.clone().unwrap();
-                    let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
-                    (*sid, get_smps(seq, &self.shmmr_spec.clone().unwrap()))
-                })
-                .collect();
-        }
-
-        // loop through each sequnece and generate the decomposition for the sequence
-        let seqid_smps_with_bundle_id_seg_direction = seqid_smps
-            .iter()
-            .map(|(sid, smps)| {
-                let smps = smps
-                    .iter()
-                    .map(|v| {
-                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
-                        (*v, seg_match)
-                    })
-                    .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
-                (*sid, smps)
-            })
-            .collect::<Vec<(
-                u32,
-                Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
-            )>>();
-
-        (principal_bundles, seqid_smps_with_bundle_id_seg_direction)
+            .collect::<PrincipalBundlesWithId>();
+        (principal_bundles_with_id, vertex_to_bundle_id_direction_pos)
     }
 
     pub fn generate_mapg_gfa(
@@ -601,6 +650,7 @@ impl SeqIndexDB {
     ) -> Result<(), std::io::Error> {
         let get_seq_by_id = |sid| -> Vec<u8> {
             match self.backend {
+                #[cfg(feature = "with_agc")]
                 Backend::AGC => {
                     let (ctg_name, sample_name, _) =
                         self.seq_info.as_ref().unwrap().get(&sid).unwrap(); //TODO: handle Option unwrap properly
@@ -609,7 +659,7 @@ impl SeqIndexDB {
                     self.agc_db
                         .as_ref()
                         .unwrap()
-                        .0
+                        .agc_file
                         .get_seq(sample_name, ctg_name)
                 }
                 Backend::MEMORY => self.seq_db.as_ref().unwrap().get_seq_by_id(sid),
@@ -642,7 +692,6 @@ impl SeqIndexDB {
                 .as_ref()
                 .unwrap()
                 .keys()
-                .into_iter()
                 .copied()
                 .collect::<Vec<u32>>()
                 .into_par_iter()
@@ -817,13 +866,13 @@ impl SeqIndexDB {
 
         // println!("DBG: pb len {:?}, filtered_adj_list len: {:?} ", pb.len(), filtered_adj_list.len());
 
-        // TODO: we will remove this redundant converion in the future
+        // TODO: we will remove this redundant conversion in the future
         let pb = pb
             .into_iter()
             .map(|p| p.into_iter().map(|v| (v.0, v.1, v.2)).collect())
             .collect::<Vec<Vec<(u64, u64, u8)>>>();
 
-        let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_priciple_bundles(pb);
+        let vertex_to_bundle_id_direction_pos = self.get_vertex_map_from_principal_bundles(pb);
 
         filtered_adj_list.iter().for_each(|(k, v, w)| {
             if v.0 <= w.0 {
@@ -906,13 +955,55 @@ impl SeqIndexDB {
     // depending on the storage type, return the corresponded index
     pub fn get_shmmr_map_internal(&self) -> Option<&seq_db::ShmmrToFrags> {
         match self.backend {
-            Backend::AGC => Some(&self.agc_db.as_ref().unwrap().1),
+            #[cfg(feature = "with_agc")]
+            Backend::AGC => None,
             Backend::FASTX => Some(&self.seq_db.as_ref().unwrap().frag_map),
             Backend::MEMORY => Some(&self.seq_db.as_ref().unwrap().frag_map),
-            Backend::FRG => Some(&self.frg_db.as_ref().unwrap().frag_map),
+            Backend::FRG => None,
             Backend::UNKNOWN => None,
         }
     }
+}
+#[allow(clippy::type_complexity)] // TODO: Define the type for readability
+pub fn get_principal_bundle_decomposition(
+    vertex_to_bundle_id_direction_pos: &VertexToBundleIdMap,
+    seq_db: &SeqIndexDB,
+) -> Vec<(u32, ShmmrPairAndBundleVertices)> {
+    let seqid_smps: Vec<(u32, Vec<(u64, u64, u32, u32, u8)>)> = seq_db
+        .seq_info
+        .clone()
+        .unwrap_or_default()
+        .iter()
+        .map(|(sid, data)| {
+            let (ctg_name, source, _) = data;
+            let source = source.clone().unwrap();
+            let seq = seq_db.get_seq(source, ctg_name.clone()).unwrap();
+            (
+                *sid,
+                seq_db.get_smps(seq, &seq_db.shmmr_spec.clone().unwrap()),
+            )
+        })
+        .collect();
+
+    // loop through each sequence and generate the decomposition for the sequence
+    let seqid_smps_with_bundle_id_seg_direction = seqid_smps
+        .iter()
+        .map(|(sid, smps)| {
+            let smps = smps
+                .iter()
+                .map(|v| {
+                    let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
+                    (*v, seg_match)
+                })
+                .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
+            (*sid, smps)
+        })
+        .collect::<Vec<(
+            u32,
+            Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>,
+        )>>();
+
+    seqid_smps_with_bundle_id_seg_direction
 }
 
 pub fn get_fastx_reader(filepath: String) -> Result<GZFastaReader, std::io::Error> {

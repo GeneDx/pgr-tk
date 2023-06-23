@@ -40,10 +40,10 @@ impl GFFRecord {
         let type_ = fields[2].clone();
         let bgn = fields[3]
             .parse::<u32>()
-            .expect("can't parse the start coordindate");
+            .expect("can't parse the start coordinate");
         let end = fields[4]
             .parse::<u32>()
-            .expect("can't parse the end coordindate");
+            .expect("can't parse the end coordinate");
         let score = match fields[5].as_str() {
             "." => None,
             s => Some(s.parse::<f32>().expect("can't parse score")),

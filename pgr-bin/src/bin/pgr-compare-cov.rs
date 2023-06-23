@@ -3,7 +3,8 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 //use std::path::PathBuf;
 use clap::{self, CommandFactory, Parser};
 
-use pgr_bin::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
+use pgr_db::ext::{pair_shmmrs, sequence_to_shmmrs, SeqIndexDB, ShmmrSpec};
+use rayon::prelude::*;
 use rustc_hash::FxHashSet;
 use std::{
     fs::File,
@@ -13,7 +14,7 @@ use std::{
 
 /// Compare SHIMMER pair count in two input sequence files
 #[derive(Parser, Debug)]
-#[clap(name = "pgr-make-frgdb")]
+#[clap(name = "pgr-compare-cov")]
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
@@ -86,7 +87,7 @@ fn filter_and_group_regions(
             let end = v[v.len() - 1].1;
             let len = v.len() as f32;
             v.into_iter().for_each(|vv| {
-                s0 += vv.2 as f32;
+                s0 += vv.2;
                 s1 += vv.3 as f32;
                 s2 += vv.4 as f32;
             });
@@ -96,7 +97,7 @@ fn filter_and_group_regions(
 }
 
 fn output_cov_bed(
-    out_data: &Vec<(u32, u32, f32, usize, usize)>,
+    out_data: &[(u32, u32, f32, usize, usize)],
     ctg: String,
     threshold: f32,
     output_bed_file0: &mut BufWriter<File>,
@@ -104,7 +105,7 @@ fn output_cov_bed(
     let cov_high = out_data
         .iter()
         .filter(|&v| v.2 > threshold + 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_high = filter_and_group_regions(&cov_high, 10000, 10000);
@@ -112,7 +113,7 @@ fn output_cov_bed(
     let cov_low = out_data
         .iter()
         .filter(|&v| v.2 < threshold - 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_low = filter_and_group_regions(&cov_low, 100, 20000);
@@ -147,7 +148,6 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
     );
     input_files
         .lines()
-        .into_iter()
         .enumerate()
         .for_each(|(fid, filename)| {
             let filepath = filename
@@ -170,7 +170,6 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
     );
     input_files
         .lines()
-        .into_iter()
         .enumerate()
         .for_each(|(fid, filename)| {
             let filepath = filename
@@ -213,7 +212,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -263,7 +262,7 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -311,9 +310,17 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
 
 fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
     let mut seq_index_db = SeqIndexDB::new();
+    #[cfg(feature = "with_agc")]
     if input_type == "AGC" {
         let _ = seq_index_db.load_from_agc_index(args.agc_idx_prefix.as_ref().unwrap().clone());
     } else if input_type == "FRG" {
+        let _ = seq_index_db.load_from_frg_index(args.frg_idx_prefix.as_ref().unwrap().clone());
+    } else {
+        panic!("input type has to be specified  AGC or FRG backends")
+    };
+
+    #[cfg(not(feature = "with_agc"))]
+    if input_type == "FRG" {
         let _ = seq_index_db.load_from_frg_index(args.frg_idx_prefix.as_ref().unwrap().clone());
     } else {
         panic!("input type has to be specified  AGC or FRG backends")
@@ -326,7 +333,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         File::open(Path::new(&args.filepath0))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files.lines().into_iter().for_each(|filename| {
+    input_files.lines().for_each(|filename| {
         let filepath = filename
             .expect("can't get fastx file name")
             .trim()
@@ -339,7 +346,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         File::open(Path::new(&args.filepath1))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files.lines().into_iter().for_each(|filename| {
+    input_files.lines().for_each(|filename| {
         let filepath = filename
             .expect("can't get fastx file name")
             .trim()
@@ -391,7 +398,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -419,8 +426,8 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c0 > 0);
-                let r = c0 as f32 / c1 as f32;
-                (k.2, k.3, r, c1, c0)
+                let r = c1 as f32 / c0 as f32;
+                (k.2, k.3, r, c0, c1)
             })
             .collect::<Vec<_>>();
         output_cov_bed(
@@ -446,7 +453,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         let shmmrs = sequence_to_shmmrs(*sid, &seq, &shmmr_spec, false);
         let smps = pair_shmmrs(&shmmrs);
         let out_data = smps
-            .iter()
+            .par_iter()
             .map(|(s0, s1)| {
                 let p0 = s0.pos() + 1;
                 let p1 = s1.pos() + 1;
@@ -474,7 +481,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
                     (0, 0)
                 };
                 assert!(c1 > 0);
-                let r = c1 as f32 / c0 as f32;
+                let r = c0 as f32 / c1 as f32;
                 (k.2, k.3, r, c1, c0)
             })
             .collect::<Vec<_>>();

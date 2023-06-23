@@ -1,6 +1,6 @@
-pushd WFA2-lib
-make all
-popd
+#pushd WFA2-lib
+#make all
+#popd
 
 rustup default stable
 cargo build -p pgr-db --release

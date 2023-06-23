@@ -5,7 +5,7 @@ It includes a number modules for access the sequence data and query the sequence
 Example
 -------
 
-This shows a simple example to query the pangenomics database::
+This shows a simple example to query the pangenome database::
 
     import pgrtk
   
@@ -128,7 +128,7 @@ def u8_to_string(u8):
 
 
 def query_sdb(seq_index_db, query_seq,
-              gap_penality_factor=0.25,
+              gap_penalty_factor=0.25,
               merge_range_tol=12,
               max_count=128,
               max_query_count=128,
@@ -144,8 +144,8 @@ def query_sdb(seq_index_db, query_seq,
     query_seq : list of bytes
         a list of bytes representing the DNA sequence
 
-    gap_penality_factor : float
-        the gap penalty factor used in sparse dyanmic programming for finding the hits
+    gap_penalty_factor : float
+        the gap penalty factor used in sparse dynamic programming for finding the hits
 
     merge_range_tol : int
         a parameter used to merge the alignment ranges
@@ -180,7 +180,7 @@ def query_sdb(seq_index_db, query_seq,
     """
     r = seq_index_db.query_fragment_to_hps(
         query_seq,
-        gap_penality_factor,
+        gap_penalty_factor,
         max_count,
         max_query_count,
         max_target_count,
@@ -333,7 +333,7 @@ def get_variant_calls(aln_segs, ref_bgn, ctg_bgn, rs0, cs0, strand):
     Parameters
     ----------
     aln_segs : list of tuples
-        -  a list of tuples of "alignment segments" generate by ``pgrtk.pgrtk.get_aln_segements()``
+        -  a list of tuples of "alignment segments" generate by ``pgrtk.pgrtk.get_aln_segments()``
         -  the "alignment segments" are a list of ``(ref_loc: SeqLocus, tgt_loc: SeqLocus, align_type: AlnSegType)``. The data structures
            is defined as following Rust structs::
 
@@ -552,7 +552,7 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
     Parameters
     ----------
     len_cutoff: int
-        the length cutoff used for filtering small bundle segement
+        the length cutoff used for filtering small bundle segment
 
     merge_length: int
         the length determining if two bundles should be merged 
@@ -564,7 +564,7 @@ def group_smps_by_principle_bundle_id(smps, len_cutoff=2500, merge_length=5000):
 
         each element of the list SHIMMER is a tuple of 
         `((shimmer0, shimmer1, pos0, pos1, direction), 
-        bundle_id, direction_to_the_bundle, postion_in bundle)`
+        bundle_id, direction_to_the_bundle, position_in bundle)`
     """
 
     pbid, pdirection = None, None
