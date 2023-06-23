@@ -63,7 +63,6 @@ impl CompactSeqFragFileStorage {
         );
         midx_file
             .lines()
-            .into_iter()
             .try_for_each(|line| -> Result<(), std::io::Error> {
                 let line = line.unwrap();
                 let mut line = line.as_str().split('\t');
@@ -99,7 +98,7 @@ impl CompactSeqFragFileStorage {
             .par_iter()
             .flat_map(|&frags| {
                 let mut frag_group_cache = FxHashMap::<u32, Fragments>::default();
-                frags.into_iter().map(|frag| {
+                frags.iter().map(|frag| {
                     let mut reconstructed_seq = <Vec<u8>>::new();
                     let mut _p = 0;
                     match frag {
@@ -133,7 +132,7 @@ impl CompactSeqFragFileStorage {
                                 [*frag_id as usize % self.frag_compress_chunk_size]
                                 .clone()
                             {
-                                let mut seq = seq_db::reconstruct_seq_from_aln_segs(&base_seq, &a);
+                                let mut seq = seq_db::reconstruct_seq_from_aln_segs(&base_seq, a);
                                 if *reversed {
                                     seq = crate::fasta_io::reverse_complement(&seq);
                                 }
@@ -165,8 +164,7 @@ impl CompactSeqFragFileStorage {
                     fetch_frag_group(frag_group_id, &self.frag_addr_offsets, &self.frag_file)
                 });
 
-                let frag = frag_group[frag_id as usize % self.frag_compress_chunk_size].clone();
-                frag
+                frag_group[frag_id as usize % self.frag_compress_chunk_size].clone()
             })
             .collect::<Fragments>();
 
@@ -199,19 +197,18 @@ impl GetSeq for CompactSeqFragFileStorage {
         let mut current_chunk_bgn;
         let mut current_chunk_end = first_group_seq.len() as u32;
         let mut sub_seqs = Vec::<(u32, Vec<u8>)>::new();
-        if bgn < current_chunk_end as u32 {
+        if bgn < current_chunk_end {
             sub_seqs.push((0, first_group_seq));
         };
 
         let group_ids = (frag_group_ids[0].0..=frag_group_ids[frag_group_ids.len() - 1].0)
-            .map(|v| v)
             .collect::<Vec<u32>>();
 
         if group_ids.len() > 1 {
-            for &group_id in group_ids[1..].into_iter()  {
+            for &group_id in group_ids[1..].iter()  {
                 let (_, _, frag_seq_len) = self.frag_addr_offsets[group_id as usize];
                 current_chunk_bgn = current_chunk_end;
-                current_chunk_end = current_chunk_bgn + frag_seq_len as u32;
+                current_chunk_end = current_chunk_bgn + frag_seq_len;
                 if (current_chunk_bgn <= bgn && bgn < current_chunk_end)
                     || (current_chunk_bgn <= end && end < current_chunk_end)
                     || (bgn <= current_chunk_bgn && current_chunk_end <= end)
@@ -227,7 +224,7 @@ impl GetSeq for CompactSeqFragFileStorage {
         //println!("{:?} {} {} {} {} {}", frag_range, sid, group_ids.len(), bgn, end, end-bgn);
         let offset = (bgn - sub_seqs[0].0) as usize;
         sub_seqs.into_iter().for_each(|ss| seq.extend(ss.1));
-        return seq[offset..offset + (end - bgn) as usize].to_vec();
+        seq[offset..offset + (end - bgn) as usize].to_vec()
     }
 }
 

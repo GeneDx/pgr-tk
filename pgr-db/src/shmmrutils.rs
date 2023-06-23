@@ -390,7 +390,7 @@ pub fn reduce_shmmr(mers: Vec<MM128>, r: u32, padding: bool) -> Vec<MM128> {
         if mdist == (r - 1) as usize {
             min_mer = rbuf.get_min();
             let mut last_i = 0_usize;
-            for i in 0..rbuf.size as usize {
+            for i in 0..rbuf.size {
                 let mm = rbuf.get(i);
                 if mm.x == min_mer.x {
                     shmmrs.push(mm);
@@ -452,7 +452,7 @@ pub fn sequence_to_shmmrs1(
         y: u64::MAX,
     };
     loop {
-        if pos >= seq.len() as usize {
+        if pos >= seq.len() {
             break;
         }
 
@@ -502,7 +502,7 @@ pub fn sequence_to_shmmrs1(
         //println!("mdist: {}", mdist);
         if mdist == (w - 1) as usize {
             min_mer = rbuf.get_min();
-            for i in 0..rbuf.size as usize {
+            for i in 0..rbuf.size {
                 let mm = rbuf.get(i);
                 if mm.x == min_mer.x {
                     shmmrs.push(mm);
@@ -537,7 +537,6 @@ pub fn sequence_to_shmmrs1(
     shmmrs
         .iter()
         .enumerate()
-        .into_iter()
         .for_each(|(i, shmmr)| {
             if i != 0 && i != shmmrs.len() - 1 {
                 let p_pos = shmmrs[i - 1].pos();
@@ -579,7 +578,7 @@ pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, k: u32, r: u32, min_span: u3
     let mut rmmer = (0_u64, 0_u64);
     let mask = u64::MAX >> (64 - k);
     loop {
-        if pos >= seq.len() as usize {
+        if pos >= seq.len() {
             break;
         }
 
@@ -634,7 +633,6 @@ pub fn sequence_to_shmmrs2(rid: u32, seq: &Vec<u8>, k: u32, r: u32, min_span: u3
     shmmrs
         .iter()
         .enumerate()
-        .into_iter()
         .for_each(|(i, shmmr)| {
             if i != 0 && i != shmmrs.len() - 1 {
                 let p_pos = shmmrs[i - 1].pos();

@@ -1,5 +1,5 @@
 // src/lib.rs
-pub const VERSION_STRING: &'static str = env!("VERSION_STRING");
+pub const VERSION_STRING: &str = env!("VERSION_STRING");
 use pgr_db::aln::{self, HitPair};
 use pgr_db::graph_utils::{AdjList, ShmmrGraphNode};
 use pgr_db::seq_db;

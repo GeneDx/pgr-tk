@@ -1,12 +1,12 @@
-from ubuntu:20.04
+from ubuntu:22.04
 RUN apt-get update
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
-RUN apt-get install -y build-essential git ssh curl clang-10 cmake libomp5 libomp-dev
+RUN apt-get install -y build-essential git ssh curl clang-14 cmake libomp5 libomp-dev libssl-dev libssl3 pkg-config
 RUN mkdir -p /opt
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-RUN . /root/.cargo/env && cargo install maturin
 RUN . /root/.cargo/env && rustup default stable
+RUN . /root/.cargo/env && cargo install --locked maturin
 ENV GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no"
 ENV PATH="/root/.cargo/bin:$PATH"
 RUN rustup toolchain list

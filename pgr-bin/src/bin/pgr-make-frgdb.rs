@@ -51,7 +51,6 @@ fn main() {
     );
     input_files
         .lines()
-        .into_iter()
         .enumerate()
         .for_each(|(fid, filename)| {
             let filepath = filename

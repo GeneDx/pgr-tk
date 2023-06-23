@@ -87,7 +87,7 @@ fn filter_and_group_regions(
             let end = v[v.len() - 1].1;
             let len = v.len() as f32;
             v.into_iter().for_each(|vv| {
-                s0 += vv.2 as f32;
+                s0 += vv.2;
                 s1 += vv.3 as f32;
                 s2 += vv.4 as f32;
             });
@@ -97,7 +97,7 @@ fn filter_and_group_regions(
 }
 
 fn output_cov_bed(
-    out_data: &Vec<(u32, u32, f32, usize, usize)>,
+    out_data: &[(u32, u32, f32, usize, usize)],
     ctg: String,
     threshold: f32,
     output_bed_file0: &mut BufWriter<File>,
@@ -105,7 +105,7 @@ fn output_cov_bed(
     let cov_high = out_data
         .iter()
         .filter(|&v| v.2 > threshold + 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_high = filter_and_group_regions(&cov_high, 10000, 10000);
@@ -113,7 +113,7 @@ fn output_cov_bed(
     let cov_low = out_data
         .iter()
         .filter(|&v| v.2 < threshold - 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_low = filter_and_group_regions(&cov_low, 100, 20000);
@@ -148,7 +148,6 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
     );
     input_files
         .lines()
-        .into_iter()
         .enumerate()
         .for_each(|(fid, filename)| {
             let filepath = filename
@@ -171,7 +170,6 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
     );
     input_files
         .lines()
-        .into_iter()
         .enumerate()
         .for_each(|(fid, filename)| {
             let filepath = filename
@@ -335,7 +333,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         File::open(Path::new(&args.filepath0))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files.lines().into_iter().for_each(|filename| {
+    input_files.lines().for_each(|filename| {
         let filepath = filename
             .expect("can't get fastx file name")
             .trim()
@@ -348,7 +346,7 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
         File::open(Path::new(&args.filepath1))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files.lines().into_iter().for_each(|filename| {
+    input_files.lines().for_each(|filename| {
         let filepath = filename
             .expect("can't get fastx file name")
             .trim()

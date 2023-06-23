@@ -82,14 +82,14 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out = if args.output_file.is_some() {
         let f = BufWriter::new(
-            File::create(args.output_file.clone().unwrap()).expect("can't open the ouptfile"),
+            File::create(args.output_file.unwrap()).expect("can't open the ouptfile"),
         );
         Box::new(f) as Box<dyn Write>
     } else {
         Box::new(io::stdout())
     };
 
-    region_file.lines().into_iter().for_each(|line| {
+    region_file.lines().for_each(|line| {
         let line = line.expect("fail to get a line in the region file");
         let fields = line.split('\t').collect::<Vec<&str>>();
         let label = fields[0].to_string();

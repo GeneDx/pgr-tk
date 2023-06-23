@@ -29,7 +29,7 @@ mod tests {
     pub fn load_seqs() -> HashMap<String, Vec<u8>> {
         let mut seqs = HashMap::<String, Vec<u8>>::new();
         let filepath = "test/test_data/test_seqs.fa";
-        let file = File::open(filepath.to_string()).unwrap();
+        let file = File::open(filepath).unwrap();
         let mut reader = BufReader::new(file);
         let mut is_gzfile = false;
         {
@@ -43,20 +43,20 @@ mod tests {
         }
         drop(reader);
 
-        let file = File::open(&filepath).unwrap();
+        let file = File::open(filepath).unwrap();
         let mut reader = BufReader::new(file);
-        let gz_buf = &mut BufReader::new(MultiGzDecoder::new(&mut reader));
+        let mut gz_buf = BufReader::new(MultiGzDecoder::new(&mut reader));
 
-        let file = File::open(&filepath).unwrap();
+        let file = File::open(filepath).unwrap();
         let reader = BufReader::new(file);
-        let std_buf = &mut BufReader::new(reader);
+        let mut std_buf = BufReader::new(reader);
 
         let fastx_buf: &mut dyn BufRead = if is_gzfile {
             drop(std_buf);
-            gz_buf
+            &mut gz_buf
         } else {
             drop(gz_buf);
-            std_buf
+            &mut std_buf
         };
 
         let mut fastx_reader =
@@ -118,7 +118,7 @@ mod tests {
             let aln_segs =
                 deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
-            if frg != re_seq || true {
+            if frg != re_seq {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
@@ -148,7 +148,7 @@ mod tests {
             let aln_segs =
                 deltas_to_aln_segs(&deltas, m.end0 as usize, m.end1 as usize, &base_frg, &frg);
             let re_seq = reconstruct_seq_from_aln_segs(&base_frg, &aln_segs);
-            if frg != re_seq || true {
+            if frg != re_seq {
                 println!("{} {}", String::from_utf8_lossy(&base_frg), base_frg.len());
                 println!("{} {}", String::from_utf8_lossy(&frg), frg.len());
                 println!("{} {} {} {}", m.bgn0, m.end0, m.bgn1, m.end1);
@@ -175,7 +175,7 @@ mod tests {
         let shmmr1 = shmmrutils::sequence_to_shmmrs(0, &cs1, &shmmr_spec, false);
         let shmmr0 = shmmr0.iter().map(|m| m.hash()).collect::<Vec<u64>>();
         let shmmr1 = shmmr1.iter().rev().map(|m| m.hash()).collect::<Vec<u64>>();
-        assert!(shmmr0.len() > 0);
+        assert!(!shmmr0.is_empty());
         assert_eq!(shmmr0, shmmr1);
     }
 

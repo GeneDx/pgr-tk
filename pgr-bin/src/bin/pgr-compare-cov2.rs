@@ -72,7 +72,7 @@ fn filter_and_group_regions(
             let end = v[v.len() - 1].1;
             let len = v.len() as f32;
             v.into_iter().for_each(|vv| {
-                s0 += vv.2 as f32;
+                s0 += vv.2;
                 s1 += vv.3 as f32;
                 s2 += vv.4 as f32;
             });
@@ -82,7 +82,7 @@ fn filter_and_group_regions(
 }
 
 fn output_cov_bed(
-    out_data: &Vec<(u32, u32, f32, usize, usize)>,
+    out_data: &[(u32, u32, f32, usize, usize)],
     ctg: String,
     prefix: String,
     threshold: f32,
@@ -91,7 +91,7 @@ fn output_cov_bed(
     let cov_high = out_data
         .iter()
         .filter(|&v| v.2 > threshold + 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_high = filter_and_group_regions(&cov_high, 10000, 10000);
@@ -99,7 +99,7 @@ fn output_cov_bed(
     let cov_low = out_data
         .iter()
         .filter(|&v| v.2 < threshold - 0.0001)
-        .map(|v| v.clone())
+        .copied()
         .collect::<Vec<_>>();
 
     let cov_low = filter_and_group_regions(&cov_low, 100, 20000);
@@ -145,7 +145,6 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
     );
     input_files
         .lines()
-        .into_iter()
         .collect::<Vec<_>>()
         .into_par_iter()
         .for_each(|filename| {
@@ -154,12 +153,12 @@ fn generate_bed_graph_from_sdb(args: &CmdOptions, input_type: &str) {
             let files = filename.expect("can't get fastx file name");
             let files = files.trim();
             let files = files.to_string();
-            let mut files = files.split("\t");
+            let mut files = files.split('\t');
             let prefix = files.next().unwrap().to_string();
             let refrenece = files.next().unwrap().to_string();
             println!("reference: {}", refrenece);
-            sample_set0.insert(refrenece.clone());
-            files.into_iter().for_each(|s| {
+            sample_set0.insert(refrenece);
+            files.for_each(|s| {
                 println!("sample: {}", s);
                 sample_set1.insert(s.to_string());
             });

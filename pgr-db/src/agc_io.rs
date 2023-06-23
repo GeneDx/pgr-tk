@@ -155,7 +155,7 @@ impl AGCFile {
         let ctg_len = end - bgn + 1;
 
         unsafe {
-            let seq_buf: *mut i8 = libc::malloc(mem::size_of::<i8>() * ctg_len as usize) as *mut i8;
+            let seq_buf: *mut i8 = libc::malloc(mem::size_of::<i8>() * ctg_len) as *mut i8;
             agc_get_ctg_seq(
                 self.agc_handle.0,
                 c_sample_name,
@@ -288,7 +288,7 @@ impl<'a> Iterator for AGCFileIter<'a> {
                             let ctg_len = *end - *bgn + 1;
                             unsafe {
                                 let seq_buf: *mut i8 =
-                                    libc::malloc(mem::size_of::<i8>() * ctg_len as usize)
+                                    libc::malloc(mem::size_of::<i8>() * ctg_len)
                                         as *mut i8;
                                 agc_get_ctg_seq(
                                     agc_handle.0,

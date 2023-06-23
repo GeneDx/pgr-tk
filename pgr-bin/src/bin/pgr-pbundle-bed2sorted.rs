@@ -36,7 +36,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
     let mut node_length = FxHashMap::<(u32, u32), Vec<_>>::default();
-    bed_file.lines().into_iter().for_each(|line| {
+    bed_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return;
@@ -69,7 +69,7 @@ fn main() -> Result<(), std::io::Error> {
         if (bundle_v_bgn as i64 - bundle_v_end as i64).abs() as f32 > (bundle_v_count as f32) * 0.5
         {
             let e = node_length.entry((bundle_id, bundle_dir)).or_default();
-            e.push((end as i64 - bgn as i64).unsigned_abs() as u64);
+            e.push((end as i64 - bgn as i64).unsigned_abs());
         }
     });
 

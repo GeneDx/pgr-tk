@@ -97,7 +97,7 @@ fn main() -> Result<(), std::io::Error> {
         let bed_file_path = path::Path::new(bed_file_path);
         let bed_file = BufReader::new(File::open(bed_file_path)?);
         let bed_file_parse_err_msg = "annotation bed file parsing error";
-        bed_file.lines().into_iter().for_each(|line| {
+        bed_file.lines().for_each(|line| {
             let line = line.unwrap().trim().to_string();
             if line.is_empty() {
                 return;
@@ -123,7 +123,7 @@ fn main() -> Result<(), std::io::Error> {
         let offset_file_path = path::Path::new(offset_file_path);
         let offset_file = BufReader::new(File::open(offset_file_path)?);
         let offset_file_parse_err_msg = "offset file parsing error";
-        offset_file.lines().into_iter().for_each(|line| {
+        offset_file.lines().for_each(|line| {
             let line = line.unwrap().trim().to_string();
             if line.is_empty() {
                 return;
@@ -145,7 +145,7 @@ fn main() -> Result<(), std::io::Error> {
     let bed_file = BufReader::new(File::open(bed_file_path)?);
     let mut ctg_data = FxHashMap::<String, Vec<_>>::default();
     let bed_file_parse_err_msg = "bed file parsing error";
-    bed_file.lines().into_iter().for_each(|line| {
+    bed_file.lines().for_each(|line| {
         let line = line.unwrap().trim().to_string();
         if line.is_empty() {
             return;
@@ -178,7 +178,7 @@ fn main() -> Result<(), std::io::Error> {
         let annotation_file = BufReader::new(File::open(path)?);
         let ctg_data_vec: Vec<_> = annotation_file
             .lines()
-            .map(|line| {
+            .filter_map(|line| {
                 let line = line.unwrap().trim().to_string();
                 if line.is_empty() {
                     return None;
@@ -206,12 +206,11 @@ fn main() -> Result<(), std::io::Error> {
                     Some((ctg, "".to_string(), data, region_annotation))
                 }
             })
-            .flatten()
             .collect();
         ctg_data_vec
     } else {
         let mut ctg_data_vec = ctg_data.iter().map(|(k, v)| (k, v)).collect::<Vec<_>>();
-        ctg_data.keys().into_iter().for_each(|ctg| {
+        ctg_data.keys().for_each(|ctg| {
             ctg_to_annotation.insert(ctg.clone(), ctg.clone());
         });
         ctg_data_vec.sort();
@@ -236,7 +235,7 @@ fn main() -> Result<(), std::io::Error> {
     let ctg_data_vec = if args.ddg_file.is_some() {
         let dendrogram_file = BufReader::new(File::open(args.ddg_file.unwrap())?);
         let mut ctg_data_vec = vec![];
-        dendrogram_file.lines().into_iter().for_each(|line| {
+        dendrogram_file.lines().for_each(|line| {
             let line = line.expect("can't read dendrogram file");
             let fields = line.trim().split('\t').collect::<Vec<&str>>();
             let parse_err_msg = "error on parsing the dendrogram file";
@@ -340,19 +339,19 @@ fn main() -> Result<(), std::io::Error> {
                         (bgn, end) = (end, bgn);
                     }
 
-                    let arror_end = end as f32;
+                    let arror_end = end;
                     let halfwidth = 5.0 * args.track_scaling;
                     let end =
                         if direction == 0 {
-                            if end as f32 - halfwidth < bgn {
+                            if end - halfwidth < bgn {
                                 bgn
                             } else {
-                                end as f32 - halfwidth
+                                end - halfwidth
                             }
-                        } else if end as f32 + halfwidth > bgn {
+                        } else if end + halfwidth > bgn {
                             bgn
                         } else {
-                            end as f32 + halfwidth
+                            end + halfwidth
                         };
 
                     let bottom0 = -halfwidth * 0.6;
@@ -408,7 +407,7 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
                         .set("d", path_str);
                     let mut g = element::Group::new().set("transform", format!("translate({left_padding} {y_offset})"));
                     if !args.no_tooltips { // it may be good idea to disable it for every large region visualization
-                        let title = element::Title::new().add(node::Text::new(title.clone()));
+                        let title = element::Title::new().add(node::Text::new(title));
                         p.append(title);
                     };
                     g.append(p);
@@ -441,13 +440,13 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
             (
                 -tree_width,
                 -32,
-                tree_width + args.track_panel_width as f32 + args.annotation_panel_width as f32,
+                tree_width + args.track_panel_width as f32 + args.annotation_panel_width,
                 24.0 + y_offset,
             ),
         )
         .set(
             "width",
-            tree_width + args.track_panel_width as f32 + args.annotation_panel_width as f32,
+            tree_width + args.track_panel_width as f32 + args.annotation_panel_width,
         )
         .set("height", 56.0 + y_offset)
         .set("preserveAspectRatio", "none")
@@ -511,10 +510,10 @@ r#".{bundle_class} {{fill:{bundle_color}; stroke:{stroke_color}; stroke-width:{s
     } else {
         let mut tick_interval = 1_usize;
         let mut tmp = track_range as f32;
-        tmp = tmp * 0.1;
+        tmp *= 0.1;
         while tmp > 1.01 {
             tick_interval *= 10;
-            tmp = tmp * 0.1;
+            tmp *= 0.1;
         }
         tick_interval
     };
