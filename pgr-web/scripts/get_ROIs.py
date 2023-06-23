@@ -16,23 +16,24 @@ with gzip.open("ncbiRefSeq.sorted.txt.gz") as f:
         strand = row[3]
         bgn = int(row[4])
         end = int(row[5])
-        gene2query[g] = {
-			"source": "hg38_tagged.fa",
-			"ctg": f"{ch}_hg38",
-			"bgn": bgn,
-			"end": end,
-			"padding": 10000,
-			"merge_range_tol": 120000,
-			"w": 48,
-			"k": 56,
-			"r": 1,
-			"min_span": 12,
-			"sketch": False,
-			"min_cov": 2,
-			"min_branch_size": 8,
-			"bundle_length_cutoff": 500,
-			"bundle_merge_distance": 10000
-        }
+        if g not in gene2query:
+            gene2query[g] = {
+                "source": "hg38_tagged.fa",
+                "ctg": f"{ch}_hg38",
+                "bgn": bgn,
+                "end": end,
+                "padding": 10000,
+                "merge_range_tol": 120000,
+                "w": 48,
+                "k": 56,
+                "r": 1,
+                "min_span": 12,
+                "sketch": False,
+                "min_cov": 2,
+                "min_branch_size": 8,
+                "bundle_length_cutoff": 500,
+                "bundle_merge_distance": 10000
+            }
 
 
 print(json.dumps(gene2query)) 
