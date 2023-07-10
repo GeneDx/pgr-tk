@@ -16,8 +16,6 @@ jobs:
         submodules: recursive
     - name: setup
       run: |
-        LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
-        git checkout $LATEST_TAG
         rustup default stable && cd WFA2-lib && make all
     - name: Run tests
       run: cargo test --verbose --workspace --exclude pgrtk
