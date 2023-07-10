@@ -5,10 +5,13 @@ on:
     tags:
       - release-v*
  
-  workflow_dispatch
+  workflow_dispatch:
+    tags:
+      - release-v*
 
 
-env:
+
+eev:se-v*
   CARGO_TERM_COLOR: always
 
 jobs:
