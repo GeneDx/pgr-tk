@@ -1,0 +1,42 @@
+name: test_and_build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: docker.io/cschin/pgr-tk-build-env
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    - name: setup
+      run: |
+        LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
+        git checkout $LATEST_TAG
+        rustup default stable && cd WFA2-lib && make all
+    - name: Run tests
+      run: cargo test --verbose --workspace --exclude pgrtk
+    - name: Build
+      run: bash build.sh
+    - uses: actions/upload-artifact@v3
+      with:
+        name: build-artifact
+        path: |
+          target/release/pgr-mdb
+          target/release/pgr-fetch-seqs
+          target/release/pgr-make-frgdb
+          target/release/pgr-pbundle-bed2dist
+          target/release/pgr-pbundle-bed2offset
+          target/release/pgr-pbundle-bed2sorted
+          target/release/pgr-pbundle-bed2svg
+          target/release/pgr-pbundle-decomp
+          target/release/pgr-query
+          target/wheels/*.whl
