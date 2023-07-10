@@ -1,9 +1,7 @@
 name: create_artifect_for_release
 
 on:
-  push:
-    tags:
-      - release-v*
+  workflow_dispatch:
  
 env:
   CARGO_TERM_COLOR: always
