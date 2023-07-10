@@ -1,10 +1,9 @@
-name: test_and_build
+name: create_artifect_for_release
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - release-v*
 
 env:
   CARGO_TERM_COLOR: always
