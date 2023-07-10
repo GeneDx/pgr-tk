@@ -18,6 +18,7 @@ jobs:
         submodules: recursive
     - name: setup
       run: |
+        git config --global --add safe.directory /__w/pgr-tk/pgr-tk
         LATEST_TAG=$(git describe --tags `git rev-list --tags --max-count=1`)
         git checkout $LATEST_TAG
         rustup default stable && cd WFA2-lib && make all
