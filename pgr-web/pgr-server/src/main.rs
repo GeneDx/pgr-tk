@@ -212,7 +212,7 @@ async fn ws_handler(ws: WebSocketUpgrade) -> response::Response {
 }
 
 use std::cell::OnceCell;
-// Todo... read the ROIs.jsod into the String than using static
+// Todo... read the ROIs.json into the String than using static
 static ROI_JSON: &str = include_str!("ROIs.json");
 
 async fn ws_handle_socket(mut socket: WebSocket) {
