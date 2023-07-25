@@ -1,8 +1,10 @@
 // use rayon::prelude::*;
 use crate::seq_db::{self, FragmentHit};
 use crate::shmmrutils::{self, ShmmrSpec};
+use log::debug;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashSet;
+use wavefront_aln::*;
 
 pub type HitPair = ((u32, u32, u8), (u32, u32, u8)); //(bgn1, end1, orientation1),  (bgn2, end2, orientation2)
 
@@ -160,7 +162,8 @@ pub fn query_fragment_to_hps(
         },
     );
 
-    let mut target_squence_id_to_hits = FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
+    let mut target_squence_id_to_hits =
+        FxHashMap::<u32, Vec<((u32, u32, u8), (u32, u32, u8))>>::default();
     raw_query_hits.into_iter().for_each(
         |(shmmr_pair, query_position, frag_signature): (
             (u64, u64),
@@ -177,18 +180,20 @@ pub fn query_fragment_to_hps(
                 return;
             };
             let left_frag_coordinate = query_position;
-            frag_signature.iter().for_each(|&(_frg_id, sid, pos0, pos1, orientation)| {
-                let count = *target_shmer_pair_count
-                    .get(&(shmmr_pair.0, shmmr_pair.1, sid))
-                    .unwrap_or(&0);
-                let max_count_target = target_max_count.unwrap_or(128);
-                if count > max_count_target {
-                    return;
-                };
-                let e = target_squence_id_to_hits.entry(sid).or_default();
-                let right_frag_coordinate = (pos0, pos1, orientation);
-                e.push((left_frag_coordinate, right_frag_coordinate));
-            });
+            frag_signature
+                .iter()
+                .for_each(|&(_frg_id, sid, pos0, pos1, orientation)| {
+                    let count = *target_shmer_pair_count
+                        .get(&(shmmr_pair.0, shmmr_pair.1, sid))
+                        .unwrap_or(&0);
+                    let max_count_target = target_max_count.unwrap_or(128);
+                    if count > max_count_target {
+                        return;
+                    };
+                    let e = target_squence_id_to_hits.entry(sid).or_default();
+                    let right_frag_coordinate = (pos0, pos1, orientation);
+                    e.push((left_frag_coordinate, right_frag_coordinate));
+                });
         },
     );
 
@@ -201,29 +206,189 @@ pub fn query_fragment_to_hps(
         .collect::<Vec<_>>()
 }
 
-#[test]
+pub fn align_bases(
+    target_str: &str,
+    query_str: &str,
+    min_wf_length: u32,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+) -> (String, String) {
+    let mut wfs = WaveFronts::new(
+        target_str,
+        query_str,
+        min_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    );
+    wfs.step_all();
+    wfs.backtrace()
+}
 
-fn sparse_aln_test() {
-    use crate::aln::sparse_aln;
-    use std::fs::File;
-    use std::io::{BufRead, BufReader};
-    let f = BufReader::new(File::open("./test/test_data/test_hits").unwrap());
-    let mut hp = Vec::<HitPair>::new();
-    f.lines().for_each(|s| {
-        if let Ok(s) = s {
-            let s = s.split_ascii_whitespace();
-            let out = s
-                .into_iter()
-                .map(|s| s.parse::<u32>().unwrap())
-                .collect::<Vec<u32>>();
-            assert_eq!(out.len(), 6);
-            hp.push((
-                (out[0], out[1], out[2] as u8),
-                (out[3], out[4], out[5] as u8),
-            ));
+pub fn aln_pair_map(aln_t_str: &str, aln_q_str: &str) -> Vec<(u32, u32, char)> {
+    let paired = std::iter::zip(aln_t_str.as_bytes(), aln_q_str.as_bytes());
+    let mut t_pos = 0_u32;
+    let mut q_pos = 0_u32;
+    paired
+        .into_iter()
+        .map(|(&tb, &qb)| {
+            let mut t = '-';
+            let new_t_pos = if tb == b'-' {
+                t = 'I';
+                t_pos
+            } else {
+                t_pos + 1
+            };
+            let new_q_pos = if qb == b'-' {
+                t = 'D';
+                q_pos
+            } else {
+                q_pos + 1
+            };
+            if tb == qb {
+                t = 'M';
+            };
+            if tb != qb && tb != b'-' && qb != b'-' {
+                t = 'X';
+            };
+            let out = (t_pos, q_pos, t);
+            t_pos = new_t_pos;
+            q_pos = new_q_pos;
+            out
+        })
+        .collect::<Vec<_>>()
+}
+
+pub fn get_variants_from_aln_pair_map(
+    aln_pairs: &[(u32, u32, char)],
+    target_str: &str,
+    query_str: &str,
+) -> Vec<Option<(u32, String, String)>> {
+    let mut previous_match = (0_u32, '-');
+    let mut current_variant = Vec::<(char, char, char)>::new();
+
+    let aggregate_variants = |previous_match: &(u32, char),
+                              current_variant: &Vec<(char, char, char)>|
+     -> Option<(u32, String, String)> {
+        let t_variant_segment = String::from_iter(current_variant.iter().map(|v| v.0));
+        let q_variant_segment = String::from_iter(current_variant.iter().map(|v| v.1));
+        let v_type = current_variant[0].2;
+        match v_type {
+            'X' => Some((previous_match.0 + 1, t_variant_segment, q_variant_segment)),
+            'I' => Some((
+                previous_match.0,
+                [previous_match.1.to_string(), t_variant_segment].join(""),
+                [previous_match.1.to_string(), q_variant_segment].join(""),
+            )),
+            'D' => Some((
+                previous_match.0,
+                [previous_match.1.to_string(), t_variant_segment].join(""),
+                [previous_match.1.to_string(), q_variant_segment].join(""),
+            )),
+            _ => None,
         }
-    });
+    };
 
-    let out = sparse_aln(&mut hp, 8, 0.5_f32);
-    out.iter().for_each(|(s, v)| println!("{} {}", s, v.len()));
+    let mut variants = Vec::<Option<(u32, String, String)>>::new();
+    aln_pairs.iter().for_each(|&(t_pos, q_pos, t)| match t {
+        'M' | 'X' => {
+            let t_char = target_str.as_bytes()[t_pos as usize] as char;
+            let q_char = query_str.as_bytes()[q_pos as usize] as char;
+            if t == 'M' {
+                if !current_variant.is_empty() {
+                    variants.push(aggregate_variants(&previous_match, &current_variant));
+                }
+                previous_match = (t_pos, t_char);
+                current_variant.clear();
+            } else {
+                current_variant.push((t_char, q_char, t));
+            }
+            debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
+        }
+        'I' => {
+            let q_char = query_str.as_bytes()[q_pos as usize] as char;
+            debug!("{} {} {:1} {:1} {}", t_pos, q_pos, '-', q_char, t);
+            if !current_variant.is_empty() {
+                if current_variant.last().unwrap().2 == t {
+                    current_variant.push(('-', q_char, t));
+                } else {
+                    variants.push(aggregate_variants(&previous_match, &current_variant));
+                    current_variant.clear();
+                    current_variant.push(('-', q_char, t));
+                }
+            } else {
+                current_variant.push(('-', q_char, t));
+            }
+        }
+        'D' => {
+            let t_char = target_str.as_bytes()[t_pos as usize] as char;
+            debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, '-', t);
+            if !current_variant.is_empty() {
+                if current_variant.last().unwrap().2 == t {
+                    current_variant.push((t_char, '-', t));
+                } else {
+                    variants.push(aggregate_variants(&previous_match, &current_variant));
+                    current_variant.clear();
+                    current_variant.push((t_char, '-', t));
+                }
+            } else {
+                current_variant.push((t_char, '-', t));
+            }
+        }
+        _ => {}
+    });
+    if !current_variant.is_empty() {
+        variants.push(aggregate_variants(&previous_match, &current_variant));
+    };
+    variants
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+
+    fn sparse_aln_test() {
+        use crate::aln::{sparse_aln, HitPair};
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        let f = BufReader::new(File::open("./test/test_data/test_hits").unwrap());
+        let mut hp = Vec::<HitPair>::new();
+        f.lines().for_each(|s| {
+            if let Ok(s) = s {
+                let s = s.split_ascii_whitespace();
+                let out = s
+                    .into_iter()
+                    .map(|s| s.parse::<u32>().unwrap())
+                    .collect::<Vec<u32>>();
+                assert_eq!(out.len(), 6);
+                hp.push((
+                    (out[0], out[1], out[2] as u8),
+                    (out[3], out[4], out[5] as u8),
+                ));
+            }
+        });
+
+        let out = sparse_aln(&mut hp, 8, 0.5_f32);
+        out.iter().for_each(|(s, v)| println!("{} {}", s, v.len()));
+    }
+
+    #[test]
+    fn test_wfa_align_bases() {
+        use crate::aln::{align_bases, aln_pair_map, get_variants_from_aln_pair_map};
+        use log::debug;
+        use simple_logger::SimpleLogger;
+        SimpleLogger::new().init().unwrap();
+        let t_str = "ACATACATGAAAAAAGTTGCATGAAACCCCAAAAGTTGCATGAAACATACATGAAAATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCATGAAACCCCATACATGAAAGTTGCATGAA";
+        let q_str = "ACATACATGAAAAAAGTTGCATGAAAAAACATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCAAAAGTTGCATGAAACATACATGAAAATGAAAAAACATACATGAAAGTTGCATGAA";
+        let (t_aln_str, q_aln_str) = align_bases(t_str, q_str, 40, 4, 2, 1);
+        println!("{}", t_aln_str);
+        println!("{}", q_aln_str);
+        let aln_pairs = aln_pair_map(&t_aln_str, &q_aln_str);
+        let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
+        variants.into_iter().flatten().for_each(|(pos, s1, s2)| {
+            println!("{} {} {}", pos, s1, s2);
+        });
+    }
 }
