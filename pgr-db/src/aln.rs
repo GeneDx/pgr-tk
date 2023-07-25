@@ -226,8 +226,8 @@ pub fn align_bases(
     wfs.backtrace()
 }
 
-pub fn aln_pair_map(aln_t_str: &str, aln_q_str: &str) -> Vec<(u32, u32, char)> {
-    let paired = std::iter::zip(aln_t_str.as_bytes(), aln_q_str.as_bytes());
+pub fn aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
+    let paired = std::iter::zip(aln_target_str.as_bytes(), aln_query_str.as_bytes());
     let mut t_pos = 0_u32;
     let mut q_pos = 0_u32;
     paired
@@ -265,10 +265,10 @@ pub fn get_variants_from_aln_pair_map(
     target_str: &str,
     query_str: &str,
 ) -> Vec<Option<(u32, String, String)>> {
-    let mut previous_match = (0_u32, '-');
+    let mut previous_match = (0_u32, '-', '-');
     let mut current_variant = Vec::<(char, char, char)>::new();
 
-    let aggregate_variants = |previous_match: &(u32, char),
+    let aggregate_variants = |previous_match: &(u32, char, char),
                               current_variant: &Vec<(char, char, char)>|
      -> Option<(u32, String, String)> {
         let t_variant_segment = String::from_iter(current_variant.iter().map(|v| v.0));
@@ -279,12 +279,12 @@ pub fn get_variants_from_aln_pair_map(
             'I' => Some((
                 previous_match.0,
                 [previous_match.1.to_string(), t_variant_segment].join(""),
-                [previous_match.1.to_string(), q_variant_segment].join(""),
+                [previous_match.2.to_string(), q_variant_segment].join(""),
             )),
             'D' => Some((
                 previous_match.0,
                 [previous_match.1.to_string(), t_variant_segment].join(""),
-                [previous_match.1.to_string(), q_variant_segment].join(""),
+                [previous_match.2.to_string(), q_variant_segment].join(""),
             )),
             _ => None,
         }
@@ -292,19 +292,30 @@ pub fn get_variants_from_aln_pair_map(
 
     let mut variants = Vec::<Option<(u32, String, String)>>::new();
     aln_pairs.iter().for_each(|&(t_pos, q_pos, t)| match t {
-        'M' | 'X' => {
+        'M' => {
             let t_char = target_str.as_bytes()[t_pos as usize] as char;
             let q_char = query_str.as_bytes()[q_pos as usize] as char;
-            if t == 'M' {
-                if !current_variant.is_empty() {
-                    variants.push(aggregate_variants(&previous_match, &current_variant));
-                }
-                previous_match = (t_pos, t_char);
+            if !current_variant.is_empty() {
+                variants.push(aggregate_variants(&previous_match, &current_variant));
                 current_variant.clear();
+            };
+            previous_match = (t_pos, t_char, q_char);
+            debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
+        }
+        'X' => {
+            let t_char = target_str.as_bytes()[t_pos as usize] as char;
+            let q_char = query_str.as_bytes()[q_pos as usize] as char;
+            if !current_variant.is_empty() {
+                if current_variant.last().unwrap().2 == t {
+                    current_variant.push((t_char, q_char, t));
+                } else {
+                    variants.push(aggregate_variants(&previous_match, &current_variant));
+                    current_variant.clear();
+                    current_variant.push((t_char, q_char, t));
+                }
             } else {
                 current_variant.push((t_char, q_char, t));
             }
-            debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
         }
         'I' => {
             let q_char = query_str.as_bytes()[q_pos as usize] as char;
