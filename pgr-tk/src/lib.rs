@@ -1675,205 +1675,108 @@ fn get_shmmr_dots(
     (x, y)
 }
 
-/// A wrapper class to represent alignment segment for python
+
+/// perform wfa alignment between two sequences
 ///
-/// This wraps the Rust struct ``seq2variants::AlnSegment`` mapping
-/// the enum ``seq2variants::AlnSegType`` to integers
+/// Parameters
+/// ----------
+/// Documents:TODO
 ///
-#[pyclass]
-#[derive(Clone)]
-struct AlnSegment {
-    /// alignment type: value =  ``b'M'``, ``b'I'``, ``b'D'``, ``b'X'``, or ``b'?'``
-    #[pyo3(get, set)]
-    t: u8,
-    /// segment coordinate in the reference: (begin, end, length)
-    #[pyo3(get, set)]
-    ref_loc: (u32, u32, u32),
-    /// segment coordinate in the target: (begin, end, length)
-    #[pyo3(get, set)]
-    tgt_loc: (u32, u32, u32),
+#[pyfunction(signature = (target_str, query_str, min_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
+pub fn wfa_align_bases(
+    target_str: &str,
+    query_str: &str,
+    min_wf_length: u32,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+) -> (String, String) {
+    aln::wfa_align_bases(
+        target_str,
+        query_str,
+        min_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    )
 }
 
-/// A  class to represent alignment mapping between the two sequences
-#[pyclass]
-#[derive(Clone)]
-pub struct AlnMap {
-    /// mapped location between two sequence as a list of paired coordinate
-    #[pyo3(get, set)]
-    pmap: Vec<(u32, u32)>,
-    /// alignment string of the reference
-    #[pyo3(get, set)]
-    ref_a_seq: Vec<u8>,
-    /// alignment string of the target
-    #[pyo3(get, set)]
-    tgt_a_seq: Vec<u8>,
-    /// alignment string of alignment symbols
-    #[pyo3(get, set)]
-    aln_seq: Vec<u8>,
+/// convert alignment string to alignment pair map
+///
+/// Parameters
+/// ----------
+/// Documents:TODO
+///
+#[pyfunction(signature = (aln_target_str, aln_query_str))]
+pub fn wfa_aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
+    aln::wfa_aln_pair_map(aln_target_str, aln_query_str)
 }
 
-/// Generate the CIGAR string from two sequences with WFA
+/// convert alignment string to alignment pair map
 ///
 /// Parameters
 /// ----------
+/// Documents:TODO
 ///
-/// seq0 : string
-///     a string representing the first sequence
-///
-/// seq1 : string
-///     a string representing the second sequence
-///
-/// Returns
-/// -------
-/// tuple
-///     tuple of (alignment_score, CIGAR_list)
-///
-// #[pyfunction(seq0, seq1)]
-// #[pyo3(text_signature = "($self, seq0, seq1)")]
-// fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
-//     if let Ok((score, cigar)) = seqs2variants::get_cigar(&seq0.to_string(), &seq1.to_string()) {
-//         Ok((score, cigar))
-//     } else {
-//         Err(PyValueError::new_err("fail to align"))
-//     }
-// }
+#[pyfunction(signature = (target_str, query_str, min_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
+pub fn get_wfa_aln_pair_map(    target_str: &str,
+    query_str: &str,
+    min_wf_length: u32,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32) -> Vec<(u32, u32, char)> {
+    let (aln_target_str, aln_query_str) =     aln::wfa_align_bases(
+        target_str,
+        query_str,
+        min_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    );
+    aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str)
+}
 
-/// Get alignment segments from two sequences
+/// generate variant segments from a pair map
 ///
 /// Parameters
 /// ----------
-/// ref_id : int
-///     a integer id for the reference sequence
+/// Documents:TODO
 ///
-/// ref_seq : string
-///     a python string of the reference sequence
-///
-/// tgt_id : int
-///     a integer id for the target sequence
-///
-/// tgt_seq : string
-///     a python string of the target sequence
-///
-/// Returns
-/// -------
-/// list
-///     a list of ``AlnSegment``
-///
-///     the ``AlnSegment`` is a Rust struct defined as::
-///
-///         pub struct SeqLocus {
-///             pub id: u32,
-///             pub bgn: u32,
-///             pub len: u32,
-///         }
-///
-///         pub enum AlnSegType {
-///             Match,
-///             Mismatch,
-///             Insertion,
-///             Deletion,
-///             Unspecified,
-///         }
-///
-///         pub struct AlnSegment {
-///             pub ref_loc: SeqLocus,
-///             pub tgt_loc: SeqLocus,
-///             pub t: AlnSegType,
-///         }
-///
-// #[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
-// #[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
-// fn get_aln_segments(
-//     ref_id: u32,
-//     ref_seq: &PyString,
-//     tgt_id: u32,
-//     tgt_seq: &PyString,
-// ) -> PyResult<Vec<AlnSegment>> {
-//     let ref_seq = ref_seq.to_string();
-//     let tgt_seq = tgt_seq.to_string();
-//     let aln_segs = seqs2variants::get_aln_segments(ref_id, &ref_seq, tgt_id, &tgt_seq);
+#[pyfunction(signature = (aln_pairs, target_str, query_str))]
+pub fn get_variants_from_aln_pair_map(
+    aln_pairs: Vec<(u32, u32, char)>,
+    target_str: &str,
+    query_str: &str,
+) -> Vec<Option<(u32, String, String)>> {
+    aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str)
+}
 
-//     match aln_segs {
-//         Ok(segs) => Ok(segs
-//             .par_iter()
-//             .map(|seg| {
-//                 let t = match seg.t {
-//                     seqs2variants::AlnSegType::Match => b'M',
-//                     seqs2variants::AlnSegType::Mismatch => b'X',
-//                     seqs2variants::AlnSegType::Insertion => b'I',
-//                     seqs2variants::AlnSegType::Deletion => b'D',
-//                     seqs2variants::AlnSegType::Unspecified => b'?',
-//                 };
-//                 AlnSegment {
-//                     t: t,
-//                     ref_loc: (seg.ref_loc.id, seg.ref_loc.bgn, seg.ref_loc.len),
-//                     tgt_loc: (seg.tgt_loc.id, seg.tgt_loc.bgn, seg.tgt_loc.len),
-//                 }
-//             })
-//             .collect()),
-//         Err(_) => Err(exceptions::PyException::new_err("alignment failed")),
-//     }
-// }
-
-/// Get alignment map from a list of alignment segments
+/// generate variant segments from two sequences
 ///
 /// Parameters
 /// ----------
-/// aln_segs : list
-///     a list of the ``AlnSegment``
+/// Documents:TODO
 ///
-/// s0: string
-///     a python string of the reference sequence
-///
-/// s1: int
-///     a integer id for the target sequence
-///
-/// Returns
-/// -------
-/// list
-///     a list of ``AlnSegment``
-// #[pyfunction(aln_segs, s0, s1)]
-// #[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
-// fn get_aln_map(
-//     aln_segs: Vec<AlnSegment>,
-//     ref_seq: &PyString,
-//     tgt_seq: &PyString,
-// ) -> PyResult<AlnMap> {
-//     let s0 = ref_seq.to_string();
-//     let s1 = tgt_seq.to_string();
-
-//     let aln_segs = aln_segs
-//         .par_iter()
-//         .map(|s| seqs2variants::AlnSegment {
-//             ref_loc: seqs2variants::SeqLocus {
-//                 id: s.ref_loc.0,
-//                 bgn: s.ref_loc.1,
-//                 len: s.ref_loc.2,
-//             },
-//             tgt_loc: seqs2variants::SeqLocus {
-//                 id: s.tgt_loc.0,
-//                 bgn: s.tgt_loc.1,
-//                 len: s.tgt_loc.2,
-//             },
-//             t: match s.t {
-//                 b'M' => seqs2variants::AlnSegType::Match,
-//                 b'X' => seqs2variants::AlnSegType::Mismatch,
-//                 b'I' => seqs2variants::AlnSegType::Insertion,
-//                 b'D' => seqs2variants::AlnSegType::Deletion,
-//                 _ => seqs2variants::AlnSegType::Unspecified,
-//             },
-//         })
-//         .collect::<seqs2variants::AlnSegments>();
-
-//     let aln_map = seqs2variants::get_aln_map(&aln_segs, &s0, &s1).unwrap();
-
-//     Ok(AlnMap {
-//         pmap: aln_map.pmap,
-//         ref_a_seq: aln_map.ref_a_seq,
-//         tgt_a_seq: aln_map.tgt_a_seq,
-//         aln_seq: aln_map.aln_seq,
-//     })
-// }
+#[pyfunction(signature = (target_str, query_str, mismatch_penalty=2, open_penalty=2, extension_penalty=1))]
+pub fn get_variant_segments(
+    target_str: &str,
+    query_str: &str,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+) -> Vec<Option<(u32, String, String)>> {
+    let min_wf_length = (query_str.len() >> 7) as u32; 
+    let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
+        target_str,
+        query_str,
+        min_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    );
+    let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+    aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str) 
+}
 
 /// Perform a naive de Bruijn graph consensus
 ///
@@ -2042,9 +1945,11 @@ fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_aln_segments, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
+    m.add_function(wrap_pyfunction!(wfa_align_bases, m)?)?;
+    m.add_function(wrap_pyfunction!(wfa_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_wfa_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_variants_from_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_variant_segments, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
     m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;
