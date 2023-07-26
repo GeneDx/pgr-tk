@@ -206,7 +206,7 @@ pub fn query_fragment_to_hps(
         .collect::<Vec<_>>()
 }
 
-pub fn align_bases(
+pub fn wfa_align_bases(
     target_str: &str,
     query_str: &str,
     min_wf_length: u32,
@@ -226,7 +226,7 @@ pub fn align_bases(
     wfs.backtrace()
 }
 
-pub fn aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
+pub fn wfa_aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
     let paired = std::iter::zip(aln_target_str.as_bytes(), aln_query_str.as_bytes());
     let mut t_pos = 0_u32;
     let mut q_pos = 0_u32;
@@ -387,16 +387,16 @@ mod test {
 
     #[test]
     fn test_wfa_align_bases() {
-        use crate::aln::{align_bases, aln_pair_map, get_variants_from_aln_pair_map};
+        use crate::aln::{wfa_align_bases, wfa_aln_pair_map, get_variants_from_aln_pair_map};
         use log::debug;
         use simple_logger::SimpleLogger;
         SimpleLogger::new().init().unwrap();
         let t_str = "ACATACATGTGTGTGAAAAATATATAAGTAAAAAAAATGCATGAAACCCCAAAAGTTGCATGAAACATACATGAAAATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCATGAAACCCCATACATGAAAGTTGCATGAA";
         let q_str = "ACATACATGTGAAATATAATAAAAGTTGCATGAAAAAACATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCAAAAGTTGCATGAAACATACATGAAAATGAAAAAACATACATGAAAGTTGCATGAA";
-        let (t_aln_str, q_aln_str) = align_bases(t_str, q_str, 20, 2, 2, 1);
+        let (t_aln_str, q_aln_str) = wfa_align_bases(t_str, q_str, 20, 2, 2, 1);
         println!("{}", t_aln_str);
         println!("{}", q_aln_str);
-        let aln_pairs = aln_pair_map(&t_aln_str, &q_aln_str);
+        let aln_pairs = wfa_aln_pair_map(&t_aln_str, &q_aln_str);
         let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
         variants.into_iter().flatten().for_each(|(pos, s1, s2)| {
             println!("{} {} {}", pos, s1, s2);
