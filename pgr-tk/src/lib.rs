@@ -1675,18 +1675,17 @@ fn get_shmmr_dots(
     (x, y)
 }
 
-
 /// perform wfa alignment between two sequences
 ///
 /// Parameters
 /// ----------
 /// Documents:TODO
 ///
-#[pyfunction(signature = (target_str, query_str, min_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
+#[pyfunction(signature = (target_str, query_str, max_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
 pub fn wfa_align_bases(
     target_str: &str,
     query_str: &str,
-    min_wf_length: u32,
+    max_wf_length: u32,
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
@@ -1694,7 +1693,7 @@ pub fn wfa_align_bases(
     aln::wfa_align_bases(
         target_str,
         query_str,
-        min_wf_length,
+        max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
@@ -1718,22 +1717,39 @@ pub fn wfa_aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, 
 /// ----------
 /// Documents:TODO
 ///
-#[pyfunction(signature = (target_str, query_str, min_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
-pub fn get_wfa_aln_pair_map(    target_str: &str,
+#[pyfunction(signature = (target_str, query_str, max_wf_length=None, mismatch_penalty=4, open_penalty=3, extension_penalty=1, max_diff_percent=0.02))]
+pub fn get_wfa_aln_pair_map(
+    target_str: &str,
     query_str: &str,
-    min_wf_length: u32,
+    max_wf_length: Option<u32>,
     mismatch_penalty: i32,
     open_penalty: i32,
-    extension_penalty: i32) -> Vec<(u32, u32, char)> {
-    let (aln_target_str, aln_query_str) =     aln::wfa_align_bases(
+    extension_penalty: i32,
+    max_diff_percent: f32,
+) -> Option<Vec<(u32, u32, char)>> {
+    let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
+    let max_wf_length = if let Some(max_wf_length) = max_wf_length {
+        max_wf_length
+    } else {
+        std::cmp::max(set_len_diff, 64_u32)
+    };
+
+    if max_wf_length > 64
+        && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
+            > max_diff_percent
+    {
+        return None;
+    };
+
+    let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
         target_str,
         query_str,
-        min_wf_length,
+        max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
     );
-    aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str)
+    Some(aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str))
 }
 
 /// generate variant segments from a pair map
@@ -1747,7 +1763,7 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: Vec<(u32, u32, char)>,
     target_str: &str,
     query_str: &str,
-) -> Vec<Option<(u32, String, String)>> {
+) -> Vec<(u32, String, String)> {
     aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str)
 }
 
@@ -1757,25 +1773,44 @@ pub fn get_variants_from_aln_pair_map(
 /// ----------
 /// Documents:TODO
 ///
-#[pyfunction(signature = (target_str, query_str, mismatch_penalty=2, open_penalty=2, extension_penalty=1))]
+#[pyfunction(signature = (target_str, query_str, max_wf_length=None, mismatch_penalty=4, open_penalty=3, extension_penalty=1, max_diff_percents = 0.05))]
 pub fn get_variant_segments(
     target_str: &str,
     query_str: &str,
+    max_wf_length: Option<u32>,
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
-) -> Vec<Option<(u32, String, String)>> {
-    let min_wf_length = (query_str.len() >> 7) as u32; 
+    max_diff_percents: f32,
+) -> Option<(Vec<(u32, String, String)>, Vec<(u32, u32, char)>)> {
+    let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
+    let max_wf_length = if let Some(max_wf_length) = max_wf_length {
+        max_wf_length
+    } else {
+        std::cmp::max(set_len_diff, 64_u32)
+    };
+
+    if max_wf_length > 64
+        && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
+            > max_diff_percents
+    {
+        return None;
+    };
+
+
     let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
         target_str,
         query_str,
-        min_wf_length,
+        max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
     );
     let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
-    aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str) 
+    Some((
+        aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str),
+        aln_pairs,
+    ))
 }
 
 /// Perform a naive de Bruijn graph consensus

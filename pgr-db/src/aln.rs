@@ -209,18 +209,20 @@ pub fn query_fragment_to_hps(
 pub fn wfa_align_bases(
     target_str: &str,
     query_str: &str,
-    min_wf_length: u32,
+    max_wf_length: u32,
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
 ) -> (String, String) {
-    let mut wfs = WaveFronts::new(
+    let capacity = std::cmp::max(1024, std::cmp::max(target_str.len(), query_str.len()) >> 5);
+    let mut wfs = WaveFronts::new_with_capacity(
         target_str,
         query_str,
-        min_wf_length,
+        max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
+        capacity
     );
     wfs.step_all();
     wfs.backtrace()
@@ -264,7 +266,7 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: &[(u32, u32, char)],
     target_str: &str,
     query_str: &str,
-) -> Vec<Option<(u32, String, String)>> {
+) -> Vec<(u32, String, String)> {
     let mut previous_match = (0_u32, '-', '-');
     let mut current_variant = Vec::<(char, char, char)>::new();
 
@@ -352,7 +354,7 @@ pub fn get_variants_from_aln_pair_map(
     if !current_variant.is_empty() {
         variants.push(aggregate_variants(&previous_match, &current_variant));
     };
-    variants
+    variants.into_iter().flatten().collect::<Vec<_>>()
 }
 
 #[cfg(test)]
@@ -398,7 +400,7 @@ mod test {
         println!("{}", q_aln_str);
         let aln_pairs = wfa_aln_pair_map(&t_aln_str, &q_aln_str);
         let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
-        variants.into_iter().flatten().for_each(|(pos, s1, s2)| {
+        variants.into_iter().for_each(|(pos, s1, s2)| {
             println!("{} {} {}", pos, s1, s2);
         });
     }
