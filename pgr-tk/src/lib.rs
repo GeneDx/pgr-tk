@@ -519,11 +519,7 @@ impl SeqIndexDB {
                         .unwrap()
                         .get(&seq_id)
                         .unwrap(); //TODO, check if seq_info is None
-                    let same_orientation = if left_match.0 .2 == left_match.1 .2 {
-                        true
-                    } else {
-                        false
-                    };
+                    let same_orientation = left_match.0 .2 == left_match.1 .2;
 
                     let qb = left_match.0 .0;
                     let qe = right_match.0 .1;
@@ -1731,10 +1727,10 @@ pub fn get_wfa_aln_pair_map(
     let max_wf_length = if let Some(max_wf_length) = max_wf_length {
         max_wf_length
     } else {
-        std::cmp::max(set_len_diff, 64_u32)
+        std::cmp::max(2*set_len_diff, 128_u32)
     };
 
-    if max_wf_length > 64
+    if max_wf_length > 128
         && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
             > max_diff_percent
     {
@@ -1787,16 +1783,15 @@ pub fn get_variant_segments(
     let max_wf_length = if let Some(max_wf_length) = max_wf_length {
         max_wf_length
     } else {
-        std::cmp::max(set_len_diff, 64_u32)
+        std::cmp::max(2*set_len_diff, 128_u32)
     };
 
-    if max_wf_length > 64
+    if max_wf_length > 128
         && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
             > max_diff_percents
     {
         return None;
     };
-
 
     let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
         target_str,
