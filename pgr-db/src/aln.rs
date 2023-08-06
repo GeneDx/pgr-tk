@@ -266,33 +266,35 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: &[(u32, u32, char)],
     target_str: &str,
     query_str: &str,
-) -> Vec<(u32, String, String)> {
-    let mut previous_match = (0_u32, '-', '-');
-    let mut current_variant = Vec::<(char, char, char)>::new();
+) -> Vec<(u32, u32, String, String)> {
 
-    let aggregate_variants = |previous_match: &(u32, char, char),
+    let mut current_variant = Vec::<(char, char, char)>::new();
+    let aggregate_variants = |previous_match: &(u32, u32, char, char),
                               current_variant: &Vec<(char, char, char)>|
-     -> Option<(u32, String, String)> {
+     -> Option<(u32, u32, String, String)> {
         let t_variant_segment = String::from_iter(current_variant.iter().map(|v| v.0));
         let q_variant_segment = String::from_iter(current_variant.iter().map(|v| v.1));
         let v_type = current_variant[0].2;
         match v_type {
-            'X' => Some((previous_match.0 + 1, t_variant_segment, q_variant_segment)),
+            'X' => Some((previous_match.0 + 1, previous_match.1 + 1, t_variant_segment, q_variant_segment)),
             'I' => Some((
                 previous_match.0,
-                [previous_match.1.to_string(), t_variant_segment].join(""),
-                [previous_match.2.to_string(), q_variant_segment].join(""),
+                previous_match.1,
+                [previous_match.2.to_string(), t_variant_segment].join(""),
+                [previous_match.3.to_string(), q_variant_segment].join(""),
             )),
             'D' => Some((
                 previous_match.0,
-                [previous_match.1.to_string(), t_variant_segment].join(""),
-                [previous_match.2.to_string(), q_variant_segment].join(""),
+                previous_match.1,
+                [previous_match.2.to_string(), t_variant_segment].join(""),
+                [previous_match.3.to_string(), q_variant_segment].join(""),
             )),
             _ => None,
         }
     };
+    let mut previous_match = (0_u32, 0_u32, '-', '-');
+    let mut variants = Vec::<Option<(u32, u32, String, String)>>::new();
 
-    let mut variants = Vec::<Option<(u32, String, String)>>::new();
     aln_pairs.iter().for_each(|&(t_pos, q_pos, t)| match t {
         'M' => {
             let t_char = target_str.as_bytes()[t_pos as usize] as char;
@@ -301,7 +303,7 @@ pub fn get_variants_from_aln_pair_map(
                 variants.push(aggregate_variants(&previous_match, &current_variant));
                 current_variant.clear();
             };
-            previous_match = (t_pos, t_char, q_char);
+            previous_match = (t_pos, q_pos, t_char, q_char);
             debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
         }
         'X' => {
@@ -400,8 +402,8 @@ mod test {
         println!("{}", q_aln_str);
         let aln_pairs = wfa_aln_pair_map(&t_aln_str, &q_aln_str);
         let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
-        variants.into_iter().for_each(|(pos, s1, s2)| {
-            println!("{} {} {}", pos, s1, s2);
+        variants.into_iter().for_each(|(t_pos, q_pos, s1, s2)| {
+            println!("{} {} {} {}", t_pos, q_pos, s1, s2);
         });
     }
 }
