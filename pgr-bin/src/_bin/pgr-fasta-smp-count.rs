@@ -12,7 +12,7 @@ use pgr_db::seq_db;
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-seq-smp-count")]
 #[clap(author, version)]
-#[clap(about = "count shimmer pairs in a shimmer database", long_about = None)]
+#[clap(about = "count shimmer pairs from fasta files", long_about = None)]
 struct CmdOptions {
     #[clap(long, short)]
     in_fasta: String,
