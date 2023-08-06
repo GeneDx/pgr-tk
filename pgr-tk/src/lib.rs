@@ -162,7 +162,7 @@ impl SeqIndexDB {
     /// ----------
     ///
     /// seq_list : list
-    ///     a list of tuple of the form (sequence_id : int, sequence_name : string, sequence: list of bytes)
+    ///     a list of tuple of the form (sequence_name : string, sequence: list of bytes)
     ///
     /// source : string
     ///     a string indicating the source of the sequence, default to "Memory"
@@ -1759,7 +1759,7 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: Vec<(u32, u32, char)>,
     target_str: &str,
     query_str: &str,
-) -> Vec<(u32, String, String)> {
+) -> Vec<(u32, u32, String, String)> {
     aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str)
 }
 
@@ -1769,7 +1769,9 @@ pub fn get_variants_from_aln_pair_map(
 /// ----------
 /// Documents:TODO
 ///
-#[pyfunction(signature = (target_str, query_str, max_wf_length=None, mismatch_penalty=4, open_penalty=3, extension_penalty=1, max_diff_percents = 0.05))]
+#[pyfunction(signature = (target_str, query_str, max_wf_length=None, 
+    mismatch_penalty=4, open_penalty=3, extension_penalty=1, 
+    max_diff_percent = 0.05))]
 pub fn get_variant_segments(
     target_str: &str,
     query_str: &str,
@@ -1777,8 +1779,8 @@ pub fn get_variant_segments(
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
-    max_diff_percents: f32,
-) -> Option<(Vec<(u32, String, String)>, Vec<(u32, u32, char)>)> {
+    max_diff_percent: f32,
+) -> Option<(Vec<(u32, u32, String, String)>, Vec<(u32, u32, char)>)> {
     let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
     let max_wf_length = if let Some(max_wf_length) = max_wf_length {
         max_wf_length
@@ -1788,7 +1790,7 @@ pub fn get_variant_segments(
 
     if max_wf_length > 128
         && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
-            > max_diff_percents
+            > max_diff_percent
     {
         return None;
     };
