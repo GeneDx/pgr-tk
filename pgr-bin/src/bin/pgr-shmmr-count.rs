@@ -18,16 +18,16 @@ enum GZFastaReader {
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// the target fasta file path
+    /// the target fasta file path, for example a reference or assembled contigs
     shmmr_target_fastx: String,
 
-    /// ref_fasta
+    /// ref_fasta, used for the reference coordinate system
     ref_fastx: String,
 
     /// read_fasta
     read_fastx: String,
 
-    /// output file name
+    /// output file name, we will compute the count comparing to the count from shmmr_target_fastx
     #[clap(short, long, default_value=None)]
     output_file: Option<String>,
 
