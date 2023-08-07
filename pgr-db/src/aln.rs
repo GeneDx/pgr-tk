@@ -289,15 +289,15 @@ pub fn get_variants_from_aln_pair_map(
                 previous_match.0,
                 previous_match.1,
                 'I',
-                [previous_match.2.to_string(), t_variant_segment].join(""),
-                [previous_match.3.to_string(), q_variant_segment].join(""),
+                [previous_match.3.to_string(), t_variant_segment].join(""),
+                [previous_match.4.to_string(), q_variant_segment].join(""),
             )),
             'D' => Some((
                 previous_match.0,
                 previous_match.1,
                 'D',
-                [previous_match.2.to_string(), t_variant_segment].join(""),
-                [previous_match.3.to_string(), q_variant_segment].join(""),
+                [previous_match.3.to_string(), t_variant_segment].join(""),
+                [previous_match.4.to_string(), q_variant_segment].join(""),
             )),
             _ => None,
         }
@@ -313,7 +313,7 @@ pub fn get_variants_from_aln_pair_map(
                 variants.push(aggregate_variants(&previous_match, &current_variant));
                 current_variant.clear();
             };
-            previous_match = (t_pos, q_pos, t_char, t_char, q_char);
+            previous_match = (t_pos, q_pos, 'M', t_char, q_char);
             debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
         }
         'X' => {
