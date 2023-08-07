@@ -213,7 +213,7 @@ pub fn wfa_align_bases(
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
-) -> (String, String) {
+) -> Option<(String, String)> {
     let capacity = std::cmp::max(1024, std::cmp::max(target_str.len(), query_str.len()) >> 5);
     let mut wfs = WaveFronts::new_with_capacity(
         target_str,
@@ -222,10 +222,13 @@ pub fn wfa_align_bases(
         mismatch_penalty,
         open_penalty,
         extension_penalty,
-        capacity
+        capacity,
     );
-    wfs.step_all();
-    wfs.backtrace()
+    if wfs.step_all(Some(1024)) == WaveFrontStepResult::ReachEnd {
+        Some(wfs.backtrace())
+    } else {
+        None
+    }
 }
 
 pub fn wfa_aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
@@ -266,34 +269,41 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: &[(u32, u32, char)],
     target_str: &str,
     query_str: &str,
-) -> Vec<(u32, u32, String, String)> {
-
+) -> Vec<(u32, u32, char, String, String)> {
     let mut current_variant = Vec::<(char, char, char)>::new();
-    let aggregate_variants = |previous_match: &(u32, u32, char, char),
+    let aggregate_variants = |previous_match: &(u32, u32, char, char, char),
                               current_variant: &Vec<(char, char, char)>|
-     -> Option<(u32, u32, String, String)> {
+     -> Option<(u32, u32, char, String, String)> {
         let t_variant_segment = String::from_iter(current_variant.iter().map(|v| v.0));
         let q_variant_segment = String::from_iter(current_variant.iter().map(|v| v.1));
         let v_type = current_variant[0].2;
         match v_type {
-            'X' => Some((previous_match.0 + 1, previous_match.1 + 1, t_variant_segment, q_variant_segment)),
+            'X' => Some((
+                previous_match.0 + 1,
+                previous_match.1 + 1,
+                'X',
+                t_variant_segment,
+                q_variant_segment,
+            )),
             'I' => Some((
                 previous_match.0,
                 previous_match.1,
+                'I',
                 [previous_match.2.to_string(), t_variant_segment].join(""),
                 [previous_match.3.to_string(), q_variant_segment].join(""),
             )),
             'D' => Some((
                 previous_match.0,
                 previous_match.1,
+                'D',
                 [previous_match.2.to_string(), t_variant_segment].join(""),
                 [previous_match.3.to_string(), q_variant_segment].join(""),
             )),
             _ => None,
         }
     };
-    let mut previous_match = (0_u32, 0_u32, '-', '-');
-    let mut variants = Vec::<Option<(u32, u32, String, String)>>::new();
+    let mut previous_match = (0_u32, 0_u32, 'U', '-', '-');
+    let mut variants = Vec::<Option<(u32, u32, char, String, String)>>::new();
 
     aln_pairs.iter().for_each(|&(t_pos, q_pos, t)| match t {
         'M' => {
@@ -303,7 +313,7 @@ pub fn get_variants_from_aln_pair_map(
                 variants.push(aggregate_variants(&previous_match, &current_variant));
                 current_variant.clear();
             };
-            previous_match = (t_pos, q_pos, t_char, q_char);
+            previous_match = (t_pos, q_pos, t_char, t_char, q_char);
             debug!("{} {} {:1} {:1} {}", t_pos, q_pos, t_char, q_char, t);
         }
         'X' => {
@@ -391,19 +401,20 @@ mod test {
 
     #[test]
     fn test_wfa_align_bases() {
-        use crate::aln::{wfa_align_bases, wfa_aln_pair_map, get_variants_from_aln_pair_map};
+        use crate::aln::{get_variants_from_aln_pair_map, wfa_align_bases, wfa_aln_pair_map};
         use log::debug;
         use simple_logger::SimpleLogger;
         SimpleLogger::new().init().unwrap();
         let t_str = "ACATACATGTGTGTGAAAAATATATAAGTAAAAAAAATGCATGAAACCCCAAAAGTTGCATGAAACATACATGAAAATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCATGAAACCCCATACATGAAAGTTGCATGAA";
         let q_str = "ACATACATGTGAAATATAATAAAAGTTGCATGAAAAAACATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCAAAAGTTGCATGAAACATACATGAAAATGAAAAAACATACATGAAAGTTGCATGAA";
-        let (t_aln_str, q_aln_str) = wfa_align_bases(t_str, q_str, 20, 2, 2, 1);
-        println!("{}", t_aln_str);
-        println!("{}", q_aln_str);
-        let aln_pairs = wfa_aln_pair_map(&t_aln_str, &q_aln_str);
-        let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
-        variants.into_iter().for_each(|(t_pos, q_pos, s1, s2)| {
-            println!("{} {} {} {}", t_pos, q_pos, s1, s2);
-        });
+        if let Some((t_aln_str, q_aln_str)) = wfa_align_bases(t_str, q_str, 20, 2, 2, 1) {
+            println!("{}", t_aln_str);
+            println!("{}", q_aln_str);
+            let aln_pairs = wfa_aln_pair_map(&t_aln_str, &q_aln_str);
+            let variants = get_variants_from_aln_pair_map(&aln_pairs, t_str, q_str);
+            variants.into_iter().for_each(|(t_pos, q_pos, t, s1, s2)| {
+                println!("{} {} {} {} {}", t_pos, q_pos, t, s1, s2);
+            });
+        }
     }
 }

@@ -1685,7 +1685,7 @@ pub fn wfa_align_bases(
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
-) -> (String, String) {
+) -> Option<(String, String)> {
     aln::wfa_align_bases(
         target_str,
         query_str,
@@ -1737,15 +1737,18 @@ pub fn get_wfa_aln_pair_map(
         return None;
     };
 
-    let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
+    if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
         target_str,
         query_str,
         max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
-    );
-    Some(aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str))
+    ) {
+        Some(aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str))
+    } else {
+        None
+    }
 }
 
 /// generate variant segments from a pair map
@@ -1759,7 +1762,7 @@ pub fn get_variants_from_aln_pair_map(
     aln_pairs: Vec<(u32, u32, char)>,
     target_str: &str,
     query_str: &str,
-) -> Vec<(u32, u32, String, String)> {
+) -> Vec<(u32, u32, char, String, String)> {
     aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str)
 }
 
@@ -1780,7 +1783,7 @@ pub fn get_variant_segments(
     open_penalty: i32,
     extension_penalty: i32,
     max_diff_percent: f32,
-) -> Option<(Vec<(u32, u32, String, String)>, Vec<(u32, u32, char)>)> {
+) -> Option<(Vec<(u32, u32, char, String, String)>, Vec<(u32, u32, char)>)> {
     let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
     let max_wf_length = if let Some(max_wf_length) = max_wf_length {
         max_wf_length
@@ -1795,19 +1798,22 @@ pub fn get_variant_segments(
         return None;
     };
 
-    let (aln_target_str, aln_query_str) = aln::wfa_align_bases(
+    if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases (
         target_str,
         query_str,
         max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
-    );
-    let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
-    Some((
-        aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str),
-        aln_pairs,
-    ))
+    ) {
+        let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+        Some((
+            aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str),
+            aln_pairs,
+        ))
+    } else {
+        None
+    }
 }
 
 /// Perform a naive de Bruijn graph consensus
