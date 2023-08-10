@@ -268,8 +268,8 @@ fn main() -> Result<(), std::io::Error> {
             out,
             "{}\t{}\t{}\t{}\t{}\t{}",
             ctg,
+            pos - args.k as usize,
             pos,
-            pos + args.k as usize,
             c1 as f32 / c0 as f32,
             c1,
             c0
