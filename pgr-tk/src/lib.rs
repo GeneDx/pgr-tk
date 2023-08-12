@@ -25,6 +25,9 @@ pub fn pgr_lib_version() -> PyResult<String> {
     Ok(VERSION_STRING.to_string())
 }
 
+
+type Bundles = Vec<Vec<(u64, u64, u8)>>; // each bundle is a Vec<node>, each node is (hash0, hash1, orientation)
+
 /// A class that stores pangenome indices and sequences with multiple backend storage options (AGC, fasta file, memory)
 /// Large set of genomic sequences, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
 /// which can read an AGC to create the index file. For example, we can create the index files from an AGC file::
@@ -53,11 +56,16 @@ pub fn pgr_lib_version() -> PyResult<String> {
 /// the ``query_fragment_to_hps()`` method.
 ///  
 #[pyclass]
+#[derive(Default)]
 struct SeqIndexDB {
     /// Rust internal:
     db_internal: pgr_db::ext::SeqIndexDB,
-    pub principal_bundles: Option<(usize, usize, Vec<Vec<(u64, u64, u8)>>)>,
+    pub principal_bundles: Option<(usize, usize, Bundles)>,
 }
+
+
+type CtgNameSrcToIdLen = FxHashMap<(String, Option<String>), (u32, u32)>;
+type SeqInfoMap = FxHashMap<u32, (String, Option<String>, u32)>; // seq_id -> (ctg_name ,src, length)
 
 #[pymethods]
 impl SeqIndexDB {
@@ -201,17 +209,18 @@ impl SeqIndexDB {
         Ok(())
     }
 
+
     /// get a dictionary that maps (ctg_name, source) -> (id, len)
     #[getter]
     pub fn get_seq_index(
         &self,
-    ) -> PyResult<Option<FxHashMap<(String, Option<String>), (u32, u32)>>> {
+    ) -> PyResult<Option<CtgNameSrcToIdLen>> {
         Ok(self.db_internal.seq_index.clone())
     }
 
     /// a dictionary that maps id -> (ctg_name, source, len)
     #[getter]
-    pub fn get_seq_info(&self) -> PyResult<Option<FxHashMap<u32, (String, Option<String>, u32)>>> {
+    pub fn get_seq_info(&self) -> PyResult<Option<SeqInfoMap>> {
         Ok(self.db_internal.seq_info.clone())
     }
 
@@ -496,9 +505,10 @@ impl SeqIndexDB {
                             // println!("right set: {:?} {:?}", v, w);
                         }
                     });
-                    if left_match.is_some() && right_match.is_some() {
-                        out.push((*t_id, *score, left_match.unwrap(), right_match.unwrap()));
+                    if let (Some(left_match), Some(right_match)) = (left_match, right_match) {
+                        out.push((*t_id, *score, left_match, right_match)); 
                     };
+
                     pos2hits.entry(pos).or_insert(vec![]).extend(out);
                 });
             });
@@ -517,7 +527,7 @@ impl SeqIndexDB {
                         .seq_info
                         .as_ref()
                         .unwrap()
-                        .get(&seq_id)
+                        .get(seq_id)
                         .unwrap(); //TODO, check if seq_info is None
                     let same_orientation = left_match.0 .2 == left_match.1 .2;
 
@@ -561,10 +571,10 @@ impl SeqIndexDB {
                     //    println!("qseq: {}", String::from_utf8_lossy(&q_seq[..]));
                     //    println!("tseq: {}", String::from_utf8_lossy(&t_seq[..]));
                     // }
-                    if ovlp.is_some() {
+                    if let Some(ovlp) = ovlp {
                         let dpos = pos - qb;
 
-                        let mut delta = ovlp.unwrap().deltas.unwrap();
+                        let mut delta = ovlp.deltas.unwrap();
 
                         delta.push(DeltaPoint { x: 0, y: 0, dk: 0 });
 
@@ -681,11 +691,7 @@ impl SeqIndexDB {
                 .into_par_iter()
                 .filter(|(_k, v)| {
                     if let Some(muc) = max_unique_count {
-                        if *v > muc {
-                            false
-                        } else {
-                            true
-                        }
+                        *v < muc
                     } else {
                         true
                     }
@@ -877,12 +883,8 @@ impl SeqIndexDB {
         keeps: Option<Vec<u32>>,
     ) -> PyResult<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>> {
         let frag_map = self.get_shmmr_map_internal();
-        if frag_map.is_none() {
-            return Err(exceptions::PyException::new_err(
-                "This method only support FASTX or MEMORY backend.",
-            ));
-        } else {
-            let frag_map = frag_map.unwrap();
+
+        if let Some(frag_map) = frag_map {
             let out = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
                 .iter()
                 .map(|adj_pair| {
@@ -894,6 +896,11 @@ impl SeqIndexDB {
                 })
                 .collect();
             Ok(out)
+    
+        } else {
+            Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ))
         }
     }
 
@@ -941,7 +948,7 @@ impl SeqIndexDB {
         let start = ShmmrGraphNode(start.0, start.1, start.2);
 
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+            seq_db::sort_adj_list_by_weighted_dfs(frag_map, &adj_list, start)
                 .iter()
                 .map(|v| {
                     (
@@ -976,6 +983,7 @@ impl SeqIndexDB {
     /// -------
     /// list
     ///     list of paths, each path is a list of nodes
+    ///     each node is a tuple of (hash0, hash1, orientation)
     ///
     #[pyo3(signature = (min_count, path_len_cutoff, keeps=None))]
     pub fn get_principal_bundles(
@@ -983,7 +991,7 @@ impl SeqIndexDB {
         min_count: usize,
         path_len_cutoff: usize,
         keeps: Option<Vec<u32>>,
-    ) -> Vec<Vec<(u64, u64, u8)>> {
+    ) -> Bundles {
         let pb = self
             .db_internal
             .get_principal_bundles(min_count, path_len_cutoff, keeps);
@@ -1134,7 +1142,7 @@ impl SeqIndexDB {
         )>,
     ) {
         fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
-            let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+            let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
             seq_db::pair_shmmrs(&shmmrs)
                 .par_iter()
                 .map(|(s0, s1)| {
@@ -1161,7 +1169,7 @@ impl SeqIndexDB {
             .into_iter()
             .map(|(sid, seq)| {
                 (
-                    sid as u32,
+                    sid,
                     get_smps(seq, &self.db_internal.shmmr_spec.clone().unwrap()),
                 )
             })
@@ -1195,10 +1203,9 @@ impl SeqIndexDB {
 
         // determine the bundles' overall orders and directions by consensus voting
         let mut bundle_mean_order_direction = (0..pb.len())
-            .into_iter()
             .map(|bid| {
                 if let Some(orders) = bundle_id_to_orders.get(&bid) {
-                    let sum: f32 = orders.into_iter().sum();
+                    let sum: f32 = orders.iter().sum();
                     let mean_ord = sum / (orders.len() as f32);
                     let mean_ord = mean_ord as usize;
                     let directions = bundle_id_to_directions.get(&bid).unwrap();
@@ -1247,14 +1254,10 @@ impl SeqIndexDB {
             .iter()
             .map(|(sid, smps)| {
                 let smps = smps
-                    .into_iter()
+                    .iter()
                     .map(|v| {
-                        let seg_match =
-                            if let Some(m) = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)) {
-                                Some(*m)
-                            } else {
-                                None
-                            };
+                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
+                       
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
@@ -1354,7 +1357,7 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    fn write_frag_and_index_files(&self, file_prefix: String) -> () {
+    fn write_frag_and_index_files(&self, file_prefix: String) {
         if self.db_internal.seq_db.is_some() {
             let internal = self.db_internal.seq_db.as_ref().unwrap();
 
@@ -1654,7 +1657,7 @@ fn get_shmmr_dots(
     for m in shmmr0 {
         let hash = m.x >> 8;
         let pos = ((m.y & 0xFFFFFFFF) >> 1) as u32;
-        base_mmer_x.entry(hash).or_insert_with(|| vec![]).push(pos);
+        base_mmer_x.entry(hash).or_insert_with(Vec::new).push(pos);
     }
 
     for m in shmmr1 {
