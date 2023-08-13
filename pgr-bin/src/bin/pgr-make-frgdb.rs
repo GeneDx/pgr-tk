@@ -49,22 +49,19 @@ fn main() {
         File::open(Path::new(&args.filepath))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files
-        .lines()
-        .enumerate()
-        .for_each(|(fid, filename)| {
-            let filepath = filename
-                .expect("can't get fastx file name")
-                .trim()
-                .to_string();
-            if fid == 0 {
-                sdb.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            } else {
-                sdb.append_from_fastx(filepath.clone())
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            }
-        });
+    input_files.lines().enumerate().for_each(|(fid, filename)| {
+        let filepath = filename
+            .expect("can't get fastx file name")
+            .trim()
+            .to_string();
+        if fid == 0 {
+            sdb.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        } else {
+            sdb.append_from_fastx(filepath.clone())
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        }
+    });
 
     sdb.write_frag_and_index_files(args.prefix);
 }

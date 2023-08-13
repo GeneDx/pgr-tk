@@ -1,8 +1,8 @@
 const VERSION_STRING: &'static str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use flate2::bufread::MultiGzDecoder;
-use pgr_db::fasta_io::{FastaReader, FastqStreamReader, SeqRec, FastaStreamReader};
-use pgr_db::kmer_filter::{MinimizerFilter};
+use pgr_db::fasta_io::{FastaReader, FastaStreamReader, FastqStreamReader, SeqRec};
+use pgr_db::kmer_filter::MinimizerFilter;
 use rayon::prelude::*;
 use std::fs::File;
 use std::io::{self, BufReader, Read};

@@ -16,7 +16,7 @@ jobs:
         submodules: recursive
     - name: setup
       run: |
-        rustup default stable && cd WFA2-lib && make all
+        rustup default stable
     - name: Run tests
       run: cargo test --verbose --workspace --exclude pgrtk
     - name: Build

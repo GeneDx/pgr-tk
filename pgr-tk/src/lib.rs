@@ -25,6 +25,9 @@ pub fn pgr_lib_version() -> PyResult<String> {
     Ok(VERSION_STRING.to_string())
 }
 
+
+type Bundles = Vec<Vec<(u64, u64, u8)>>; // each bundle is a Vec<node>, each node is (hash0, hash1, orientation)
+
 /// A class that stores pangenome indices and sequences with multiple backend storage options (AGC, fasta file, memory)
 /// Large set of genomic sequences, a user should use AGC backend. A binary file provides the command ``pgr-mdb``
 /// which can read an AGC to create the index file. For example, we can create the index files from an AGC file::
@@ -53,11 +56,16 @@ pub fn pgr_lib_version() -> PyResult<String> {
 /// the ``query_fragment_to_hps()`` method.
 ///  
 #[pyclass]
+#[derive(Default)]
 struct SeqIndexDB {
     /// Rust internal:
     db_internal: pgr_db::ext::SeqIndexDB,
-    pub principal_bundles: Option<(usize, usize, Vec<Vec<(u64, u64, u8)>>)>,
+    pub principal_bundles: Option<(usize, usize, Bundles)>,
 }
+
+
+type CtgNameSrcToIdLen = FxHashMap<(String, Option<String>), (u32, u32)>;
+type SeqInfoMap = FxHashMap<u32, (String, Option<String>, u32)>; // seq_id -> (ctg_name ,src, length)
 
 #[pymethods]
 impl SeqIndexDB {
@@ -162,7 +170,7 @@ impl SeqIndexDB {
     /// ----------
     ///
     /// seq_list : list
-    ///     a list of tuple of the form (sequence_id : int, sequence_name : string, sequence: list of bytes)
+    ///     a list of tuple of the form (sequence_name : string, sequence: list of bytes)
     ///
     /// source : string
     ///     a string indicating the source of the sequence, default to "Memory"
@@ -201,17 +209,18 @@ impl SeqIndexDB {
         Ok(())
     }
 
+
     /// get a dictionary that maps (ctg_name, source) -> (id, len)
     #[getter]
     pub fn get_seq_index(
         &self,
-    ) -> PyResult<Option<FxHashMap<(String, Option<String>), (u32, u32)>>> {
+    ) -> PyResult<Option<CtgNameSrcToIdLen>> {
         Ok(self.db_internal.seq_index.clone())
     }
 
     /// a dictionary that maps id -> (ctg_name, source, len)
     #[getter]
-    pub fn get_seq_info(&self) -> PyResult<Option<FxHashMap<u32, (String, Option<String>, u32)>>> {
+    pub fn get_seq_info(&self) -> PyResult<Option<SeqInfoMap>> {
         Ok(self.db_internal.seq_info.clone())
     }
 
@@ -367,7 +376,7 @@ impl SeqIndexDB {
             Backend::AGC => Ok(self
                 .db_internal
                 .query_fragment_to_hps_from_mmap_file(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
@@ -378,7 +387,7 @@ impl SeqIndexDB {
             Backend::FRG => Ok(self
                 .db_internal
                 .query_fragment_to_hps_from_mmap_file(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
@@ -389,7 +398,7 @@ impl SeqIndexDB {
             Backend::MEMORY | Backend::FASTX => Ok(self
                 .db_internal
                 .query_fragment_to_hps(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
@@ -496,9 +505,10 @@ impl SeqIndexDB {
                             // println!("right set: {:?} {:?}", v, w);
                         }
                     });
-                    if left_match.is_some() && right_match.is_some() {
-                        out.push((*t_id, *score, left_match.unwrap(), right_match.unwrap()));
+                    if let (Some(left_match), Some(right_match)) = (left_match, right_match) {
+                        out.push((*t_id, *score, left_match, right_match)); 
                     };
+
                     pos2hits.entry(pos).or_insert(vec![]).extend(out);
                 });
             });
@@ -517,13 +527,9 @@ impl SeqIndexDB {
                         .seq_info
                         .as_ref()
                         .unwrap()
-                        .get(&seq_id)
+                        .get(seq_id)
                         .unwrap(); //TODO, check if seq_info is None
-                    let same_orientation = if left_match.0 .2 == left_match.1 .2 {
-                        true
-                    } else {
-                        false
-                    };
+                    let same_orientation = left_match.0 .2 == left_match.1 .2;
 
                     let qb = left_match.0 .0;
                     let qe = right_match.0 .1;
@@ -565,10 +571,10 @@ impl SeqIndexDB {
                     //    println!("qseq: {}", String::from_utf8_lossy(&q_seq[..]));
                     //    println!("tseq: {}", String::from_utf8_lossy(&t_seq[..]));
                     // }
-                    if ovlp.is_some() {
+                    if let Some(ovlp) = ovlp {
                         let dpos = pos - qb;
 
-                        let mut delta = ovlp.unwrap().deltas.unwrap();
+                        let mut delta = ovlp.deltas.unwrap();
 
                         delta.push(DeltaPoint { x: 0, y: 0, dk: 0 });
 
@@ -685,11 +691,7 @@ impl SeqIndexDB {
                 .into_par_iter()
                 .filter(|(_k, v)| {
                     if let Some(muc) = max_unique_count {
-                        if *v > muc {
-                            false
-                        } else {
-                            true
-                        }
+                        *v < muc
                     } else {
                         true
                     }
@@ -881,12 +883,8 @@ impl SeqIndexDB {
         keeps: Option<Vec<u32>>,
     ) -> PyResult<Vec<(u32, (u64, u64, u8), (u64, u64, u8))>> {
         let frag_map = self.get_shmmr_map_internal();
-        if frag_map.is_none() {
-            return Err(exceptions::PyException::new_err(
-                "This method only support FASTX or MEMORY backend.",
-            ));
-        } else {
-            let frag_map = frag_map.unwrap();
+
+        if let Some(frag_map) = frag_map {
             let out = seq_db::frag_map_to_adj_list(frag_map, min_count, keeps)
                 .iter()
                 .map(|adj_pair| {
@@ -898,6 +896,11 @@ impl SeqIndexDB {
                 })
                 .collect();
             Ok(out)
+    
+        } else {
+            Err(exceptions::PyException::new_err(
+                "This method only support FASTX or MEMORY backend.",
+            ))
         }
     }
 
@@ -945,7 +948,7 @@ impl SeqIndexDB {
         let start = ShmmrGraphNode(start.0, start.1, start.2);
 
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            seq_db::sort_adj_list_by_weighted_dfs(&frag_map, &adj_list, start)
+            seq_db::sort_adj_list_by_weighted_dfs(frag_map, &adj_list, start)
                 .iter()
                 .map(|v| {
                     (
@@ -980,6 +983,7 @@ impl SeqIndexDB {
     /// -------
     /// list
     ///     list of paths, each path is a list of nodes
+    ///     each node is a tuple of (hash0, hash1, orientation)
     ///
     #[pyo3(signature = (min_count, path_len_cutoff, keeps=None))]
     pub fn get_principal_bundles(
@@ -987,7 +991,7 @@ impl SeqIndexDB {
         min_count: usize,
         path_len_cutoff: usize,
         keeps: Option<Vec<u32>>,
-    ) -> Vec<Vec<(u64, u64, u8)>> {
+    ) -> Bundles {
         let pb = self
             .db_internal
             .get_principal_bundles(min_count, path_len_cutoff, keeps);
@@ -1138,7 +1142,7 @@ impl SeqIndexDB {
         )>,
     ) {
         fn get_smps(seq: Vec<u8>, shmmr_spec: &ShmmrSpec) -> Vec<(u64, u64, u32, u32, u8)> {
-            let shmmrs = sequence_to_shmmrs(0, &seq, &shmmr_spec, false);
+            let shmmrs = sequence_to_shmmrs(0, &seq, shmmr_spec, false);
             seq_db::pair_shmmrs(&shmmrs)
                 .par_iter()
                 .map(|(s0, s1)| {
@@ -1165,7 +1169,7 @@ impl SeqIndexDB {
             .into_iter()
             .map(|(sid, seq)| {
                 (
-                    sid as u32,
+                    sid,
                     get_smps(seq, &self.db_internal.shmmr_spec.clone().unwrap()),
                 )
             })
@@ -1199,10 +1203,9 @@ impl SeqIndexDB {
 
         // determine the bundles' overall orders and directions by consensus voting
         let mut bundle_mean_order_direction = (0..pb.len())
-            .into_iter()
             .map(|bid| {
                 if let Some(orders) = bundle_id_to_orders.get(&bid) {
-                    let sum: f32 = orders.into_iter().sum();
+                    let sum: f32 = orders.iter().sum();
                     let mean_ord = sum / (orders.len() as f32);
                     let mean_ord = mean_ord as usize;
                     let directions = bundle_id_to_directions.get(&bid).unwrap();
@@ -1251,14 +1254,10 @@ impl SeqIndexDB {
             .iter()
             .map(|(sid, smps)| {
                 let smps = smps
-                    .into_iter()
+                    .iter()
                     .map(|v| {
-                        let seg_match =
-                            if let Some(m) = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)) {
-                                Some(*m)
-                            } else {
-                                None
-                            };
+                        let seg_match = vertex_to_bundle_id_direction_pos.get(&(v.0, v.1)).copied();
+                       
                         (*v, seg_match)
                     })
                     .collect::<Vec<((u64, u64, u32, u32, u8), Option<(usize, u8, usize)>)>>();
@@ -1358,7 +1357,7 @@ impl SeqIndexDB {
         Ok(())
     }
 
-    fn write_frag_and_index_files(&self, file_prefix: String) -> () {
+    fn write_frag_and_index_files(&self, file_prefix: String) {
         if self.db_internal.seq_db.is_some() {
             let internal = self.db_internal.seq_db.as_ref().unwrap();
 
@@ -1658,7 +1657,7 @@ fn get_shmmr_dots(
     for m in shmmr0 {
         let hash = m.x >> 8;
         let pos = ((m.y & 0xFFFFFFFF) >> 1) as u32;
-        base_mmer_x.entry(hash).or_insert_with(|| vec![]).push(pos);
+        base_mmer_x.entry(hash).or_insert_with(Vec::new).push(pos);
     }
 
     for m in shmmr1 {
@@ -1675,205 +1674,150 @@ fn get_shmmr_dots(
     (x, y)
 }
 
-/// A wrapper class to represent alignment segment for python
+/// perform wfa alignment between two sequences
 ///
-/// This wraps the Rust struct ``seq2variants::AlnSegment`` mapping
-/// the enum ``seq2variants::AlnSegType`` to integers
+/// Parameters
+/// ----------
+/// Documents:TODO
 ///
-#[pyclass]
-#[derive(Clone)]
-struct AlnSegment {
-    /// alignment type: value =  ``b'M'``, ``b'I'``, ``b'D'``, ``b'X'``, or ``b'?'``
-    #[pyo3(get, set)]
-    t: u8,
-    /// segment coordinate in the reference: (begin, end, length)
-    #[pyo3(get, set)]
-    ref_loc: (u32, u32, u32),
-    /// segment coordinate in the target: (begin, end, length)
-    #[pyo3(get, set)]
-    tgt_loc: (u32, u32, u32),
+#[pyfunction(signature = (target_str, query_str, max_wf_length, mismatch_penalty, open_penalty, extension_penalty))]
+pub fn wfa_align_bases(
+    target_str: &str,
+    query_str: &str,
+    max_wf_length: u32,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+) -> Option<(String, String)> {
+    aln::wfa_align_bases(
+        target_str,
+        query_str,
+        max_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    )
 }
 
-/// A  class to represent alignment mapping between the two sequences
-#[pyclass]
-#[derive(Clone)]
-pub struct AlnMap {
-    /// mapped location between two sequence as a list of paired coordinate
-    #[pyo3(get, set)]
-    pmap: Vec<(u32, u32)>,
-    /// alignment string of the reference
-    #[pyo3(get, set)]
-    ref_a_seq: Vec<u8>,
-    /// alignment string of the target
-    #[pyo3(get, set)]
-    tgt_a_seq: Vec<u8>,
-    /// alignment string of alignment symbols
-    #[pyo3(get, set)]
-    aln_seq: Vec<u8>,
+/// convert alignment string to alignment pair map
+///
+/// Parameters
+/// ----------
+/// Documents:TODO
+///
+#[pyfunction(signature = (aln_target_str, aln_query_str))]
+pub fn wfa_aln_pair_map(aln_target_str: &str, aln_query_str: &str) -> Vec<(u32, u32, char)> {
+    aln::wfa_aln_pair_map(aln_target_str, aln_query_str)
 }
 
-/// Generate the CIGAR string from two sequences with WFA
+/// convert alignment string to alignment pair map
 ///
 /// Parameters
 /// ----------
+/// Documents:TODO
 ///
-/// seq0 : string
-///     a string representing the first sequence
-///
-/// seq1 : string
-///     a string representing the second sequence
-///
-/// Returns
-/// -------
-/// tuple
-///     tuple of (alignment_score, CIGAR_list)
-///
-// #[pyfunction(seq0, seq1)]
-// #[pyo3(text_signature = "($self, seq0, seq1)")]
-// fn get_cigar(seq0: &PyString, seq1: &PyString) -> PyResult<(i32, Vec<u8>)> {
-//     if let Ok((score, cigar)) = seqs2variants::get_cigar(&seq0.to_string(), &seq1.to_string()) {
-//         Ok((score, cigar))
-//     } else {
-//         Err(PyValueError::new_err("fail to align"))
-//     }
-// }
+#[pyfunction(signature = (target_str, query_str, max_wf_length=None, mismatch_penalty=4, open_penalty=3, extension_penalty=1, max_diff_percent=0.02))]
+pub fn get_wfa_aln_pair_map(
+    target_str: &str,
+    query_str: &str,
+    max_wf_length: Option<u32>,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+    max_diff_percent: f32,
+) -> Option<Vec<(u32, u32, char)>> {
+    let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
+    let max_wf_length = if let Some(max_wf_length) = max_wf_length {
+        max_wf_length
+    } else {
+        std::cmp::max(2*set_len_diff, 128_u32)
+    };
 
-/// Get alignment segments from two sequences
+    if max_wf_length > 128
+        && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
+            > max_diff_percent
+    {
+        return None;
+    };
+
+    if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
+        target_str,
+        query_str,
+        max_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    ) {
+        Some(aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str))
+    } else {
+        None
+    }
+}
+
+/// generate variant segments from a pair map
 ///
 /// Parameters
 /// ----------
-/// ref_id : int
-///     a integer id for the reference sequence
+/// Documents:TODO
 ///
-/// ref_seq : string
-///     a python string of the reference sequence
-///
-/// tgt_id : int
-///     a integer id for the target sequence
-///
-/// tgt_seq : string
-///     a python string of the target sequence
-///
-/// Returns
-/// -------
-/// list
-///     a list of ``AlnSegment``
-///
-///     the ``AlnSegment`` is a Rust struct defined as::
-///
-///         pub struct SeqLocus {
-///             pub id: u32,
-///             pub bgn: u32,
-///             pub len: u32,
-///         }
-///
-///         pub enum AlnSegType {
-///             Match,
-///             Mismatch,
-///             Insertion,
-///             Deletion,
-///             Unspecified,
-///         }
-///
-///         pub struct AlnSegment {
-///             pub ref_loc: SeqLocus,
-///             pub tgt_loc: SeqLocus,
-///             pub t: AlnSegType,
-///         }
-///
-// #[pyfunction(ref_id, ref_seq, tgt_id, tgt_seq)]
-// #[pyo3(text_signature = "($self, ref_id, ref_seq, tgt_id, tgt_seq)")]
-// fn get_aln_segments(
-//     ref_id: u32,
-//     ref_seq: &PyString,
-//     tgt_id: u32,
-//     tgt_seq: &PyString,
-// ) -> PyResult<Vec<AlnSegment>> {
-//     let ref_seq = ref_seq.to_string();
-//     let tgt_seq = tgt_seq.to_string();
-//     let aln_segs = seqs2variants::get_aln_segments(ref_id, &ref_seq, tgt_id, &tgt_seq);
+#[pyfunction(signature = (aln_pairs, target_str, query_str))]
+pub fn get_variants_from_aln_pair_map(
+    aln_pairs: Vec<(u32, u32, char)>,
+    target_str: &str,
+    query_str: &str,
+) -> Vec<(u32, u32, char, String, String)> {
+    aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str)
+}
 
-//     match aln_segs {
-//         Ok(segs) => Ok(segs
-//             .par_iter()
-//             .map(|seg| {
-//                 let t = match seg.t {
-//                     seqs2variants::AlnSegType::Match => b'M',
-//                     seqs2variants::AlnSegType::Mismatch => b'X',
-//                     seqs2variants::AlnSegType::Insertion => b'I',
-//                     seqs2variants::AlnSegType::Deletion => b'D',
-//                     seqs2variants::AlnSegType::Unspecified => b'?',
-//                 };
-//                 AlnSegment {
-//                     t: t,
-//                     ref_loc: (seg.ref_loc.id, seg.ref_loc.bgn, seg.ref_loc.len),
-//                     tgt_loc: (seg.tgt_loc.id, seg.tgt_loc.bgn, seg.tgt_loc.len),
-//                 }
-//             })
-//             .collect()),
-//         Err(_) => Err(exceptions::PyException::new_err("alignment failed")),
-//     }
-// }
-
-/// Get alignment map from a list of alignment segments
+/// generate variant segments from two sequences
 ///
 /// Parameters
 /// ----------
-/// aln_segs : list
-///     a list of the ``AlnSegment``
+/// Documents:TODO
 ///
-/// s0: string
-///     a python string of the reference sequence
-///
-/// s1: int
-///     a integer id for the target sequence
-///
-/// Returns
-/// -------
-/// list
-///     a list of ``AlnSegment``
-// #[pyfunction(aln_segs, s0, s1)]
-// #[pyo3(text_signature = "($self, aln_segs, s0, s1)")]
-// fn get_aln_map(
-//     aln_segs: Vec<AlnSegment>,
-//     ref_seq: &PyString,
-//     tgt_seq: &PyString,
-// ) -> PyResult<AlnMap> {
-//     let s0 = ref_seq.to_string();
-//     let s1 = tgt_seq.to_string();
+#[pyfunction(signature = (target_str, query_str, max_wf_length=None, 
+    mismatch_penalty=4, open_penalty=3, extension_penalty=1, 
+    max_diff_percent = 0.05))]
+pub fn get_variant_segments(
+    target_str: &str,
+    query_str: &str,
+    max_wf_length: Option<u32>,
+    mismatch_penalty: i32,
+    open_penalty: i32,
+    extension_penalty: i32,
+    max_diff_percent: f32,
+) -> Option<(Vec<(u32, u32, char, String, String)>, Vec<(u32, u32, char)>)> {
+    let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
+    let max_wf_length = if let Some(max_wf_length) = max_wf_length {
+        max_wf_length
+    } else {
+        std::cmp::max(2*set_len_diff, 128_u32)
+    };
 
-//     let aln_segs = aln_segs
-//         .par_iter()
-//         .map(|s| seqs2variants::AlnSegment {
-//             ref_loc: seqs2variants::SeqLocus {
-//                 id: s.ref_loc.0,
-//                 bgn: s.ref_loc.1,
-//                 len: s.ref_loc.2,
-//             },
-//             tgt_loc: seqs2variants::SeqLocus {
-//                 id: s.tgt_loc.0,
-//                 bgn: s.tgt_loc.1,
-//                 len: s.tgt_loc.2,
-//             },
-//             t: match s.t {
-//                 b'M' => seqs2variants::AlnSegType::Match,
-//                 b'X' => seqs2variants::AlnSegType::Mismatch,
-//                 b'I' => seqs2variants::AlnSegType::Insertion,
-//                 b'D' => seqs2variants::AlnSegType::Deletion,
-//                 _ => seqs2variants::AlnSegType::Unspecified,
-//             },
-//         })
-//         .collect::<seqs2variants::AlnSegments>();
+    if max_wf_length > 128
+        && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
+            > max_diff_percent
+    {
+        return None;
+    };
 
-//     let aln_map = seqs2variants::get_aln_map(&aln_segs, &s0, &s1).unwrap();
-
-//     Ok(AlnMap {
-//         pmap: aln_map.pmap,
-//         ref_a_seq: aln_map.ref_a_seq,
-//         tgt_a_seq: aln_map.tgt_a_seq,
-//         aln_seq: aln_map.aln_seq,
-//     })
-// }
+    if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases (
+        target_str,
+        query_str,
+        max_wf_length,
+        mismatch_penalty,
+        open_penalty,
+        extension_penalty,
+    ) {
+        let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+        Some((
+            aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str),
+            aln_pairs,
+        ))
+    } else {
+        None
+    }
+}
 
 /// Perform a naive de Bruijn graph consensus
 ///
@@ -2042,9 +1986,11 @@ fn pgrtk(_: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<AGCFile>()?;
     m.add_function(wrap_pyfunction!(sparse_aln, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_dots, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_cigar, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_aln_segments, m)?)?;
-    //m.add_function(wrap_pyfunction!(get_aln_map, m)?)?;
+    m.add_function(wrap_pyfunction!(wfa_align_bases, m)?)?;
+    m.add_function(wrap_pyfunction!(wfa_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_wfa_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_variants_from_aln_pair_map, m)?)?;
+    m.add_function(wrap_pyfunction!(get_variant_segments, m)?)?;
     m.add_function(wrap_pyfunction!(pgr_lib_version, m)?)?;
     m.add_function(wrap_pyfunction!(get_shmmr_pairs_from_seq, m)?)?;
     m.add_function(wrap_pyfunction!(naive_dbg_consensus, m)?)?;

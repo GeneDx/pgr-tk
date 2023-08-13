@@ -18,16 +18,16 @@ enum GZFastaReader {
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// the target fasta file path
+    /// the target fasta file path, for example a reference or assembled contigs
     shmmr_target_fastx: String,
 
-    /// ref_fasta
+    /// ref_fasta, used for the reference coordinate system
     ref_fastx: String,
 
     /// read_fasta
     read_fastx: String,
 
-    /// output file name
+    /// output file name, we will compute the count comparing to the count from shmmr_target_fastx
     #[clap(short, long, default_value=None)]
     output_file: Option<String>,
 
@@ -180,7 +180,7 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|(counts, locations)| {
                 counts.for_each(|(k, v)| {
-                    let mut e = shmmr_count.entry(k).or_default();
+                    let e = shmmr_count.entry(k).or_default();
                     e.0 += v;
                 });
                 ref_shmmr_location.extend(locations);
@@ -221,8 +221,8 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|counts| {
                 counts.for_each(|(k, v)| {
-                    let mut e = shmmr_count.entry(k).or_default();
-                    (*e).1 += v;
+                    let e = shmmr_count.entry(k).or_default();
+                    e.1 += v;
                 });
             });
     };
@@ -268,8 +268,8 @@ fn main() -> Result<(), std::io::Error> {
             out,
             "{}\t{}\t{}\t{}\t{}\t{}",
             ctg,
+            pos - args.k as usize,
             pos,
-            pos + args.k as usize,
             c1 as f32 / c0 as f32,
             c1,
             c0
