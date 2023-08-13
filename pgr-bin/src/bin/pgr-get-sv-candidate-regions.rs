@@ -227,7 +227,7 @@ fn main() -> Result<(), std::io::Error> {
             );
             (idx, seq_rec, query_results)
         })
-        .map(|(_idx, seq_rec, query_results)| {
+        .flat_map(|(_idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
                 let q_name = String::from_utf8_lossy(&seq_rec.id);
                 let query_seq = seq_rec.seq;
@@ -330,7 +330,7 @@ fn main() -> Result<(), std::io::Error> {
                             .0
                             .clone();
 
-                        mapped_region_aln.into_iter().flat_map(|v| {
+                        mapped_region_aln.into_iter().map(|v| {
                             let mut output_records = Vec::<String>::new();
                             output_records.push(format!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len)); 
                             let v_last = v.last().unwrap().clone();
@@ -387,6 +387,7 @@ fn main() -> Result<(), std::io::Error> {
         .collect::<Vec<_>>()
         .into_iter()
         .flatten()
-        .for_each(|v| v.into_iter().for_each(|v| {println!("{}", v)}));
+        .enumerate()
+        .for_each(|(idx, v)| v.into_iter().for_each(|v| {println!("{:07}\t{}", idx, v)}));
     Ok(())
 }
