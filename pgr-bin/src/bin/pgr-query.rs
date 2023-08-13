@@ -142,7 +142,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let query_results = if !args.fastx_file {
                 seq_index_db.query_fragment_to_hps_from_mmap_file(
-                    query_seq,
+                    &query_seq,
                     args.gap_penalty_factor,
                     Some(args.max_count),
                     Some(args.max_query_count),
@@ -151,7 +151,7 @@ fn main() -> Result<(), std::io::Error> {
                 )
             } else {
                 seq_index_db.query_fragment_to_hps(
-                    query_seq,
+                    &query_seq,
                     args.gap_penalty_factor,
                     Some(args.max_count),
                     Some(args.max_query_count),

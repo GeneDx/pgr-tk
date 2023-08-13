@@ -376,7 +376,7 @@ impl SeqIndexDB {
             Backend::AGC => Ok(self
                 .db_internal
                 .query_fragment_to_hps_from_mmap_file(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
@@ -387,7 +387,7 @@ impl SeqIndexDB {
             Backend::FRG => Ok(self
                 .db_internal
                 .query_fragment_to_hps_from_mmap_file(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
@@ -398,7 +398,7 @@ impl SeqIndexDB {
             Backend::MEMORY | Backend::FASTX => Ok(self
                 .db_internal
                 .query_fragment_to_hps(
-                    seq,
+                    &seq,
                     penalty,
                     max_count,
                     max_count_query,
