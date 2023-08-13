@@ -315,7 +315,8 @@ fn main() -> Result<(), std::io::Error> {
                             .clone();
 
                         mapped_region_aln.into_iter().for_each(|v| {
-                            println!("B\t{}\t{}\t{}", ref_ctg_name, q_name, q_len); 
+                            println!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len); 
+                            let v_last = v.last().unwrap().clone();
                             v.into_iter()
                                 .for_each(|((ts, te), (qs, qe), orientation, diff)| {
                                     let qs = if orientation == 0 { qs } else { qs - kmer_size };
@@ -330,7 +331,7 @@ fn main() -> Result<(), std::io::Error> {
                                             diff.0.into_iter().for_each(
                                                 |(td, qd, vt, t_str, q_str)| {
                                                     println!(
-                                                        "V\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                                                        "V\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                                         ref_ctg_name,
                                                         ts,
                                                         te,
@@ -338,8 +339,9 @@ fn main() -> Result<(), std::io::Error> {
                                                         qs,
                                                         qe,
                                                         orientation,
+                                                        td,
+                                                        qd,
                                                         ts + td,
-                                                        qs + qd,
                                                         vt,
                                                         t_str,
                                                         q_str
@@ -354,7 +356,7 @@ fn main() -> Result<(), std::io::Error> {
                                         );
                                     }
                                 });
-                            println!("E\t{}\t{}\t{}", ref_ctg_name, q_name, q_len);
+                            println!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v_last.0.0, v_last.0.1, q_name, v_last.1.0, v_last.1.1, v_last.2, q_len); 
                         });
                     })
             };
