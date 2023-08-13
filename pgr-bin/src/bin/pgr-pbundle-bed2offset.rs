@@ -18,7 +18,7 @@ struct CmdOptions {
     /// the path the annotation files
     #[clap(long)]
     ctgs_of_interest: Option<String>,
-    /// use alternate anchoring method 
+    /// use alternate anchoring method
     #[clap(long, default_value_t = false)]
     alt_anchoring_mode: bool,
 }

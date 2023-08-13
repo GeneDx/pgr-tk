@@ -146,44 +146,38 @@ fn generate_bed_graph_from_fastx_files(args: &CmdOptions) {
         File::open(Path::new(&args.filepath0))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files
-        .lines()
-        .enumerate()
-        .for_each(|(fid, filename)| {
-            let filepath = filename
-                .expect("can't get fastx file name")
-                .trim()
-                .to_string();
-            if fid == 0 {
-                sdb0.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            } else {
-                sdb0.append_from_fastx(filepath.clone())
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            }
-        });
+    input_files.lines().enumerate().for_each(|(fid, filename)| {
+        let filepath = filename
+            .expect("can't get fastx file name")
+            .trim()
+            .to_string();
+        if fid == 0 {
+            sdb0.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        } else {
+            sdb0.append_from_fastx(filepath.clone())
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        }
+    });
 
     let mut sdb1 = SeqIndexDB::new();
     let input_files = BufReader::new(
         File::open(Path::new(&args.filepath1))
             .expect("can't open the input file that contains the paths to the fastx files"),
     );
-    input_files
-        .lines()
-        .enumerate()
-        .for_each(|(fid, filename)| {
-            let filepath = filename
-                .expect("can't get fastx file name")
-                .trim()
-                .to_string();
-            if fid == 0 {
-                sdb1.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            } else {
-                sdb1.append_from_fastx(filepath.clone())
-                    .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
-            }
-        });
+    input_files.lines().enumerate().for_each(|(fid, filename)| {
+        let filepath = filename
+            .expect("can't get fastx file name")
+            .trim()
+            .to_string();
+        if fid == 0 {
+            sdb1.load_from_fastx(filepath.clone(), args.w, args.k, args.r, args.min_span)
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        } else {
+            sdb1.append_from_fastx(filepath.clone())
+                .unwrap_or_else(|_| panic!("fail to read the fastx file: {}", filepath));
+        }
+    });
 
     let mut output_bedgraph_file0 = BufWriter::new(
         File::create(Path::new(&args.prefix).with_extension("0.bedgraph"))
