@@ -222,7 +222,7 @@ fn main() -> Result<(), std::io::Error> {
             .for_each(|counts| {
                 counts.for_each(|(k, v)| {
                     let e = shmmr_count.entry(k).or_default();
-                    (*e).1 += v;
+                    e.1 += v;
                 });
             });
     };
