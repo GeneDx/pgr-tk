@@ -52,7 +52,7 @@ type AlignSegments = Vec<AlignSegment>;
 
 fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     // the aln_segs should be sorted already
-    let mut aln_segs = aln_segs.clone();
+    let aln_segs = aln_segs.clone();
 
     let mut last_ts = aln_segs[0].1 .0;
     let mut last_te = aln_segs[0].1 .1;
@@ -61,7 +61,7 @@ fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     let mut last_qe = aln_segs[0].0 .1;
 
     let mut rtn = Vec::<((u32, u32), (u32, u32))>::new();
-    //rtn.push(((last_ts, last_te), (last_qs, last_qe)));
+    rtn.push(((last_ts, last_te), (last_qs, last_qe)));
     for ((qs, qe, qo), (ts, te, to)) in aln_segs {
         if te < ts {
             continue;
@@ -69,7 +69,7 @@ fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
         if qo != to {
             continue;
         };
-        if ts >= last_te {
+        if ts > last_te {
             last_ts = last_te;
             last_te = te;
 
@@ -78,8 +78,8 @@ fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
             if last_ts == last_te {
                 continue;
             }
+            rtn.push(((last_ts, last_te), (last_qs, last_qe)));
         }
-        rtn.push(((last_ts, last_te), (last_qs, last_qe)));
     }
     rtn
 }
@@ -96,7 +96,7 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     let mut last_qe = aln_segs[0].0 .1;
 
     let mut rtn = Vec::<((u32, u32), (u32, u32))>::new();
-    //rtn.push(((last_ts, last_te), (last_qs, last_qe)));
+    rtn.push(((last_ts, last_te), (last_qs, last_qe)));
     for ((qs, qe, qo), (ts, te, to)) in aln_segs {
         if te < ts {
             continue;
@@ -113,8 +113,8 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
             if last_ts == last_te {
                 continue;
             }
+            rtn.push(((last_ts, last_te), (last_qs, last_qe)));
         }
-        rtn.push(((last_ts, last_te), (last_qs, last_qe)));
     }
     rtn
 }
@@ -127,20 +127,12 @@ pub fn get_variant_segments(
     mismatch_penalty: i32,
     open_penalty: i32,
     extension_penalty: i32,
-    max_diff_percent: f32,
 ) -> Option<AlignmentResult> {
     let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
     let max_wf_length = if let Some(max_wf_length) = max_wf_length {
         max_wf_length
     } else {
         std::cmp::max(2 * set_len_diff, 128_u32)
-    };
-
-    if max_wf_length > 128
-        && (max_wf_length as f32 / std::cmp::min(target_str.len(), query_str.len()) as f32)
-            > max_diff_percent
-    {
-        return None;
     };
 
     if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
@@ -259,6 +251,9 @@ fn main() -> Result<(), std::io::Error> {
                                 aln_segs
                                     .into_iter()
                                     .map(|((ts, te), (qs, qe))| {
+                                        let ts = ts - kmer_size;
+                                        let qs = if orientation == 0 {qs - kmer_size} else {qs};
+                                        let qe = if orientation == 0 {qe} else {qe + kmer_size};
                                         let s0str = ref_seq[ts as usize..te as usize].to_vec();
                                         let s1str = if orientation == 0 {
                                             query_seq[qs as usize..qe as usize].to_vec()
@@ -286,11 +281,10 @@ fn main() -> Result<(), std::io::Error> {
                                                 get_variant_segments(
                                                     &s0str,
                                                     &s1str,
-                                                    Some(64),
-                                                    4,
+                                                    Some(128),
                                                     3,
+                                                    2,
                                                     1,
-                                                    1.0,
                                                 )
                                             } else {
                                                 None
@@ -304,7 +298,7 @@ fn main() -> Result<(), std::io::Error> {
                                         ((ts, te), (qs, qe), orientation, diff)
                                     })
                                     .collect::<Vec<_>>()
-                            })
+                            }).filter(|v| !v.is_empty())
                             .collect::<Vec<_>>();
 
                         let ref_ctg_name = ref_seq_index_db
@@ -317,6 +311,9 @@ fn main() -> Result<(), std::io::Error> {
                             .clone();
 
                         mapped_region_aln.into_iter().for_each(|v| {
+                            if v.is_empty() {
+                                return
+                            };
                             println!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len); 
                             let v_last = v.last().unwrap().clone();
                             v.into_iter()
