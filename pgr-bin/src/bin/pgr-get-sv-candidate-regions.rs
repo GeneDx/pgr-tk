@@ -60,7 +60,7 @@ fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
 
     let mut rtn = Vec::<((u32, u32), (u32, u32))>::new();
     rtn.push(((last_ts, last_te), (last_qs, last_qe)));
-    for ((qs, qe, qo), (ts, te, to)) in aln_segs {
+    for ((_qs, qe, qo), (ts, te, to)) in aln_segs {
         if te < ts {
             continue;
         };
@@ -95,7 +95,7 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
 
     let mut rtn = Vec::<((u32, u32), (u32, u32))>::new();
     rtn.push(((last_ts, last_te), (last_qs, last_qe)));
-    for ((qs, qe, qo), (ts, te, to)) in aln_segs {
+    for ((qs, _qe, qo), (ts, te, to)) in aln_segs {
         if te < ts {
             continue;
         };
@@ -119,8 +119,8 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
 
 type AlignmentResult = (Vec<(u32, u32, char, String, String)>, Vec<(u32, u32, char)>);
 pub fn get_variant_segments(
-    target_str: &str,
-    query_str: &str,
+    target_str: &[u8],
+    query_str: &[u8],
     max_wf_length: Option<u32>,
     mismatch_penalty: i32,
     open_penalty: i32,
@@ -133,17 +133,38 @@ pub fn get_variant_segments(
         std::cmp::max(2 * set_len_diff, 128_u32)
     };
 
+    // we need to reverse the string for alignment such the the gaps are on the left
+    // maybe we can do this in the stack for performance in the future
+    let mut r_t_str = target_str.to_vec();
+    let mut r_q_str = query_str.to_vec();
+    r_t_str.reverse();
+    r_q_str.reverse();
+    let r_t_str = String::from_utf8_lossy(&r_t_str[..]);
+    let r_q_str = String::from_utf8_lossy(&r_q_str[..]);
+    let t_len_minus_one = r_t_str.len() as u32 - 1;
+    let q_len_minus_one = r_q_str.len() as u32 - 1;
+
     if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
-        target_str,
-        query_str,
+        &r_t_str,
+        &r_q_str,
         max_wf_length,
         mismatch_penalty,
         open_penalty,
         extension_penalty,
     ) {
-        let aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+        let mut aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+        // convert the coordinate from the reverse to the forward sequence
+        aln_pairs.iter_mut().for_each(|(t_pos, q_pos, _c)| {
+            *t_pos = t_len_minus_one - *t_pos;
+            *q_pos = q_len_minus_one - *q_pos;
+        });
+        aln_pairs.reverse();
+
+        // compute the VCF like variant representation
+        let target_str = String::from_utf8_lossy(target_str);
+        let query_str = String::from_utf8_lossy(query_str);
         Some((
-            aln::get_variants_from_aln_pair_map(&aln_pairs, target_str, query_str),
+            aln::get_variants_from_aln_pair_map(&aln_pairs, &target_str, &query_str),
             aln_pairs,
         ))
     } else {
@@ -206,7 +227,7 @@ fn main() -> Result<(), std::io::Error> {
             );
             (idx, seq_rec, query_results)
         })
-        .map(|(idx, seq_rec, query_results)| {
+        .map(|(_idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
                 let q_name = String::from_utf8_lossy(&seq_rec.id);
                 let query_seq = seq_rec.seq;
@@ -275,8 +296,8 @@ fn main() -> Result<(), std::io::Error> {
                                                     .abs()
                                                     < 256
                                             {
-                                                let s0str = String::from_utf8_lossy(&s0str[..]);
-                                                let s1str = String::from_utf8_lossy(&s1str[..]);
+                                                //let s0str = String::from_utf8_lossy(&s0str[..]);
+                                                //let s1str = String::from_utf8_lossy(&s1str[..]);
                                                 get_variant_segments(
                                                     &s0str,
                                                     &s1str,
