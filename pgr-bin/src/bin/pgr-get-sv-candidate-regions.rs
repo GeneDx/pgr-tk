@@ -51,6 +51,7 @@ type AlignSegment = ((u32, u32, u8), (u32, u32, u8));
 type AlignSegments = Vec<AlignSegment>;
 
 fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
+    // the aln_segs should be sorted already
     let mut aln_segs = aln_segs.clone();
 
     let mut last_ts = aln_segs[0].1 .0;
@@ -84,6 +85,7 @@ fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
 }
 
 fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
+    // the aln_segs should be sorted already
     let mut aln_segs = aln_segs.clone();
     aln_segs.reverse();
 
