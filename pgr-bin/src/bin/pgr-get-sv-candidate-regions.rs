@@ -5,9 +5,7 @@ use pgr_db::ext::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::{reverse_complement, SeqRec};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
-use std::fs::File;
-use std::io::{self, BufWriter, Write};
-use std::path::Path;
+use std::io;
 
 /// Align long contigs and identify potential SV regions with respect to the reference fasta file
 #[derive(Parser, Debug)]
@@ -208,7 +206,7 @@ fn main() -> Result<(), std::io::Error> {
             );
             (idx, seq_rec, query_results)
         })
-        .for_each(|(idx, seq_rec, query_results)| {
+        .map(|(idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
                 let q_name = String::from_utf8_lossy(&seq_rec.id);
                 let query_seq = seq_rec.seq;
@@ -235,12 +233,12 @@ fn main() -> Result<(), std::io::Error> {
                     })
                 });
 
-                sid_to_mapped_regions
+                let rtn = sid_to_mapped_regions
                     .into_iter()
-                    .for_each(|(sid, mapped_regions)| {
+                    .flat_map(|(sid, mapped_regions)| {
                         let ref_seq = ref_seq_index_db.get_seq_by_id(sid).unwrap();
                         let mapped_region_aln = mapped_regions
-                            .into_iter()
+                            .into_par_iter()
                             .map(|(aln_segs, orientation)| {
                                 let aln_segs = if orientation == 0 {
                                     filter_aln(&aln_segs)
@@ -251,9 +249,10 @@ fn main() -> Result<(), std::io::Error> {
                                 aln_segs
                                     .into_iter()
                                     .map(|((ts, te), (qs, qe))| {
-                                        let ts = ts - kmer_size;
-                                        let qs = if orientation == 0 {qs - kmer_size} else {qs};
-                                        let qe = if orientation == 0 {qe} else {qe + kmer_size};
+                                        let ts = ts - kmer_size - 1;
+                                        let te = te - 1;
+                                        let qs = if orientation == 0 {qs - kmer_size - 1} else {qs + 1};
+                                        let qe = if orientation == 0 {qe - 1} else {qe + kmer_size + 1};
                                         let s0str = ref_seq[ts as usize..te as usize].to_vec();
                                         let s1str = if orientation == 0 {
                                             query_seq[qs as usize..qe as usize].to_vec()
@@ -310,11 +309,9 @@ fn main() -> Result<(), std::io::Error> {
                             .0
                             .clone();
 
-                        mapped_region_aln.into_iter().for_each(|v| {
-                            if v.is_empty() {
-                                return
-                            };
-                            println!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len); 
+                        mapped_region_aln.into_iter().flat_map(|v| {
+                            let mut output_records = Vec::<String>::new();
+                            output_records.push(format!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len)); 
                             let v_last = v.last().unwrap().clone();
                             v.into_iter()
                                 .for_each(|((ts, te), (qs, qe), orientation, diff)| {
@@ -322,14 +319,15 @@ fn main() -> Result<(), std::io::Error> {
                                     let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                     if let Some(diff) = diff {
                                         if diff.0.is_empty() {
-                                            println!(
+                                            output_records.push(format!(
                                                 "M\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                                 ref_ctg_name, ts, te, q_name, qs, qe, orientation
-                                            );
+                                            ));
                                         } else {
                                             diff.0.into_iter().for_each(
                                                 |(td, qd, vt, t_str, q_str)| {
-                                                    println!(
+                                                    output_records.push(
+                                                    format!(
                                                         "V\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                                         ref_ctg_name,
                                                         ts,
@@ -344,21 +342,30 @@ fn main() -> Result<(), std::io::Error> {
                                                         vt,
                                                         t_str,
                                                         q_str
-                                                    );
+                                                    ));
                                                 },
                                             )
                                         }
                                     } else {
-                                        println!(
+                                        output_records.push(
+                                        format!(
                                             "S\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                                             ref_ctg_name, ts, te, q_name, qs, qe, orientation
-                                        );
+                                        ));
                                     }
                                 });
-                            println!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v_last.0.0, v_last.0.1, q_name, v_last.1.0, v_last.1.1, v_last.2, q_len); 
-                        });
-                    })
-            };
-        });
+                            output_records.push(format!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v_last.0.0, v_last.0.1, q_name, v_last.1.0, v_last.1.1, v_last.2, q_len)); 
+                            output_records
+                        }).collect::<Vec<_>>()
+                    }).collect::<Vec<_>>();
+                Some(rtn)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+        .flatten()
+        .for_each(|v| v.into_iter().for_each(|v| {println!("{}", v)}));
     Ok(())
 }
