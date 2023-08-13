@@ -204,7 +204,7 @@ pub fn get_target_and_principal_bundle_decomposition(
     // );
 
     let query_results = seq_db.query_fragment_to_hps_from_mmap_file(
-        sub_seq,
+        &sub_seq,
         0.25,
         Some(128),
         Some(128),

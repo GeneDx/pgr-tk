@@ -251,7 +251,7 @@ impl SeqIndexDB {
     #[allow(clippy::type_complexity)]
     pub fn query_fragment_to_hps(
         &self,
-        seq: Vec<u8>,
+        seq: &Vec<u8>,
         penalty: f32,
         max_count: Option<u32>,
         max_count_query: Option<u32>,
@@ -260,10 +260,10 @@ impl SeqIndexDB {
     ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         if let Some(frag_map) = self.get_shmmr_map_internal() {
-            let raw_query_hits = raw_query_fragment(frag_map, &seq, shmmr_spec);
+            let raw_query_hits = raw_query_fragment(frag_map, seq, shmmr_spec);
             let res = aln::query_fragment_to_hps(
                 raw_query_hits,
-                &seq,
+                seq,
                 shmmr_spec,
                 penalty,
                 max_count,
@@ -280,7 +280,7 @@ impl SeqIndexDB {
     #[allow(clippy::type_complexity)]
     pub fn query_fragment_to_hps_from_mmap_file(
         &self,
-        seq: Vec<u8>,
+        seq: &Vec<u8>,
         penalty: f32,
         max_count: Option<u32>,
         max_count_query: Option<u32>,

@@ -142,7 +142,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let query_results = if !args.fastx_file {
                 seq_index_db.query_fragment_to_hps_from_mmap_file(
-                    query_seq,
+                    &query_seq,
                     args.gap_penalty_factor,
                     Some(args.max_count),
                     Some(args.max_query_count),
@@ -151,7 +151,7 @@ fn main() -> Result<(), std::io::Error> {
                 )
             } else {
                 seq_index_db.query_fragment_to_hps(
-                    query_seq,
+                    &query_seq,
                     args.gap_penalty_factor,
                     Some(args.max_count),
                     Some(args.max_query_count),
@@ -323,7 +323,8 @@ fn main() -> Result<(), std::io::Error> {
                     writeln!(
                         hit_file,
                         "#{}",
-                        [   "idx",
+                        [
+                            "idx",
                             "q_ctg_name",
                             "q_ctg_bgn",
                             "q_ctg_end",
@@ -351,7 +352,7 @@ fn main() -> Result<(), std::io::Error> {
                             let q_bgn = aln[0].0 .0;
                             let q_end = aln[aln.len() - 1].0 .1;
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
-                            let target_seq_name = 
+                            let target_seq_name =
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
 
                             if args.bed_summary {
@@ -370,7 +371,7 @@ fn main() -> Result<(), std::io::Error> {
                                     src,
                                     q_bgn,
                                     q_end,
-                                    target_seq_name 
+                                    target_seq_name
                                 )
                                 .expect("writing hit summary fail\n");
                             } else {

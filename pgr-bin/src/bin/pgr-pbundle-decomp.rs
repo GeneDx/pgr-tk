@@ -399,8 +399,7 @@ fn main() -> Result<(), std::io::Error> {
             let e = p[p.len() - 1].0 .3 + args.k;
             let bid = p[0].1;
             let direction = p[0].2;
-            let is_repeat =
-            if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
+            let is_repeat = if *ctg_bundle_count.get(&bid).unwrap_or(&0) > 1 {
                 repeat_count
                     .entry(*sid)
                     .or_insert_with(Vec::new)
@@ -452,11 +451,7 @@ fn main() -> Result<(), std::io::Error> {
         let (ctg, _src, len) = sdata;
         let repeat_bundle_count = repeat_count.get(&sid).unwrap_or(&vec![]).len();
         let non_repeat_bundle_count = non_repeat_count.get(&sid).unwrap_or(&vec![]).len();
-        let repeat_sum: u32 = repeat_count
-            .get(&sid)
-            .unwrap_or(&vec![])
-            .iter()
-            .sum();
+        let repeat_sum: u32 = repeat_count.get(&sid).unwrap_or(&vec![]).iter().sum();
         let repeat_bundle_max: u32 = repeat_count
             .get(&sid)
             .unwrap_or(&vec![])
@@ -467,11 +462,7 @@ fn main() -> Result<(), std::io::Error> {
             .unwrap_or(&vec![])
             .iter()
             .fold(len, |x, &y| if x < y { x } else { y });
-        let non_repeat_sum: u32 = non_repeat_count
-            .get(&sid)
-            .unwrap_or(&vec![])
-            .iter()
-            .sum();
+        let non_repeat_sum: u32 = non_repeat_count.get(&sid).unwrap_or(&vec![]).iter().sum();
         let non_repeat_bundle_max = non_repeat_count
             .get(&sid)
             .unwrap_or(&vec![])

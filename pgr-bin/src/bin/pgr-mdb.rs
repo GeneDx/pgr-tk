@@ -60,8 +60,9 @@ fn load_write_index_from_agcfile(
     let mut sdb = seq_db::CompactSeqDB::new(shmmr_spec.clone());
     let filelist = File::open(path)?;
 
-    BufReader::new(filelist).lines().try_for_each(
-        |fp| -> Result<(), std::io::Error> {
+    BufReader::new(filelist)
+        .lines()
+        .try_for_each(|fp| -> Result<(), std::io::Error> {
             let fp = fp.unwrap();
             //println!("load file {}", fp);
             let mut agcfile: AGCFile = AGCFile::new(fp)?;
@@ -70,8 +71,7 @@ fn load_write_index_from_agcfile(
             //println!("start to load index");
             let _ = sdb.load_index_from_agcfile(agcfile);
             Ok(())
-        },
-    )?;
+        })?;
 
     //seq_db::write_shmr_map_file(&sdb.frag_map, "test.db".to_string());
     sdb.write_shmmr_map_index(prefix)?;
@@ -108,5 +108,4 @@ fn main() {
 
     #[cfg(not(feature = "with_agc"))]
     panic!("the command is not compiled with `with_agc` feature")
-
 }
