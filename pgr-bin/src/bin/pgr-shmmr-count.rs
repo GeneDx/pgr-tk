@@ -180,7 +180,7 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|(counts, locations)| {
                 counts.for_each(|(k, v)| {
-                    let mut e = shmmr_count.entry(k).or_default();
+                    let e = shmmr_count.entry(k).or_default();
                     e.0 += v;
                 });
                 ref_shmmr_location.extend(locations);
@@ -221,7 +221,7 @@ fn main() -> Result<(), std::io::Error> {
             .into_iter()
             .for_each(|counts| {
                 counts.for_each(|(k, v)| {
-                    let mut e = shmmr_count.entry(k).or_default();
+                    let e = shmmr_count.entry(k).or_default();
                     (*e).1 += v;
                 });
             });
