@@ -274,10 +274,10 @@ fn main() -> Result<(), std::io::Error> {
                                 aln_segs
                                     .into_iter()
                                     .map(|((ts, te), (qs, qe))| {
-                                        let ts = ts - kmer_size - 1;
+                                        let ts = ts - kmer_size;
                                         let te = te - 1;
-                                        let qs = if orientation == 0 {qs - kmer_size - 1} else {qs + 1};
-                                        let qe = if orientation == 0 {qe - 1} else {qe + kmer_size + 1};
+                                        let qs = if orientation == 0 {qs - kmer_size} else {qs + 1};
+                                        let qe = if orientation == 0 {qe - 1} else {qe + kmer_size};
                                         let s0str = ref_seq[ts as usize..te as usize].to_vec();
                                         let s1str = if orientation == 0 {
                                             query_seq[qs as usize..qe as usize].to_vec()
