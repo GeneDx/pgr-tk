@@ -5,7 +5,9 @@ use pgr_db::ext::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::{reverse_complement, SeqRec};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
-use std::io;
+use std::fs::File;
+use std::io::{self, BufWriter, Write};
+use std::path::Path;
 
 /// Align long contigs and identify potential SV regions with respect to the reference fasta file
 #[derive(Parser, Debug)]
@@ -18,7 +20,7 @@ struct CmdOptions {
     /// the path to the query assembly contig file
     assembly_contig_path: String,
     /// the prefix of the output file
-    output_prefix: String,
+    output_path: String,
     /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
     #[clap(long, default_value_t = 0)]
     number_of_thread: usize,
@@ -189,6 +191,8 @@ fn main() -> Result<(), std::io::Error> {
         args.r,
         args.min_span,
     )?;
+
+    let mut out_file = BufWriter::new(File::create(Path::new(&args.output_path)).unwrap());
 
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
@@ -388,6 +392,10 @@ fn main() -> Result<(), std::io::Error> {
         .into_iter()
         .flatten()
         .enumerate()
-        .for_each(|(idx, v)| v.into_iter().for_each(|v| {println!("{:07}\t{}", idx, v)}));
+        .for_each(|(idx, v)| { 
+            v.into_iter().for_each(|v| {
+                writeln!(out_file, "{:07}\t{}", idx, v).expect("fail to write the output file");
+            })
+        });
     Ok(())
 }
