@@ -19,8 +19,8 @@ struct CmdOptions {
     reference_fasta_path: String,
     /// the path to the query assembly contig file
     assembly_contig_path: String,
-    /// the prefix of the output file
-    output_path: String,
+    /// the prefix of the output files
+    output_prefix: String,
     /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
     #[clap(long, default_value_t = 0)]
     number_of_thread: usize,
@@ -43,6 +43,29 @@ struct CmdOptions {
     /// the span of the chain for building the sparse alignment directed acyclic graph
     #[clap(long, default_value_t = 8)]
     max_aln_chain_span: u32,
+}
+
+#[derive(Clone)]
+enum Record {
+    Bgn(u32, u32, u32, u32, u32, u32, u32, u32),
+    End(u32, u32, u32, u32, u32, u32, u32, u32),
+    Match(u32, u32, u32, u32, u32, u32, u32),
+    SvCnd(u32, u32, u32, u32, u32, u32, u32),
+    Variant(
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        u32,
+        char,
+        String,
+        String,
+    ),
 }
 
 // ((q_smp_start, q_smp_end, q_smp_orientation), (t_smp_start, t_smp_end, t_smp_orientation))
@@ -119,7 +142,7 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     rtn
 }
 
-type AlignmentResult = (Vec<(u32, u32, char, String, String)>, Vec<(u32, u32, char)>);
+type AlignmentResult = Vec<(u32, u32, char, String, String)>;
 pub fn get_variant_segments(
     target_str: &[u8],
     query_str: &[u8],
@@ -158,7 +181,13 @@ pub fn get_variant_segments(
     ) {
         let mut aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
         // assume the base on the left are identical  ( # of base = left_padding)
-        (0..left_padding).for_each(|delta| {aln_pairs.push(( (r_t_str.len()+delta) as u32, (r_q_str.len() + delta) as u32, 'M'));});
+        (0..left_padding).for_each(|delta| {
+            aln_pairs.push((
+                (r_t_str.len() + delta) as u32,
+                (r_q_str.len() + delta) as u32,
+                'M',
+            ));
+        });
         // convert the coordinate from the reverse to the forward sequence
         aln_pairs.iter_mut().for_each(|(t_pos, q_pos, _c)| {
             *t_pos = t_len_minus_one - *t_pos;
@@ -169,10 +198,9 @@ pub fn get_variant_segments(
         // compute the VCF like variant representation
         let target_str = String::from_utf8_lossy(target_str);
         let query_str = String::from_utf8_lossy(query_str);
-        Some((
-            aln::get_variants_from_aln_pair_map(&aln_pairs, &target_str, &query_str),
-            aln_pairs,
-        ))
+        Some(
+            aln::get_variants_from_aln_pair_map(&aln_pairs, &target_str, &query_str)
+        )
     } else {
         None
     }
@@ -196,7 +224,16 @@ fn main() -> Result<(), std::io::Error> {
         args.min_span,
     )?;
 
-    let mut out_file = BufWriter::new(File::create(Path::new(&args.output_path)).unwrap());
+    let mut out_alnmap = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("alnmap")).unwrap(),
+    );
+
+    let mut out_vcf =
+        BufWriter::new(File::create(Path::new(&args.output_prefix).with_extension("vcf")).unwrap());
+
+    let mut out_svcnd = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("svcnd.bed")).unwrap(),
+    );
 
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
@@ -217,10 +254,17 @@ fn main() -> Result<(), std::io::Error> {
 
     let kmer_size = args.k;
 
-    query_seqs
+    let query_name =  query_seqs.iter().enumerate().map(|(idx, seq_rec)| 
+        (idx as u32, String::from_utf8_lossy(&seq_rec.id[..]).to_string()) ).collect::<FxHashMap<_,_>>();
+    let target_name = ref_seq_index_db
+        .seq_info
+        .as_ref()
+        .unwrap().iter().map(|(k, v)| (*k, v.0.clone())).collect::<FxHashMap<_,_>>();
+
+    let all_records = query_seqs
         .into_par_iter()
         .enumerate()
-        .map(|(idx, seq_rec)| {
+        .map(|(q_idx, seq_rec)| {
             // let q_name = String::from_utf8_lossy(&seq_rec.id);
             let query_seq = seq_rec.seq.clone();
             //let q_len = query_seq.len();
@@ -233,15 +277,14 @@ fn main() -> Result<(), std::io::Error> {
                 Some(1),
                 Some(args.max_aln_chain_span),
             );
-            (idx, seq_rec, query_results)
+            (q_idx, seq_rec, query_results)
         })
-        .flat_map(|(_idx, seq_rec, query_results)| {
+        .flat_map(|(q_idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
-                let q_name = String::from_utf8_lossy(&seq_rec.id);
                 let query_seq = seq_rec.seq;
                 let q_len = query_seq.len();
                 let mut sid_to_mapped_regions = FxHashMap::default();
-                qr.into_iter().for_each(|(sid, mapped_segments)| {
+                qr.into_iter().for_each(|(t_idx, mapped_segments)| {
                     let mut aln_lens = vec![];
                     let mut f_count = 0_usize;
                     let mut r_count = 0_usize;
@@ -256,7 +299,7 @@ fn main() -> Result<(), std::io::Error> {
                                 }
                             }
                             let orientation = if f_count > r_count { 0_u32 } else { 1_u32 };
-                            let e = sid_to_mapped_regions.entry(sid).or_insert_with(Vec::new);
+                            let e = sid_to_mapped_regions.entry(t_idx).or_insert_with(Vec::new);
                             e.push((aln, orientation))
                         }
                     })
@@ -264,8 +307,8 @@ fn main() -> Result<(), std::io::Error> {
 
                 let rtn = sid_to_mapped_regions
                     .into_iter()
-                    .flat_map(|(sid, mapped_regions)| {
-                        let ref_seq = ref_seq_index_db.get_seq_by_id(sid).unwrap();
+                    .flat_map(|(t_idx, mapped_regions)| {
+                        let ref_seq = ref_seq_index_db.get_seq_by_id(t_idx).unwrap();
                         let mapped_region_aln = mapped_regions
                             .into_par_iter()
                             .map(|(aln_segs, orientation)| {
@@ -280,8 +323,8 @@ fn main() -> Result<(), std::io::Error> {
                                     .map(|((ts, te), (qs, qe))| {
                                         let ts = ts - kmer_size; // add one to ensure a match base if the first call is deletion
                                         let te = te;
-                                        let qs = if orientation == 0 {qs - kmer_size} else {qs};
-                                        let qe = if orientation == 0 {qe} else {qe + kmer_size};
+                                        let qs = if orientation == 0 { qs - kmer_size } else { qs };
+                                        let qe = if orientation == 0 { qe } else { qe + kmer_size };
                                         let s0str = ref_seq[ts as usize..te as usize].to_vec();
                                         let s1str = if orientation == 0 {
                                             query_seq[qs as usize..qe as usize].to_vec()
@@ -330,96 +373,203 @@ fn main() -> Result<(), std::io::Error> {
                                         //         println!("XX0: {}",s0str);
                                         //         println!("XX1: {}",s1str);
                                         //         println!("XX2: {} {}", diff[0].3, diff[0].4);
-                                        //     } 
+                                        //     }
                                         // }
                                         // println!("{:?} {:?}",  ((ts, te), (qs, qe), orientation), diff);
                                         // println!();
-                                        
+
                                         ((ts, te), (qs, qe), orientation, diff)
                                     })
                                     .collect::<Vec<_>>()
-                            }).filter(|v| !v.is_empty())
+                            })
+                            .filter(|v| !v.is_empty())
                             .collect::<Vec<_>>();
 
-                        let ref_ctg_name = ref_seq_index_db
-                            .seq_info
-                            .as_ref()
-                            .unwrap()
-                            .get(&sid)
-                            .unwrap()
-                            .0
-                            .clone();
-
-                        mapped_region_aln.into_iter().map(|v| {
-                            let mut output_records = Vec::<String>::new();
-                            output_records.push(format!("B\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v[0].0.0, v[0].0.1, q_name, v[0].1.0, v[0].1.1, v[0].2, q_len)); 
-                            let v_last = v.last().unwrap().clone();
-                            v.into_iter()
-                                .for_each(|((ts, te), (qs, qe), orientation, diff)| {
-                                    let qs = if orientation == 0 { qs } else { qs - kmer_size };
-                                    let qe = if orientation == 0 { qe } else { qe - kmer_size };
-                                    if let Some(diff) = diff {
-                                        if diff.0.is_empty() {
-                                            output_records.push(format!(
-                                                "M\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                                ref_ctg_name, ts, te, q_name, qs, qe, orientation
-                                            ));
+                        mapped_region_aln
+                            .into_iter()
+                            .map(|v| {
+                                let mut output_records = Vec::<Record>::new();
+                                let bgn_rec = v[0].clone();
+                                output_records.push(Record::Bgn(
+                                    t_idx,
+                                    bgn_rec.0 .0,
+                                    bgn_rec.0 .1,
+                                    q_idx as u32,
+                                    bgn_rec.1 .0,
+                                    bgn_rec.1 .1,
+                                    bgn_rec.2,
+                                    q_len as u32,
+                                ));
+                                let v_last = v.last().unwrap().clone();
+                                v.into_iter().for_each(
+                                    |((ts, te), (qs, qe), orientation, diff)| {
+                                        let qs = if orientation == 0 { qs } else { qs - kmer_size };
+                                        let qe = if orientation == 0 { qe } else { qe - kmer_size };
+                                        if let Some(diff) = diff {
+                                            if diff.is_empty() {
+                                                output_records.push(Record::Match(
+                                                    t_idx,
+                                                    ts,
+                                                    te,
+                                                    q_idx as u32,
+                                                    qs,
+                                                    qe,
+                                                    orientation,
+                                                ))
+                                            } else {
+                                                diff.into_iter().for_each(
+                                                    |(td, qd, vt, t_str, q_str)| {
+                                                        output_records.push(Record::Variant(
+                                                            t_idx,
+                                                            ts,
+                                                            te,
+                                                            q_idx as u32,
+                                                            qs,
+                                                            qe,
+                                                            orientation,
+                                                            td,
+                                                            qd,
+                                                            ts + td,
+                                                            vt,
+                                                            t_str,
+                                                            q_str,
+                                                        ));
+                                                    },
+                                                )
+                                            }
                                         } else {
-                                            diff.0.into_iter().for_each(
-                                                |(td, qd, vt, t_str, q_str)| {
-                                                    output_records.push(
-                                                    format!(
-                                                        "V\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                                        ref_ctg_name,
-                                                        ts,
-                                                        te,
-                                                        q_name,
-                                                        qs,
-                                                        qe,
-                                                        orientation,
-                                                        td,
-                                                        qd,
-                                                        ts + td,
-                                                        vt,
-                                                        t_str,
-                                                        q_str
-                                                    ));
-                                                },
-                                            )
+                                            output_records.push(Record::SvCnd(
+                                                t_idx,
+                                                ts,
+                                                te,
+                                                q_idx as u32,
+                                                qs,
+                                                qe,
+                                                orientation,
+                                            ));
                                         }
-                                    } else {
-                                        output_records.push(
-                                        format!(
-                                            "S\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                                            ref_ctg_name, ts, te, q_name, qs, qe, orientation
-                                        ));
-                                    }
-                                });
-                            output_records.push(format!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", 
-                                ref_ctg_name, 
-                                v_last.0.0, 
-                                v_last.0.1, 
-                                q_name, 
-                                v_last.1.0, 
-                                v_last.1.1, 
-                                v_last.2, 
-                                q_len)); 
-                            output_records
-                        }).collect::<Vec<_>>()
-                    }).collect::<Vec<_>>();
+                                    },
+                                );
+                                output_records.push(Record::End(
+                                    t_idx,
+                                    v_last.0 .0,
+                                    v_last.0 .1,
+                                    q_idx as u32,
+                                    v_last.1 .0,
+                                    v_last.1 .1,
+                                    v_last.2,
+                                    q_len as u32,
+                                ));
+                                output_records
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
                 Some(rtn)
             } else {
                 None
             }
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>();
+
+    writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
+    writeln!(
+        out_vcf,
+        r#"##FORMAT=<ID=GT,Number=1,Type=Integer,Description="Genotype">"#
+    )
+    .expect("fail to write the vcf file");
+    writeln!(
+        out_vcf,
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS000"
+    )
+    .expect("fail to write the vcf file");
+
+    let mut vcf_records = Vec::<(u32, u32, String, String)>::new();
+    let mut bed_records = Vec::<(u32, u32, u32)>::new();
+
+    all_records
         .into_iter()
         .flatten()
         .enumerate()
-        .for_each(|(idx, v)| { 
-            v.into_iter().for_each(|v| {
-                writeln!(out_file, "{:07}\t{}", idx, v).expect("fail to write the output file");
+        .for_each(|(idx, vr)| {
+            vr.into_iter().for_each(|r| {
+                let rec_out = match r.clone() {
+                    Record::Bgn(t_idx, ts, te, q_idx, qs, qe, orientation, q_len) => {
+                        let tn = target_name.get(&t_idx).unwrap();
+                        let qn = query_name.get(&q_idx).unwrap(); 
+                        format!(
+                        "{:06}\tB\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        idx, tn, ts, te, qn, qs, qe, orientation, q_len
+                    )},
+                    Record::End(t_idx, ts, te, q_idx, qs, qe, orientation, q_len) => {
+                        let tn = target_name.get(&t_idx).unwrap();
+                        let qn = query_name.get(&q_idx).unwrap(); 
+                        format!(
+                        "{:06}\tE\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        idx, tn, ts, te, qn, qs, qe, orientation, q_len
+                    )},
+                    Record::Match(t_idx, ts, te, q_idx, qs, qe, orientation) => {
+                        let tn = target_name.get(&t_idx).unwrap();
+                        let qn = query_name.get(&q_idx).unwrap();
+                        format!(
+                        "{:06}\tM\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        idx, tn, ts, te, qn, qs, qe, orientation
+                    )},
+                    Record::SvCnd(t_idx, ts, te, q_idx, qs, qe, orientation) => {
+                        bed_records.push((t_idx, ts + 1, te + 1));
+                        let tn = target_name.get(&t_idx).unwrap();
+                        let qn = query_name.get(&q_idx).unwrap();
+
+                        format!(
+                            "{:06}\tS\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            idx, tn, ts, te, qn, qs, qe, orientation
+                        )
+                    }
+                    Record::Variant(
+                        t_idx,
+                        ts,
+                        te,
+                        q_idx,
+                        qs,
+                        qe,
+                        orientation,
+                        td,
+                        qd,
+                        tc,
+                        vt,
+                        tvs,
+                        qvs,
+                    ) => {
+                        vcf_records.push((t_idx, tc + 1, tvs.clone(), qvs.clone()));
+                        let tn = target_name.get(&t_idx).unwrap();
+                        let qn = query_name.get(&q_idx).unwrap();
+                        format!(
+                            "{:06}\tV\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            idx, tn, ts, te, qn, qs, qe, orientation, td, qd, tc, vt, tvs, qvs
+                        )
+                    }
+                };
+                writeln!(out_alnmap, "{}", rec_out).expect("fail to write the output file");
             })
         });
+
+    vcf_records.sort();
+    vcf_records.into_iter().for_each(|(t_idx, tc, tvs, qvs)| {
+        let tn =  target_name.get(&t_idx).unwrap();
+        writeln!(
+            out_vcf,
+            "{}\t{}\t.\t{}\t{}\t60\tPASS\tGT\t1/1",
+            tn, tc, tvs, qvs
+        )
+        .expect("fail to write the vcf file");
+    });
+
+    bed_records.sort();
+    bed_records.into_iter().for_each(|(t_idx, ts, te)| {
+        let tn =  target_name.get(&t_idx).unwrap();
+        writeln!(out_svcnd, "{}\t{}\t{}", tn, ts + 1, te + 1)
+            .expect("fail to write the 'in-alignment' sv candidate bed file");
+    });
+
     Ok(())
 }
