@@ -558,7 +558,7 @@ fn main() -> Result<(), std::io::Error> {
         let tn =  target_name.get(&t_idx).unwrap();
         writeln!(
             out_vcf,
-            "{}\t{}\t.\t{}\t{}\t60\tPASS\tGT\t1/1",
+            "{}\t{}\t.\t{}\t{}\t60\tPASS\t.\tGT\t1/1",
             tn, tc, tvs, qvs
         )
         .expect("fail to write the vcf file");
