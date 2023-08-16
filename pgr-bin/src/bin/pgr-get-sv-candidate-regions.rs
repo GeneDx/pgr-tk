@@ -377,8 +377,8 @@ fn main() -> Result<(), std::io::Error> {
                                                     &s0str,
                                                     &s1str,
                                                     1,
-                                                    Some(128),
-                                                    3,
+                                                    Some(144),
+                                                    4,
                                                     2,
                                                     1,
                                                 )
