@@ -613,11 +613,11 @@ fn main() -> Result<(), std::io::Error> {
                 cte = te;
             } else if te <= cte {
                 let bed_annotation = format!("TD:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
-                target_aln_bed_records.push( (t_name.clone(), cte, ts, bed_annotation)); 
+                target_aln_bed_records.push( (t_name.clone(), ts, te, bed_annotation)); 
                 //println!("D {} {} {} {} {}", t_name, cts, te, c_ctg, next_ctg);
             } else {
-                let bed_annotation = format!("TD:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
-                target_aln_bed_records.push( (t_name.clone(), cte, ts, bed_annotation)); 
+                let bed_annotation = format!("TO:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
+                target_aln_bed_records.push( (t_name.clone(), ts, cte, bed_annotation)); 
                 //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
                 c_ctg = next_ctg;
                 cte = te;
@@ -671,7 +671,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut all_bed_record = Vec::<_>::new();
     all_bed_record.extend(in_aln_sv_and_bed_records); 
     all_bed_record.extend(target_aln_bed_records); 
-    all_bed_record.extend(query_aln_bed_records); 
+    //all_bed_record.extend(query_aln_bed_records); 
     all_bed_record.sort();
 
     all_bed_record.into_iter().for_each(|r| {
