@@ -225,6 +225,10 @@ fn main() -> Result<(), std::io::Error> {
         File::create(Path::new(&args.output_prefix).with_extension("svcnd.bed")).unwrap(),
     );
 
+    let mut out_ctgsv = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("ctgsv.bed")).unwrap(),
+    );
+
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
         seq_iter.into_iter().for_each(|r| {
@@ -254,12 +258,27 @@ fn main() -> Result<(), std::io::Error> {
             )
         })
         .collect::<FxHashMap<_, _>>();
+
+    let query_len = query_seqs
+        .iter()
+        .enumerate()
+        .map(|(idx, seq_rec)| (idx as u32, seq_rec.seq.len()))
+        .collect::<FxHashMap<_, _>>();
+
     let target_name = ref_seq_index_db
         .seq_info
         .as_ref()
         .unwrap()
         .iter()
         .map(|(k, v)| (*k, v.0.clone()))
+        .collect::<FxHashMap<_, _>>();
+
+    let target_len = ref_seq_index_db
+        .seq_info
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (*k, v.2))
         .collect::<FxHashMap<_, _>>();
 
     let all_records = query_seqs
@@ -493,10 +512,8 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut vcf_records = Vec::<(u32, u32, String, String)>::new();
     let mut in_aln_sv_cnd_records = Vec::<ShimmerMatchBlock>::new();
-    let mut out_aln_sv_cnd_bed_records = Vec::<ShimmerMatchBlock>::new();
-    let mut btn_ctg_sv_cnd_bed_records = Vec::<ShimmerMatchBlock>::new();
-    let mut target_aln_blocks = FxHashMap::<u32, Vec::<(usize, ShimmerMatchBlock)>>::default();
-    let mut query_aln_blocks = FxHashMap::<u32, Vec::<(usize, ShimmerMatchBlock)>>::default();
+    let mut target_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock)>>::default();
+    let mut query_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock)>>::default();
 
     all_records
         .into_iter()
@@ -574,111 +591,153 @@ fn main() -> Result<(), std::io::Error> {
                 writeln!(out_alnmap, "{}", rec_out).expect("fail to write the output file");
             });
             //aln_block.push( (aln_idx, bgn_rec.unwrap(), end_rec.unwrap()) );
-            let (b_t_idx, b_ts, b_te, b_q_idx, b_qs, b_qe, b_orientation) = bgn_rec.unwrap();
-            let (e_t_idx, e_ts, e_te, e_q_idx, e_qs, e_qe, e_orientation) = end_rec.unwrap();
+            let (b_t_idx, b_ts, _b_te, b_q_idx, b_qs, b_qe, b_orientation) = bgn_rec.unwrap();
+            let (e_t_idx, _e_ts, e_te, e_q_idx, e_qs, e_qe, e_orientation) = end_rec.unwrap();
             assert_eq!(b_orientation, e_orientation);
             assert_eq!(b_t_idx, e_t_idx);
             assert_eq!(b_q_idx, e_q_idx);
             let t_entry = target_aln_blocks.entry(b_t_idx).or_insert_with(Vec::new);
             let q_entry = query_aln_blocks.entry(b_q_idx).or_insert_with(Vec::new);
             if b_orientation == 0 {
-                t_entry.push( (aln_idx, (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation)) );
-                q_entry.push( (aln_idx, (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation)) );
-
+                t_entry.push((
+                    aln_idx,
+                    (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation),
+                ));
+                q_entry.push((
+                    aln_idx,
+                    (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation),
+                ));
             } else {
-                t_entry.push( (aln_idx, (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation)) );
-                q_entry.push( (aln_idx, (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation)) );
-            } 
+                t_entry.push((
+                    aln_idx,
+                    (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation),
+                ));
+                q_entry.push((
+                    aln_idx,
+                    (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation),
+                ));
+            }
         });
 
     let mut target_aln_blocks = target_aln_blocks.into_iter().collect::<Vec<_>>();
     target_aln_blocks.sort();
 
     let mut target_aln_bed_records = Vec::<(String, u32, u32, String)>::new();
-    target_aln_blocks.iter_mut().for_each(|(t_idx, aln_blocks)| {
-        aln_blocks.sort_by_key(|v| v.1.1);
-        let mut cts = 0_u32;
-        let mut cte = 0_u32;
-        let mut c_ctg = &String::from("BGN");
-        let mut t_name = target_name.get(&t_idx).unwrap();
-        aln_blocks.iter().for_each(|&(aln_idx, (t_idx, ts, te, q_idx, qs, qe, orientation))| {
-            //println!("T {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
-            let next_ctg = query_name.get(&q_idx).unwrap();
-            if ts > cte {
-                let bed_annotation = format!("TG:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
-                target_aln_bed_records.push( (t_name.clone(), cte, ts, bed_annotation)); 
-                //println!("G {} {} {} {} {}", t_name, cte, ts, c_ctg, next_ctg);
-                c_ctg = next_ctg;
-                cts = ts;
-                cte = te;
-            } else if te <= cte {
-                let bed_annotation = format!("TD:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
-                target_aln_bed_records.push( (t_name.clone(), ts, te, bed_annotation)); 
-                //println!("D {} {} {} {} {}", t_name, cts, te, c_ctg, next_ctg);
-            } else {
-                let bed_annotation = format!("TO:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
-                target_aln_bed_records.push( (t_name.clone(), ts, cte, bed_annotation)); 
-                //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
-                c_ctg = next_ctg;
-                cte = te;
-            }
-        }) 
-    });
+    target_aln_blocks
+        .iter_mut()
+        .for_each(|(t_idx, aln_blocks)| {
+            aln_blocks.sort_by_key(|v| v.1 .1);
+            let mut cts = 0_u32;
+            let mut cte = 0_u32;
+            let mut c_ctg = &String::from("BGN");
+            let t_name = target_name.get(t_idx).unwrap();
+            aln_blocks
+                .iter()
+                .for_each(|&(_aln_idx, (_t_idx, ts, te, q_idx, qs, qe, orientation))| {
+                    //println!("T {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
+                    let next_ctg = query_name.get(&q_idx).unwrap();
+                    if ts > cte {
+                        let bed_annotation =
+                            format!("TG:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
+                        target_aln_bed_records.push((t_name.clone(), cte, ts, bed_annotation));
+                        //println!("G {} {} {} {} {}", t_name, cte, ts, c_ctg, next_ctg);
+                        c_ctg = next_ctg;
+                        cts = ts;
+                        cte = te;
+                    } else if te <= cte {
+                        let bed_annotation =
+                            format!("TD:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
+                        target_aln_bed_records.push((t_name.clone(), ts, te, bed_annotation));
+                        //println!("D {} {} {} {} {}", t_name, cts, te, c_ctg, next_ctg);
+                    } else {
+                        let bed_annotation =
+                            format!("TO:{}>{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, orientation);
+                        target_aln_bed_records.push((t_name.clone(), ts, cte, bed_annotation));
+                        //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
+                        c_ctg = next_ctg;
+                        cte = te;
+                    }
+                });
+                let next_ctg = &String::from("END");
+                let t_len = * target_len.get(t_idx).unwrap();
+                let bed_annotation =
+                format!("TG:{}>{}", c_ctg, next_ctg);
+                target_aln_bed_records.push((t_name.clone(), cte, t_len, bed_annotation));
+        });
 
     let mut query_aln_bed_records = Vec::<(String, u32, u32, String)>::new();
     query_aln_blocks.iter_mut().for_each(|(q_idx, aln_blocks)| {
-        aln_blocks.sort_by_key(|v| v.1.4);
+        aln_blocks.sort_by_key(|v| v.1 .4);
         let mut cqs = 0_u32;
         let mut cqe = 0_u32;
-        let mut p_target = &String::from("BGN"); 
-        let q_name = query_name.get(&q_idx).unwrap();
-        aln_blocks.iter().for_each(|&(aln_idx, (t_idx, ts, te, q_idx, qs, qe, orientation))| {
-            //println!("Q {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
-            let t_name = target_name.get(&t_idx).unwrap();
-            if qs > cqe {
-                let bed_annotation = format!("QG:{}+{}:{}:{}:{}", p_target, q_name, qs, qe, orientation);
-                query_aln_bed_records.push( (t_name.clone(), te, ts, bed_annotation)); 
-                //println!("G {} {} {} {}", t_name, ts, te, p_target);
-                p_target = t_name;
-                cqs = qs;
-                cqe = qe;
-            } else if qe <= cqe {
-                let bed_annotation = format!("QD:{}+{}:{}:{}:{}", p_target, q_name, qs, qe, orientation);
-                query_aln_bed_records.push( (t_name.clone(), te, ts, bed_annotation)); 
-                //println!("D {} {} {} {}", t_name, ts, te, p_target);
-            } else {
-                let bed_annotation = format!("QD:{}+{}:{}:{}:{}", p_target, q_name, qs, qe, orientation);
-                query_aln_bed_records.push( (t_name.clone(), te, ts, bed_annotation)); 
-                //println!("O {} {} {} {}", t_name, ts, te, p_target);
-                p_target = t_name;
-                cqe = qe;
-            }
-        }) 
+        let mut c_target = &String::from("BGN");
+        let q_name = query_name.get(q_idx).unwrap();
+        aln_blocks
+            .iter()
+            .for_each(|&(_aln_idx, (t_idx, ts, te, _q_idx, qs, qe, orientation))| {
+                //println!("Q {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
+                let next_target = target_name.get(&t_idx).unwrap();
+                if qs > cqe {
+                    let bed_annotation = format!(
+                        "QG:{}>{}:{}:{}:{}",
+                        c_target, next_target, ts, te, orientation
+                    );
+                    query_aln_bed_records.push((q_name.clone(), cqe, qs, bed_annotation));
+                    //println!("G {} {} {} {}", t_name, ts, te, p_target);
+                    c_target = next_target;
+                    cqs = qs;
+                    cqe = qe;
+                } else if qe <= cqe {
+                    let bed_annotation = format!(
+                        "QD:{}>{}:{}:{}:{}",
+                        c_target, next_target, ts, te, orientation
+                    );
+                    query_aln_bed_records.push((q_name.clone(), qs, qe, bed_annotation));
+                    //println!("D {} {} {} {}", t_name, ts, te, p_target);
+                } else {
+                    let bed_annotation = format!(
+                        "QO:{}>{}:{}:{}:{}",
+                        c_target, next_target, ts, te, orientation
+                    );
+                    query_aln_bed_records.push((q_name.clone(), qs, cqe, bed_annotation));
+                    //println!("O {} {} {} {}", t_name, ts, te, p_target);
+                    c_target = next_target;
+                    cqe = qe;
+                }
+            });
+        let next_target = &String::from("END");
+        let bed_annotation = format!("QG:{}>{}", c_target, next_target);
+        let q_len = *query_len.get(q_idx).unwrap() as u32;
+        query_aln_bed_records.push((q_name.clone(), cqe, q_len, bed_annotation));
     });
-
 
     let mut in_aln_sv_and_bed_records = Vec::<(String, u32, u32, String)>::new();
     in_aln_sv_cnd_records.sort();
-    in_aln_sv_cnd_records.into_iter().for_each(
-        |(t_idx, ts, te, q_idx, qs, qe, orientation)| {
+    in_aln_sv_cnd_records
+        .into_iter()
+        .for_each(|(t_idx, ts, te, q_idx, qs, qe, orientation)| {
             let q_name = query_name.get(&q_idx).unwrap();
             let bed_annotation = format!("SVC:{}:{}:{}:{}", q_name, qs, qe, orientation);
             let t_name = target_name.get(&t_idx).unwrap();
-            in_aln_sv_and_bed_records.push((t_name.clone(), ts+1, te+1, bed_annotation));
-        },
-    );
+            in_aln_sv_and_bed_records.push((t_name.clone(), ts + 1, te + 1, bed_annotation));
+        });
 
-    let mut all_bed_record = Vec::<_>::new();
-    all_bed_record.extend(in_aln_sv_and_bed_records); 
-    all_bed_record.extend(target_aln_bed_records); 
-    //all_bed_record.extend(query_aln_bed_records); 
-    all_bed_record.sort();
+    let mut all_bed_records = Vec::<_>::new();
+    all_bed_records.extend(in_aln_sv_and_bed_records);
+    all_bed_records.extend(target_aln_bed_records);
+    //all_bed_record.extend(query_aln_bed_records);
+    all_bed_records.sort();
 
-    all_bed_record.into_iter().for_each(|r| {
-        writeln!(out_svcnd, "{}\t{}\t{}\t{}", r.0, r.1, r.2, r.3) 
-        .expect("fail to write the 'in-alignment' sv candidate bed file");
-    } );
+    all_bed_records.into_iter().for_each(|r| {
+        writeln!(out_svcnd, "{}\t{}\t{}\t{}", r.0, r.1, r.2, r.3)
+            .expect("fail to write the 'in-alignment' sv candidate bed file");
+    });
 
+    query_aln_bed_records.sort();
+    query_aln_bed_records.into_iter().for_each(|r| {
+        writeln!(out_ctgsv, "{}\t{}\t{}\t{}", r.0, r.1, r.2, r.3)
+            .expect("fail to write the 'in-alignment' sv candidate bed file");
+    });
 
     vcf_records.sort();
     vcf_records.into_iter().for_each(|(t_idx, tc, tvs, qvs)| {
@@ -693,7 +752,6 @@ fn main() -> Result<(), std::io::Error> {
         )
         .expect("fail to write the vcf file");
     });
-
 
     Ok(())
 }
