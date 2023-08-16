@@ -505,12 +505,7 @@ fn main() -> Result<(), std::io::Error> {
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
     writeln!(
         out_vcf,
-        r#"##FORMAT=<ID=GT,Number=1,Type=Integer,Description="Genotype">"#
-    )
-    .expect("fail to write the vcf file");
-    writeln!(
-        out_vcf,
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS000"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
     )
     .expect("fail to write the vcf file");
 
@@ -754,7 +749,7 @@ fn main() -> Result<(), std::io::Error> {
         let tn = target_name.get(&t_idx).unwrap();
         writeln!(
             out_vcf,
-            "{}\t{}\t.\t{}\t{}\t60\tPASS\t.\tGT\t1/1",
+            "{}\t{}\t.\t{}\t{}\t60\tPASS\t.",
             tn,
             tc,
             tvs.trim_end_matches('-'),
