@@ -27,7 +27,7 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 80)]
     w: u32,
     /// minimizer k-mer size
-    #[clap(long, short, default_value_t = 56)]
+    #[clap(long, short, default_value_t = 55)]
     k: u32,
     /// sparse minimizer (shimmer) reduction factor
     #[clap(long, short, default_value_t = 4)]
@@ -123,6 +123,7 @@ type AlignmentResult = (Vec<(u32, u32, char, String, String)>, Vec<(u32, u32, ch
 pub fn get_variant_segments(
     target_str: &[u8],
     query_str: &[u8],
+    left_padding: usize,
     max_wf_length: Option<u32>,
     mismatch_penalty: i32,
     open_penalty: i32,
@@ -137,14 +138,15 @@ pub fn get_variant_segments(
 
     // we need to reverse the string for alignment such the the gaps are on the left
     // maybe we can do this in the stack for performance in the future
-    let mut r_t_str = target_str.to_vec();
-    let mut r_q_str = query_str.to_vec();
+    // we assume the left_padding base on the left side are identical
+    let mut r_t_str = target_str[left_padding..].to_vec();
+    let mut r_q_str = query_str[left_padding..].to_vec();
     r_t_str.reverse();
     r_q_str.reverse();
     let r_t_str = String::from_utf8_lossy(&r_t_str[..]);
     let r_q_str = String::from_utf8_lossy(&r_q_str[..]);
-    let t_len_minus_one = r_t_str.len() as u32 - 1;
-    let q_len_minus_one = r_q_str.len() as u32 - 1;
+    let t_len_minus_one = left_padding as u32 + r_t_str.len() as u32 - 1;
+    let q_len_minus_one = left_padding as u32 + r_q_str.len() as u32 - 1;
 
     if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
         &r_t_str,
@@ -155,6 +157,8 @@ pub fn get_variant_segments(
         extension_penalty,
     ) {
         let mut aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
+        // assume the base on the left are identical  ( # of base = left_padding)
+        (0..left_padding).for_each(|delta| {aln_pairs.push(( (r_t_str.len()+delta) as u32, (r_q_str.len() + delta) as u32, 'M'));});
         // convert the coordinate from the reverse to the forward sequence
         aln_pairs.iter_mut().for_each(|(t_pos, q_pos, _c)| {
             *t_pos = t_len_minus_one - *t_pos;
@@ -274,10 +278,10 @@ fn main() -> Result<(), std::io::Error> {
                                 aln_segs
                                     .into_iter()
                                     .map(|((ts, te), (qs, qe))| {
-                                        let ts = ts - kmer_size;
-                                        let te = te - 1;
-                                        let qs = if orientation == 0 {qs - kmer_size} else {qs + 1};
-                                        let qe = if orientation == 0 {qe - 1} else {qe + kmer_size};
+                                        let ts = ts - kmer_size; // add one to ensure a match base if the first call is deletion
+                                        let te = te;
+                                        let qs = if orientation == 0 {qs - kmer_size} else {qs};
+                                        let qe = if orientation == 0 {qe} else {qe + kmer_size};
                                         let s0str = ref_seq[ts as usize..te as usize].to_vec();
                                         let s1str = if orientation == 0 {
                                             query_seq[qs as usize..qe as usize].to_vec()
@@ -305,6 +309,7 @@ fn main() -> Result<(), std::io::Error> {
                                                 get_variant_segments(
                                                     &s0str,
                                                     &s1str,
+                                                    1,
                                                     Some(128),
                                                     3,
                                                     2,
@@ -317,8 +322,19 @@ fn main() -> Result<(), std::io::Error> {
                                             None
                                         };
 
+                                        // if diff.is_some() {
+                                        //     let diff = diff.clone().unwrap().0;
+                                        //     if !diff.is_empty() && diff[0].0 == 0 && diff[0].2 == 'I' {
+                                        //         let s0str = String::from_utf8_lossy(&s0str[..]);
+                                        //         let s1str = String::from_utf8_lossy(&s1str[..]);
+                                        //         println!("XX0: {}",s0str);
+                                        //         println!("XX1: {}",s1str);
+                                        //         println!("XX2: {} {}", diff[0].3, diff[0].4);
+                                        //     } 
+                                        // }
                                         // println!("{:?} {:?}",  ((ts, te), (qs, qe), orientation), diff);
                                         // println!();
+                                        
                                         ((ts, te), (qs, qe), orientation, diff)
                                     })
                                     .collect::<Vec<_>>()
@@ -379,7 +395,15 @@ fn main() -> Result<(), std::io::Error> {
                                         ));
                                     }
                                 });
-                            output_records.push(format!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", ref_ctg_name, v_last.0.0, v_last.0.1, q_name, v_last.1.0, v_last.1.1, v_last.2, q_len)); 
+                            output_records.push(format!("E\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", 
+                                ref_ctg_name, 
+                                v_last.0.0, 
+                                v_last.0.1, 
+                                q_name, 
+                                v_last.1.0, 
+                                v_last.1.1, 
+                                v_last.2, 
+                                q_len)); 
                             output_records
                         }).collect::<Vec<_>>()
                     }).collect::<Vec<_>>();
