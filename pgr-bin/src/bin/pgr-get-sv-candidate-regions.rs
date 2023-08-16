@@ -221,6 +221,10 @@ fn main() -> Result<(), std::io::Error> {
     let mut out_vcf =
         BufWriter::new(File::create(Path::new(&args.output_prefix).with_extension("vcf")).unwrap());
 
+    let mut out_ctgmap = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("ctgmap.bed")).unwrap(),
+    );
+
     let mut out_svcnd = BufWriter::new(
         File::create(Path::new(&args.output_prefix).with_extension("svcnd.bed")).unwrap(),
     );
@@ -631,9 +635,8 @@ fn main() -> Result<(), std::io::Error> {
             let mut cte = 0_u32;
             let mut c_ctg = &String::from("BGN");
             let t_name = target_name.get(t_idx).unwrap();
-            aln_blocks
-                .iter()
-                .for_each(|&(_aln_idx, (_t_idx, ts, te, q_idx, qs, qe, orientation))| {
+            aln_blocks.iter().for_each(
+                |&(_aln_idx, (_t_idx, ts, te, q_idx, qs, qe, orientation))| {
                     //println!("T {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
                     let next_ctg = query_name.get(&q_idx).unwrap();
                     if ts > cte {
@@ -656,13 +659,20 @@ fn main() -> Result<(), std::io::Error> {
                         //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
                         c_ctg = next_ctg;
                         cte = te;
-                    }
-                });
-                let next_ctg = &String::from("END");
-                let t_len = * target_len.get(t_idx).unwrap();
-                let bed_annotation =
-                format!("TG:{}>{}", c_ctg, next_ctg);
-                target_aln_bed_records.push((t_name.clone(), cte, t_len, bed_annotation));
+                    };
+                    let q_name = query_name.get(&q_idx).unwrap();
+                    writeln!(
+                        out_ctgmap,
+                        "{}\t{}\t{}\t{}:{}:{}:{}",
+                        t_name, ts, te, q_name, qs, qe, orientation
+                    )
+                    .expect("can't write ctgmap file");
+                },
+            );
+            let next_ctg = &String::from("END");
+            let t_len = *target_len.get(t_idx).unwrap();
+            let bed_annotation = format!("TG:{}>{}", c_ctg, next_ctg);
+            target_aln_bed_records.push((t_name.clone(), cte, t_len, bed_annotation));
         });
 
     let mut query_aln_bed_records = Vec::<(String, u32, u32, String)>::new();
@@ -672,9 +682,8 @@ fn main() -> Result<(), std::io::Error> {
         let mut cqe = 0_u32;
         let mut c_target = &String::from("BGN");
         let q_name = query_name.get(q_idx).unwrap();
-        aln_blocks
-            .iter()
-            .for_each(|&(_aln_idx, (t_idx, ts, te, _q_idx, qs, qe, orientation))| {
+        aln_blocks.iter().for_each(
+            |&(_aln_idx, (t_idx, ts, te, _q_idx, qs, qe, orientation))| {
                 //println!("Q {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
                 let next_target = target_name.get(&t_idx).unwrap();
                 if qs > cqe {
@@ -704,7 +713,8 @@ fn main() -> Result<(), std::io::Error> {
                     c_target = next_target;
                     cqe = qe;
                 }
-            });
+            },
+        );
         let next_target = &String::from("END");
         let bed_annotation = format!("QG:{}>{}", c_target, next_target);
         let q_len = *query_len.get(q_idx).unwrap() as u32;
