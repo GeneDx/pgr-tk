@@ -559,7 +559,7 @@ fn main() -> Result<(), std::io::Error> {
         writeln!(
             out_vcf,
             "{}\t{}\t.\t{}\t{}\t60\tPASS\t.\tGT\t1/1",
-            tn, tc, tvs, qvs
+            tn, tc, tvs.trim_end_matches('-'), qvs.trim_end_matches('-')
         )
         .expect("fail to write the vcf file");
     });
