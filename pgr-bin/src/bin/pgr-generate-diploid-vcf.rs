@@ -163,7 +163,7 @@ fn main() -> Result<(), std::io::Error> {
     .expect("fail to write the vcf file");
     writeln!(
         out_vcf,
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tGT\tSAMPLE"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE"
     )
     .expect("fail to write the vcf file");
 
