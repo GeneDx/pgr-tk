@@ -13,9 +13,9 @@ use std::path::Path;
 #[clap(author, version)]
 #[clap(about, long_about = None)]
 struct CmdOptions {
-    /// path to the the first haplotype alnmap file
+    /// path to the first haplotype alnmap file
     hap0_path: String,
-    /// path to the the second haplotype alnmap file
+    /// path to the second haplotype alnmap file
     hap1_path: String,
     /// the prefix of the output files
     output_path: String,
@@ -197,7 +197,7 @@ fn main() -> Result<(), std::io::Error> {
             });
         };
 
-        vt_count.into_iter().for_each(|(vts, gt_count)| {
+        vt_count.into_iter().for_each(|(tvs, gt_count)| {
             gt_count.into_iter().for_each(|(qvs, (c0, c1))| {
                 let qvs = qvs.trim_end_matches('-').clone();
                 let gt0 = if c0 > 0 {
@@ -228,7 +228,7 @@ fn main() -> Result<(), std::io::Error> {
                     "{}\t{}\t.\t{}\t{}\t60\tPASS\t.\tGT\t{}",
                     k.0,
                     k.1 + 1,
-                    vts,
+                    tvs,
                     qvs,
                     gt,
                 )
