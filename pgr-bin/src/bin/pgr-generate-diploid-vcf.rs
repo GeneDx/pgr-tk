@@ -1,7 +1,7 @@
 const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use iset::set::IntervalSet;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
