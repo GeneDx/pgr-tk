@@ -378,8 +378,8 @@ fn main() -> Result<(), std::io::Error> {
                                                     &s1str,
                                                     1,
                                                     Some(144),
-                                                    4,
-                                                    2,
+                                                    3,
+                                                    3,
                                                     1,
                                                 )
                                             } else {
