@@ -30,7 +30,7 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 55)]
     k: u32,
     /// sparse minimizer (shimmer) reduction factor
-    #[clap(long, short, default_value_t = 4)]
+    #[clap(long, short, default_value_t = 3)]
     r: u32,
     /// min span for neighboring minimizers
     #[clap(long, short, default_value_t = 64)]
@@ -52,7 +52,7 @@ enum Record {
     Bgn(ShimmerMatchBlock, u32),
     End(ShimmerMatchBlock, u32),
     Match(ShimmerMatchBlock),
-    SvCnd(ShimmerMatchBlock),
+    SvCnd((ShimmerMatchBlock, AlnDiff)),
     Variant(ShimmerMatchBlock, u32, u32, u32, char, String, String),
 }
 
@@ -60,6 +60,15 @@ enum Record {
 type AlignSegment = ((u32, u32, u8), (u32, u32, u8));
 
 type AlignSegments = Vec<AlignSegment>;
+
+#[derive(Clone)]
+enum AlnDiff {
+    Aligned(AlignmentResult),
+    FailAln,
+    FailEndMatch,
+    FailLengthDiff,
+    FailShortSeq,
+}
 
 fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     // the aln_segs should be sorted already
@@ -363,17 +372,23 @@ fn main() -> Result<(), std::io::Error> {
                                         // println!("YY0: {}", String::from_utf8_lossy(&s0str[s0str.len() - 16..]));
                                         // println!("YY1: {}", String::from_utf8_lossy(&s1str[s1str.len() - 16..]));
 
-                                        let diff = if s0str.len() > 16 && s1str.len() > 16 {
-                                            if s0str[..16] == s1str[..16]
-                                                && s0str[s0str.len() - 16..]
-                                                    == s1str[s1str.len() - 16..]
-                                                && (s0str.len() as isize - s1str.len() as isize)
-                                                    .abs()
-                                                    < 256
+                                        let wf_aln_diff: AlnDiff =
+                                            if s0str.len() <= 16 || s1str.len() <= 16 {
+                                                AlnDiff::FailShortSeq
+                                            } else if (s0str.len() as isize - s1str.len() as isize)
+                                                .abs()
+                                                >= 256
                                             {
+                                                AlnDiff::FailLengthDiff
+                                            } else if s0str[..16] != s1str[..16]
+                                                || s0str[s0str.len() - 16..]
+                                                    != s1str[s1str.len() - 16..]
+                                            {
+                                                AlnDiff::FailEndMatch
+                                            } else {
                                                 //let s0str = String::from_utf8_lossy(&s0str[..]);
                                                 //let s1str = String::from_utf8_lossy(&s1str[..]);
-                                                get_variant_segments(
+                                                if let Some(aln_res) = get_variant_segments(
                                                     &s0str,
                                                     &s1str,
                                                     1,
@@ -381,13 +396,12 @@ fn main() -> Result<(), std::io::Error> {
                                                     3,
                                                     3,
                                                     1,
-                                                )
-                                            } else {
-                                                None
-                                            }
-                                        } else {
-                                            None
-                                        };
+                                                ) {
+                                                    AlnDiff::Aligned(aln_res)
+                                                } else {
+                                                    AlnDiff::FailAln
+                                                }
+                                            };
 
                                         // if diff.is_some() {
                                         //     let diff = diff.clone().unwrap().0;
@@ -402,7 +416,7 @@ fn main() -> Result<(), std::io::Error> {
                                         // println!("{:?} {:?}",  ((ts, te), (qs, qe), orientation), diff);
                                         // println!();
 
-                                        ((ts, te), (qs, qe), orientation, diff)
+                                        ((ts, te), (qs, qe), orientation, wf_aln_diff)
                                     })
                                     .collect::<Vec<_>>()
                             })
@@ -431,7 +445,7 @@ fn main() -> Result<(), std::io::Error> {
                                     |((ts, te), (qs, qe), orientation, diff)| {
                                         let qs = if orientation == 0 { qs } else { qs - kmer_size };
                                         let qe = if orientation == 0 { qe } else { qe - kmer_size };
-                                        if let Some(diff) = diff {
+                                        if let AlnDiff::Aligned(diff) = diff {
                                             if diff.is_empty() {
                                                 output_records.push(Record::Match((
                                                     t_idx,
@@ -467,13 +481,8 @@ fn main() -> Result<(), std::io::Error> {
                                             }
                                         } else {
                                             output_records.push(Record::SvCnd((
-                                                t_idx,
-                                                ts,
-                                                te,
-                                                q_idx as u32,
-                                                qs,
-                                                qe,
-                                                orientation,
+                                                (t_idx, ts, te, q_idx as u32, qs, qe, orientation),
+                                                diff,
                                             )));
                                         }
                                     },
@@ -503,14 +512,11 @@ fn main() -> Result<(), std::io::Error> {
         .collect::<Vec<_>>();
 
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
-    writeln!(
-        out_vcf,
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
-    )
-    .expect("fail to write the vcf file");
+    writeln!(out_vcf, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO")
+        .expect("fail to write the vcf file");
 
     let mut vcf_records = Vec::<(u32, u32, String, String)>::new();
-    let mut in_aln_sv_cnd_records = Vec::<ShimmerMatchBlock>::new();
+    let mut in_aln_sv_cnd_records = Vec::<(ShimmerMatchBlock, char)>::new();
     let mut target_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock)>>::default();
     let mut query_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock)>>::default();
 
@@ -551,22 +557,24 @@ fn main() -> Result<(), std::io::Error> {
                             aln_idx, tn, ts, te, qn, qs, qe, orientation
                         )
                     }
-                    Record::SvCnd((t_idx, ts, te, q_idx, qs, qe, orientation)) => {
+                    Record::SvCnd(((t_idx, ts, te, q_idx, qs, qe, orientation), diff)) => {
+                        let diff_type = match diff {
+                            AlnDiff::FailAln => 'A',
+                            AlnDiff::FailEndMatch => 'E',
+                            AlnDiff::FailShortSeq => 'S',
+                            AlnDiff::FailLengthDiff => 'L',
+                            _ => 'U',
+                        };
                         in_aln_sv_cnd_records.push((
-                            t_idx,
-                            ts + 1,
-                            te + 1,
-                            q_idx,
-                            qs + 1,
-                            qe + 1,
-                            orientation,
+                            (t_idx, ts + 1, te + 1, q_idx, qs + 1, qe + 1, orientation),
+                            diff_type,
                         ));
                         let tn = target_name.get(&t_idx).unwrap();
                         let qn = query_name.get(&q_idx).unwrap();
 
                         format!(
-                            "{:06}\tS\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                            aln_idx, tn, ts, te, qn, qs, qe, orientation
+                            "{:06}\tS\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            aln_idx, tn, ts, te, qn, qs, qe, orientation, diff_type
                         )
                     }
                     Record::Variant(
@@ -718,14 +726,15 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut in_aln_sv_and_bed_records = Vec::<(String, u32, u32, String)>::new();
     in_aln_sv_cnd_records.sort();
-    in_aln_sv_cnd_records
-        .into_iter()
-        .for_each(|(t_idx, ts, te, q_idx, qs, qe, orientation)| {
+    in_aln_sv_cnd_records.into_iter().for_each(
+        |((t_idx, ts, te, q_idx, qs, qe, orientation), diff_type)| {
             let q_name = query_name.get(&q_idx).unwrap();
-            let bed_annotation = format!("SVC:{}:{}:{}:{}", q_name, qs, qe, orientation);
+            let bed_annotation =
+                format!("SVC:{}:{}:{}:{}:{}", q_name, qs, qe, orientation, diff_type);
             let t_name = target_name.get(&t_idx).unwrap();
             in_aln_sv_and_bed_records.push((t_name.clone(), ts + 1, te + 1, bed_annotation));
-        });
+        },
+    );
 
     let mut all_bed_records = Vec::<_>::new();
     all_bed_records.extend(in_aln_sv_and_bed_records);
