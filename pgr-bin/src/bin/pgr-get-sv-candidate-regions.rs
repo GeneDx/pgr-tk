@@ -367,11 +367,7 @@ fn main() -> Result<(), std::io::Error> {
                                                     ..(qe - kmer_size) as usize],
                                             )
                                         };
-                                        // println!("XX0: {}", String::from_utf8_lossy(&s0str[..16]));
-                                        // println!("XX1: {}", String::from_utf8_lossy(&s1str[..16]));
-                                        // println!("YY0: {}", String::from_utf8_lossy(&s0str[s0str.len() - 16..]));
-                                        // println!("YY1: {}", String::from_utf8_lossy(&s1str[s1str.len() - 16..]));
-
+      
                                         let wf_aln_diff: AlnDiff =
                                             if s0str.len() <= 16 || s1str.len() <= 16 {
                                                 AlnDiff::FailShortSeq
@@ -385,37 +381,19 @@ fn main() -> Result<(), std::io::Error> {
                                                     != s1str[s1str.len() - 16..]
                                             {
                                                 AlnDiff::FailEndMatch
+                                            } else if let Some(aln_res) = get_variant_segments(
+                                                &s0str,
+                                                &s1str,
+                                                1,
+                                                Some(144),
+                                                3,
+                                                3,
+                                                1,
+                                            ) {
+                                                AlnDiff::Aligned(aln_res)
                                             } else {
-                                                //let s0str = String::from_utf8_lossy(&s0str[..]);
-                                                //let s1str = String::from_utf8_lossy(&s1str[..]);
-                                                if let Some(aln_res) = get_variant_segments(
-                                                    &s0str,
-                                                    &s1str,
-                                                    1,
-                                                    Some(144),
-                                                    3,
-                                                    3,
-                                                    1,
-                                                ) {
-                                                    AlnDiff::Aligned(aln_res)
-                                                } else {
-                                                    AlnDiff::FailAln
-                                                }
+                                                AlnDiff::FailAln
                                             };
-
-                                        // if diff.is_some() {
-                                        //     let diff = diff.clone().unwrap().0;
-                                        //     if !diff.is_empty() && diff[0].0 == 0 && diff[0].2 == 'I' {
-                                        //         let s0str = String::from_utf8_lossy(&s0str[..]);
-                                        //         let s1str = String::from_utf8_lossy(&s1str[..]);
-                                        //         println!("XX0: {}",s0str);
-                                        //         println!("XX1: {}",s1str);
-                                        //         println!("XX2: {} {}", diff[0].3, diff[0].4);
-                                        //     }
-                                        // }
-                                        // println!("{:?} {:?}",  ((ts, te), (qs, qe), orientation), diff);
-                                        // println!();
-
                                         ((ts, te), (qs, qe), orientation, wf_aln_diff)
                                     })
                                     .collect::<Vec<_>>()
