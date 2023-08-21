@@ -210,6 +210,7 @@ pub fn get_target_and_principal_bundle_decomposition(
         Some(128),
         Some(128),
         Some(0),
+        None,
         false
     );
 
