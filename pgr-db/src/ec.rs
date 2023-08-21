@@ -669,7 +669,6 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         Ok(out_seqs)
     }
 
-    let orientated = true;
     let out = sids
         .par_iter()
         .map(|&sid| {
