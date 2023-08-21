@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 
-/// Align long contigs and identify potential SV regions with respect to the reference fasta file
+/// Generate diploid VCF field from paired alnmap file from two haplotype assembly 
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-generate-diploid-vcf")]
 #[clap(author, version)]
