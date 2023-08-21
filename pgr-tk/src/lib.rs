@@ -360,7 +360,7 @@ impl SeqIndexDB {
     ///     ((``query_start``, ``query_end``, ``query_orientation``),
     ///     (``target_start``, ``target_end``, ``target_orientation``))
     #[pyo3(
-        text_signature = "($self, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span, orientated=false)"
+        text_signature = "($self, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span, max_gap=None, orientated=false)"
     )]
     pub fn query_fragment_to_hps(
         &self,
@@ -370,6 +370,7 @@ impl SeqIndexDB {
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
+        max_gap: Option<u32>,
         orientated: Option<bool>
     ) -> PyResult<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let orientated = if let Some(orientated) = orientated {orientated} else {false}; 
@@ -384,6 +385,7 @@ impl SeqIndexDB {
                     max_count_query,
                     max_count_target,
                     max_aln_span,
+                    max_gap,
                     orientated
                 )
                 .unwrap()),
@@ -396,6 +398,7 @@ impl SeqIndexDB {
                     max_count_query,
                     max_count_target,
                     max_aln_span,
+                    max_gap,
                     orientated
                 )
                 .unwrap()),
@@ -408,6 +411,7 @@ impl SeqIndexDB {
                     max_count_query,
                     max_count_target,
                     max_aln_span,
+                    max_gap,
                     orientated
                 )
                 .unwrap()),
@@ -462,7 +466,7 @@ impl SeqIndexDB {
     ///     used for the detailed alignment to pin down the exact mapped positions.
     ///
     #[pyo3(
-        text_signature = "($self, positions, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span)"
+        text_signature = "($self, positions, seq, penalty, max_count, max_query_count, max_target_count, max_aln_span, max_gap=None, oriented=false)"
     )]
     pub fn map_positions_in_seq(
         &self,
@@ -473,9 +477,11 @@ impl SeqIndexDB {
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
-        orientated: bool
+        max_gap: Option<u32>,
+        orientated: Option<bool>
     ) -> PyResult<Vec<(u32, (u32, u32, u8), (u32, u32), (u32, u32))>> {
         let shmmr_spec = self.db_internal.shmmr_spec.as_ref().unwrap();
+        let orientated = if let Some(orientated) = orientated {orientated} else {false};
         let mut all_alns = {
             let raw_query_hits = self.query_fragment(seq.clone()).unwrap();
             aln::query_fragment_to_hps(
@@ -487,6 +493,7 @@ impl SeqIndexDB {
                 max_count_query,
                 max_count_target,
                 max_aln_span,
+                max_gap,
                 orientated
             )
         };
@@ -1528,15 +1535,17 @@ impl AGCFile {
 ///     chunk alignment ignoring the gaps. Typically, a number between 0.1 to 0.5 should
 ///     be used.
 ///
-#[pyfunction(signature = (sp_hits, max_span, penalty, orientated=false))]
+#[pyfunction(signature = (sp_hits, max_span, penalty, max_gap=None, orientated=false))]
 pub fn sparse_aln(
     sp_hits: Vec<HitPair>,
     max_span: u32,
     penalty: f32,
-    orientated: bool
+    max_gap: Option<u32>,
+    orientated: Option<bool>
 ) -> PyResult<Vec<(f32, Vec<HitPair>)>> {
     let mut hp = sp_hits.clone();
-    Ok(aln::sparse_aln(&mut hp, max_span, penalty, orientated))
+    let orientated = if let Some(orientated) = orientated {orientated} else {false}; 
+    Ok(aln::sparse_aln(&mut hp, max_span, penalty, max_gap, orientated))
 }
 
 /// Generate a list of shimmer pair from a sequence

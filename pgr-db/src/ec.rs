@@ -540,6 +540,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             Some(32),
             Some(32),
             Some(33),
+            None,
             true
         );
 

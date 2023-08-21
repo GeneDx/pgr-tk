@@ -12,6 +12,7 @@ pub fn sparse_aln(
     sp_hits: &mut Vec<HitPair>,
     max_span: u32,
     penalty: f32,
+    max_gap: Option<u32>,
     orientated: bool,
 ) -> Vec<(f32, Vec<HitPair>)> {
     // given a set of hits in the form of (bgn1, end1, orientation1),  (bgn2, end2, orientation2)
@@ -37,13 +38,31 @@ pub fn sparse_aln(
             j -= 1;
 
             let pre_hp = sp_hits[j];
+
             if orientated {
-                let p_orientation = pre_hp.0.2 ^ pre_hp.1.2; // pre_hp.0.2  = 0 or 1 and pre_hp.1.2 = 0 or 1
-                let orientation = hp.0.2 ^ hp.1.2; // hp.0.2  = 0 or 1 and hp.1.2 = 0 or 1
+                // don't connect if orientations are not agreed if orientated == true
+                let p_orientation = pre_hp.0 .2 ^ pre_hp.1 .2; // pre_hp.0.2  = 0 or 1 and pre_hp.1.2 = 0 or 1
+                let orientation = hp.0 .2 ^ hp.1 .2; // hp.0.2  = 0 or 1 and hp.1.2 = 0 or 1
                 if p_orientation != orientation {
-                    continue
+                    continue;
                 }
             }
+
+            if let Some(max_gap) = max_gap {
+                let max_gap = max_gap as f32;
+                if hp.0 .2 == hp.1 .2 {
+                    if (hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs() > max_gap
+                        || (hp.1 .0 as f32 - pre_hp.1 .1 as f32).abs() > max_gap
+                    {
+                        continue;
+                    }
+                } else if (hp.0 .0 as f32 - pre_hp.0 .1 as f32).abs() > max_gap
+                    || (hp.1 .1 as f32 - pre_hp.1 .0 as f32).abs() > max_gap
+                {
+                    continue;
+                }
+            }
+
             if pre_hp.0 == hp.0 {
                 continue;
             }; // don't connect node with the same left coordinate
@@ -133,6 +152,7 @@ pub fn query_fragment_to_hps(
     query_max_count: Option<u32>,
     target_max_count: Option<u32>,
     max_aln_span: Option<u32>,
+    max_gap: Option<u32>,
     oriented: bool,
 ) -> TargetHitPairLists {
     let mut shmmr_pair_hash_count = FxHashMap::<(u64, u64), u32>::default();
@@ -211,7 +231,12 @@ pub fn query_fragment_to_hps(
     target_squence_id_to_hits
         .into_iter()
         .filter(|(_sid, hps)| hps.len() > 1)
-        .map(|(sid, mut hps)| (sid, sparse_aln(&mut hps, max_aln_span, penalty, oriented)))
+        .map(|(sid, mut hps)| {
+            (
+                sid,
+                sparse_aln(&mut hps, max_aln_span, penalty, max_gap, oriented),
+            )
+        })
         .collect::<Vec<_>>()
 }
 
@@ -404,7 +429,8 @@ mod test {
             }
         });
         let oriented = false;
-        let out = sparse_aln(&mut hp, 8, 0.5_f32, oriented);
+        let max_gap = None;
+        let out = sparse_aln(&mut hp, 8, 0.5_f32, max_gap, oriented);
         out.iter().for_each(|(s, v)| println!("{} {}", s, v.len()));
     }
 

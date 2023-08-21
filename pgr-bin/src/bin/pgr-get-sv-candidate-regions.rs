@@ -40,6 +40,10 @@ struct CmdOptions {
     #[clap(long, short, default_value_t = 0.025)]
     gap_penalty_factor: f32,
 
+    /// the max gap length allowed in the alignment blocks
+    #[clap(long, default_value_t = 100000)]
+    max_gap: u32,
+
     /// the span of the chain for building the sparse alignment directed acyclic graph
     #[clap(long, default_value_t = 8)]
     max_aln_chain_span: u32,
@@ -301,7 +305,7 @@ fn main() -> Result<(), std::io::Error> {
             // let q_name = String::from_utf8_lossy(&seq_rec.id);
             let query_seq = seq_rec.seq.clone();
             //let q_len = query_seq.len();
-
+            let max_gap = args.max_gap;
             let query_results = ref_seq_index_db.query_fragment_to_hps(
                 &query_seq,
                 args.gap_penalty_factor,
@@ -309,6 +313,7 @@ fn main() -> Result<(), std::io::Error> {
                 Some(1),
                 Some(1),
                 Some(args.max_aln_chain_span),
+                Some(max_gap),
                 true,
             );
             (q_idx, seq_rec, query_results)
