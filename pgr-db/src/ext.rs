@@ -257,6 +257,7 @@ impl SeqIndexDB {
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
+        oriented: bool,
     ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = &self.shmmr_spec.as_ref().unwrap();
         if let Some(frag_map) = self.get_shmmr_map_internal() {
@@ -270,6 +271,7 @@ impl SeqIndexDB {
                 max_count_query,
                 max_count_target,
                 max_aln_span,
+                oriented
             );
             Some(res)
         } else {
@@ -286,6 +288,7 @@ impl SeqIndexDB {
         max_count_query: Option<u32>,
         max_count_target: Option<u32>,
         max_aln_span: Option<u32>,
+        oriented: bool
     ) -> Option<Vec<(u32, Vec<(f32, Vec<aln::HitPair>)>)>> {
         let shmmr_spec = self.shmmr_spec.as_ref().unwrap();
 
@@ -329,6 +332,7 @@ impl SeqIndexDB {
             max_count_query,
             max_count_target,
             max_aln_span,
+            oriented,
         );
         Some(res)
     }

@@ -540,6 +540,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             Some(32),
             Some(32),
             Some(33),
+            true
         );
 
         let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
@@ -668,6 +669,7 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
         Ok(out_seqs)
     }
 
+    let orientated = true;
     let out = sids
         .par_iter()
         .map(|&sid| {

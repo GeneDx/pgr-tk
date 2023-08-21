@@ -148,6 +148,7 @@ fn main() -> Result<(), std::io::Error> {
                     Some(args.max_query_count),
                     Some(args.max_target_count),
                     Some(args.max_aln_chain_span),
+                    false
                 )
             } else {
                 seq_index_db.query_fragment_to_hps(
@@ -157,6 +158,7 @@ fn main() -> Result<(), std::io::Error> {
                     Some(args.max_query_count),
                     Some(args.max_target_count),
                     Some(args.max_aln_chain_span),
+                    false
                 )
             };
 
