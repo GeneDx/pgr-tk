@@ -74,7 +74,7 @@ fn main() -> Result<(), std::io::Error> {
             if let Some(i_map) = annotation_interval.get(&chr) {
                 // TODO, we only pick the first overlap for now
                 let mut annotations = FxHashSet::<String>::default();
-                for (strand, attributes) in i_map.values(bgn..end) {
+                for (_strand, attributes) in i_map.values(bgn..end) {
                     // TODO: need a proper parser
                     let attributes = attributes.trim_end_matches(';').to_string();
                     let a_fields = attributes.split(';').collect::<Vec<&str>>();
