@@ -49,8 +49,8 @@ type ShimmerMatchBlock = (u32, u32, u32, u32, u32, u32, u32);
 
 #[derive(Clone)]
 enum Record {
-    Bgn(ShimmerMatchBlock, u32),
-    End(ShimmerMatchBlock, u32),
+    Bgn(ShimmerMatchBlock, u32, u32), // MatchBlock, q_len, q_aln_orientation
+    End(ShimmerMatchBlock, u32, u32), // MatchBlock, q_len, q_aln_orientation
     Match(ShimmerMatchBlock),
     SvCnd((ShimmerMatchBlock, AlnDiff)),
     Variant(ShimmerMatchBlock, u32, u32, u32, char, String, String),
@@ -309,36 +309,55 @@ fn main() -> Result<(), std::io::Error> {
                 Some(1),
                 Some(1),
                 Some(args.max_aln_chain_span),
+                true,
             );
             (q_idx, seq_rec, query_results)
         })
         .flat_map(|(q_idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
                 let query_seq = seq_rec.seq;
-                let q_len = query_seq.len();
-                let mut sid_to_mapped_regions = FxHashMap::default();
+                let q_len: usize = query_seq.len();
+                let mut target_id_to_mapped_regions = FxHashMap::default();
+                let mut target_id_to_orientation_len_count = FxHashMap::default(); 
                 qr.into_iter().for_each(|(t_idx, mapped_segments)| {
                     let mut aln_lens = vec![];
-                    let mut f_count = 0_usize;
-                    let mut r_count = 0_usize;
+                    let mut ctg_orientation_count = (0_usize, 0_usize); // ctg level orientation count: (fwd_count, rev_count)
                     mapped_segments.into_iter().for_each(|(_score, aln)| {
+                        let mut segment_orientation_count = (0_usize, 0_usize); // ctg level orientation count: (fwd_count, rev_count)
                         if aln.len() > 2 {
                             aln_lens.push(aln.len());
                             for hp in &aln {
+                                let seg_len = (hp.0.1 - hp.0.0) as usize;
                                 if hp.0 .2 == hp.1 .2 {
-                                    f_count += 1;
+                                    ctg_orientation_count.0 += seg_len;
+                                    segment_orientation_count.0 += seg_len;
                                 } else {
-                                    r_count += 1;
+                                    ctg_orientation_count.1 += seg_len;
+                                    segment_orientation_count.1 += seg_len;
                                 }
                             }
-                            let orientation = if f_count > r_count { 0_u32 } else { 1_u32 };
-                            let e = sid_to_mapped_regions.entry(t_idx).or_insert_with(Vec::new);
-                            e.push((aln, orientation))
+                            let seg_orientation =
+                                if segment_orientation_count.0 > segment_orientation_count.1 {
+                                    0_u32
+                                } else {
+                                    1_u32
+                                };
+
+                            let e = target_id_to_mapped_regions.entry(t_idx).or_insert_with(Vec::new);
+                            e.push((aln, seg_orientation))
                         }
+                        let ctg_orientation = if ctg_orientation_count.0 > ctg_orientation_count.1 {
+                            0_u32
+                        } else {
+                            1_u32
+                        };
+                        let e = target_id_to_orientation_len_count.entry(t_idx).or_insert(((0,0),0));
+                        *e = (ctg_orientation_count, ctg_orientation); 
+                         
                     })
                 });
 
-                let rtn = sid_to_mapped_regions
+                let rtn = target_id_to_mapped_regions
                     .into_iter()
                     .flat_map(|(t_idx, mapped_regions)| {
                         let ref_seq = ref_seq_index_db.get_seq_by_id(t_idx).unwrap();
@@ -400,7 +419,7 @@ fn main() -> Result<(), std::io::Error> {
                             })
                             .filter(|v| !v.is_empty())
                             .collect::<Vec<_>>();
-
+                        let (_, ctg_orientation) = target_id_to_orientation_len_count.get(&t_idx).unwrap();
                         mapped_region_aln
                             .into_iter()
                             .map(|v| {
@@ -417,6 +436,7 @@ fn main() -> Result<(), std::io::Error> {
                                         bgn_rec.2,
                                     ),
                                     q_len as u32,
+                                    *ctg_orientation,
                                 ));
                                 let v_last = v.last().unwrap().clone();
                                 v.into_iter().for_each(
@@ -476,6 +496,7 @@ fn main() -> Result<(), std::io::Error> {
                                         v_last.2,
                                     ),
                                     q_len as u32,
+                                    *ctg_orientation
                                 ));
                                 output_records
                             })
@@ -503,7 +524,7 @@ fn main() -> Result<(), std::io::Error> {
             let mut end_rec: Option<ShimmerMatchBlock> = None;
             vr.iter().for_each(|r| {
                 match r.clone() {
-                    Record::Bgn(match_block, _q_len) => {
+                    Record::Bgn(match_block, _q_len, _ctg_orientation) => {
                         bgn_rec = Some(match_block);
                     }
                     Record::SvCnd(((t_idx, ts, te, q_idx, qs, qe, orientation), diff)) => {
@@ -519,7 +540,7 @@ fn main() -> Result<(), std::io::Error> {
                             diff_type,
                         ));
                     }
-                    Record::End(match_block, _q_len) => {
+                    Record::End(match_block, _q_len, _ctg_orientation) => {
                         end_rec = Some(match_block);
                     }
                     _ => {}
@@ -690,9 +711,8 @@ fn main() -> Result<(), std::io::Error> {
             .expect("fail to write the 'in-alignment' sv candidate bed file");
     });
 
-
     let mut vcf_records = Vec::<(ShimmerMatchBlock, u32, u32, String, String)>::new();
-    
+
     // the second round loop through all_records to output and tagged variant from duplicate / overlapped blocks
     all_records
         .into_iter()
@@ -701,22 +721,22 @@ fn main() -> Result<(), std::io::Error> {
         .for_each(|(aln_idx, vr)| {
             vr.into_iter().for_each(|r| {
                 let rec_out = match r.clone() {
-                    Record::Bgn(match_block, q_len) => {
+                    Record::Bgn(match_block, q_len, ctg_orientation) => {
                         let (t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
                         let tn = target_name.get(&t_idx).unwrap();
                         let qn = query_name.get(&q_idx).unwrap();
                         format!(
-                            "{:06}\tB\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                            aln_idx, tn, ts, te, qn, qs, qe, orientation, q_len
+                            "{:06}\tB\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            aln_idx, tn, ts, te, qn, qs, qe, orientation, q_len, ctg_orientation
                         )
                     }
-                    Record::End(match_block, q_len) => {
+                    Record::End(match_block, q_len, ctg_orientation) => {
                         let (t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
                         let tn = target_name.get(&t_idx).unwrap();
                         let qn = query_name.get(&q_idx).unwrap();
                         format!(
-                            "{:06}\tE\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                            aln_idx, tn, ts, te, qn, qs, qe, orientation, q_len
+                            "{:06}\tE\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            aln_idx, tn, ts, te, qn, qs, qe, orientation, q_len, ctg_orientation
                         )
                     }
                     Record::Match((t_idx, ts, te, q_idx, qs, qe, orientation)) => {
