@@ -7,7 +7,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{BufReader, Read};
 use std::path::{self, Path};
-use svg::node::{element, Node};
+use svg::node::{element, Node, self};
 use svg::Document;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -185,6 +185,14 @@ fn main() -> Result<(), std::io::Error> {
                 .set("d", path_str);
             document.append(path);
 
+            let text = element::Text::new()
+            .set("x", b)
+            .set("y", 0)
+            .set("font-size", "6px")
+            .set("font-family", "monospace")
+            .add(node::Text::new(target_aln_block_records.1.clone()));
+            document.append(text);
+
             let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
             target_aln_block_records.4.iter().for_each(|record| {
                 let e = best_query_block
@@ -212,7 +220,7 @@ fn main() -> Result<(), std::io::Error> {
                     let path = element::Path::new()
                         .set("stroke", color)
                         .set("stroke-width", "5")
-                        .set("alpha", "0.7")
+                        .set("opacity", "0.7")
                         .set("d", path_str);
                     document.append(path);
                     
@@ -284,10 +292,22 @@ fn main() -> Result<(), std::io::Error> {
         let path = element::Path::new()
             .set("stroke", "#000")
             .set("stroke-width", format!("{w}"))
-            .set("alpha", "0.7")
+            .set("opacity", "0.7")
             .set("d", path_str);
         document.append(path);
 
+        let text = element::Text::new()
+        .set("x", 0.0)
+        .set("y", y-10.0)
+        .set("font-size", "20px")
+        .set("font-family", "monospace")
+        .add(node::Text::new(target_aln_block_records.1.clone()));
+        document.append(text);
+
+
+
+        
+     
         let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
         target_aln_block_records.4.iter().for_each(|record| {
             let e = best_query_block
@@ -315,7 +335,7 @@ fn main() -> Result<(), std::io::Error> {
                 let path = element::Path::new()
                     .set("stroke", color)
                     .set("stroke-width", "5")
-                    .set("alpha", "0.7")
+                    .set("opacity", "0.7")
                     .set("d", path_str);
                 document.append(path);
                 
@@ -364,11 +384,11 @@ fn main() -> Result<(), std::io::Error> {
                 .set("fill", color)
                 .set("stroke", "#000")
                 .set("stroke-width", "0.5")
-                .set("alpha", "0.7")
+                .set("opacity", "0.7")
                 .set("d", path_str);
             document.append(path);
         });
-        y_offset += 120.0;
+        y_offset += 125.0;
     });
 
 
