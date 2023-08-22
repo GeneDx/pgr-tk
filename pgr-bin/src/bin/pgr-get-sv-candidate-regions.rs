@@ -5,6 +5,7 @@ use pgr_db::ext::{get_fastx_reader, GZFastaReader, SeqIndexDB};
 use pgr_db::fasta_io::{reverse_complement, SeqRec};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use serde::Serialize;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::Path;
@@ -56,7 +57,7 @@ enum Record {
     Bgn(ShimmerMatchBlock, u32, u32), // MatchBlock, q_len, ctg_aln_orientation
     End(ShimmerMatchBlock, u32, u32), // MatchBlock, q_len, ctg_aln_orientation
     Match(ShimmerMatchBlock),
-    SvCnd((ShimmerMatchBlock, AlnDiff, u32)), // MatchBlock, diff_type, ctg_aln_orientation 
+    SvCnd((ShimmerMatchBlock, AlnDiff, u32)), // MatchBlock, diff_type, ctg_aln_orientation
     Variant(ShimmerMatchBlock, u32, u32, u32, char, String, String),
 }
 
@@ -73,6 +74,31 @@ enum AlnDiff {
     FailLengthDiff,
     FailShortSeq,
 }
+
+#[derive(Serialize)]
+struct CtgMapRec {
+    t_name: String,
+    ts: u32,
+    te: u32,
+    q_name: String,
+    qs: u32,
+    qe: u32,
+    ctg_len: u32,
+    orientation: u32,
+    ctg_orientation: u32,
+    t_dup: bool,
+    t_ovlp: bool,
+    q_dup: bool,
+    q_ovlp: bool,
+}
+
+#[derive(Serialize)]
+struct CtgMapSet {
+    records: Vec<CtgMapRec>,
+    target_length: Vec<(u32, String, u32)>,
+    query_length: Vec<(u32, String, u32)>
+}
+
 
 fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     // the aln_segs should be sorted already
@@ -236,6 +262,10 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out_ctgmap = BufWriter::new(
         File::create(Path::new(&args.output_prefix).with_extension("ctgmap.bed")).unwrap(),
+    );
+
+    let mut out_ctgmap_json = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("ctgmap.json")).unwrap(),
     );
 
     let mut out_svcnd = BufWriter::new(
@@ -489,7 +519,8 @@ fn main() -> Result<(), std::io::Error> {
                                         } else {
                                             output_records.push(Record::SvCnd((
                                                 (t_idx, ts, te, q_idx as u32, qs, qe, orientation),
-                                                diff, *ctg_orientation
+                                                diff,
+                                                *ctg_orientation,
                                             )));
                                         }
                                     },
@@ -520,8 +551,10 @@ fn main() -> Result<(), std::io::Error> {
         .collect::<Vec<_>>();
 
     let mut in_aln_sv_cnd_records = Vec::<(ShimmerMatchBlock, char, u32)>::new();
-    let mut target_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock, u32, u32)>>::default();
-    let mut query_aln_blocks = FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock, u32, u32)>>::default();
+    let mut target_aln_blocks =
+        FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock, u32, u32)>>::default();
+    let mut query_aln_blocks =
+        FxHashMap::<u32, Vec<(usize, ShimmerMatchBlock, u32, u32)>>::default();
 
     // the first round loop through all_records for computing duplicated / overlapped match blocks
     all_records
@@ -536,7 +569,11 @@ fn main() -> Result<(), std::io::Error> {
                     Record::Bgn(match_block, q_len, ctg_orientation) => {
                         bgn_rec = Some((match_block, q_len, ctg_orientation));
                     }
-                    Record::SvCnd(((t_idx, ts, te, q_idx, qs, qe, orientation), diff, ctg_orientation)) => {
+                    Record::SvCnd((
+                        (t_idx, ts, te, q_idx, qs, qe, orientation),
+                        diff,
+                        ctg_orientation,
+                    )) => {
                         let diff_type = match diff {
                             AlnDiff::FailAln => 'A',
                             AlnDiff::FailEndMatch => 'E',
@@ -547,7 +584,7 @@ fn main() -> Result<(), std::io::Error> {
                         in_aln_sv_cnd_records.push((
                             (t_idx, ts + 1, te + 1, q_idx, qs + 1, qe + 1, orientation),
                             diff_type,
-                            ctg_orientation
+                            ctg_orientation,
                         ));
                     }
                     Record::End(match_block, q_len, ctg_orientation) => {
@@ -578,26 +615,26 @@ fn main() -> Result<(), std::io::Error> {
                     aln_idx,
                     (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation),
                     ctg_len,
-                    ctg_orientation
+                    ctg_orientation,
                 ));
                 q_entry.push((
                     aln_idx,
                     (b_t_idx, b_ts, e_te, b_q_idx, b_qs, e_qe, b_orientation),
                     ctg_len,
-                    ctg_orientation
+                    ctg_orientation,
                 ));
             } else {
                 t_entry.push((
                     aln_idx,
                     (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation),
                     ctg_len,
-                    ctg_orientation
+                    ctg_orientation,
                 ));
                 q_entry.push((
                     aln_idx,
                     (b_t_idx, b_ts, e_te, b_q_idx, e_qs, b_qe, b_orientation),
                     ctg_len,
-                    ctg_orientation
+                    ctg_orientation,
                 ));
             }
         });
@@ -616,34 +653,42 @@ fn main() -> Result<(), std::io::Error> {
             let mut cte = 0_u32;
             let mut c_ctg = &String::from("BGN");
             let t_name = target_name.get(t_idx).unwrap();
-            match_blocks.iter().for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
-                let (_t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
-                //println!("T {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
-                let next_ctg = query_name.get(&q_idx).unwrap();
-                if ts > cte {
-                    let bed_annotation =
-                        format!("TG:{}>{}:{}:{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation);
-                    target_aln_bed_records.push((t_name.clone(), cte, ts, bed_annotation));
-                    //println!("G {} {} {} {} {}", t_name, cte, ts, c_ctg, next_ctg);
-                    c_ctg = next_ctg;
-                    cts = ts;
-                    cte = te;
-                } else if te <= cte {
-                    let bed_annotation =
-                        format!("TD:{}>{}:{}:{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation);
-                    target_duplicate_blocks.insert(match_block);
-                    target_aln_bed_records.push((t_name.clone(), ts, te, bed_annotation));
-                    //println!("D {} {} {} {} {}", t_name, cts, te, c_ctg, next_ctg);
-                } else {
-                    let bed_annotation =
-                        format!("TO:{}>{}:{}:{}:{}:{}:{}", c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation);
-                    target_overlap_blocks.insert(match_block);
-                    target_aln_bed_records.push((t_name.clone(), ts, cte, bed_annotation));
-                    //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
-                    c_ctg = next_ctg;
-                    cte = te;
-                };
-            });
+            match_blocks
+                .iter()
+                .for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
+                    let (_t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
+                    //println!("T {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
+                    let next_ctg = query_name.get(&q_idx).unwrap();
+                    if ts > cte {
+                        let bed_annotation = format!(
+                            "TG:{}>{}:{}:{}:{}:{}:{}",
+                            c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation
+                        );
+                        target_aln_bed_records.push((t_name.clone(), cte, ts, bed_annotation));
+                        //println!("G {} {} {} {} {}", t_name, cte, ts, c_ctg, next_ctg);
+                        c_ctg = next_ctg;
+                        cts = ts;
+                        cte = te;
+                    } else if te <= cte {
+                        let bed_annotation = format!(
+                            "TD:{}>{}:{}:{}:{}:{}:{}",
+                            c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation
+                        );
+                        target_duplicate_blocks.insert(match_block);
+                        target_aln_bed_records.push((t_name.clone(), ts, te, bed_annotation));
+                        //println!("D {} {} {} {} {}", t_name, cts, te, c_ctg, next_ctg);
+                    } else {
+                        let bed_annotation = format!(
+                            "TO:{}>{}:{}:{}:{}:{}:{}",
+                            c_ctg, next_ctg, qs, qe, ctg_len, orientation, ctg_orientation
+                        );
+                        target_overlap_blocks.insert(match_block);
+                        target_aln_bed_records.push((t_name.clone(), ts, cte, bed_annotation));
+                        //println!("O {} {} {} {} {}", t_name, ts, cte, c_ctg, next_ctg);
+                        c_ctg = next_ctg;
+                        cte = te;
+                    };
+                });
             let next_ctg = &String::from("END");
             let t_len = *target_len.get(t_idx).unwrap();
             let bed_annotation = format!("TG:{}>{}", c_ctg, next_ctg);
@@ -661,40 +706,42 @@ fn main() -> Result<(), std::io::Error> {
             let mut cqe = 0_u32;
             let mut c_target = &String::from("BGN");
             let q_name = query_name.get(q_idx).unwrap();
-            match_blocks.iter().for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
-                //println!("Q {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
-                let (t_idx, ts, te, _q_idx, qs, qe, orientation) = match_block;
-                let next_target = target_name.get(&t_idx).unwrap();
-                if qs > cqe {
-                    let bed_annotation = format!(
-                        "QG:{}>{}:{}:{}:{}:{}:{}",
-                        c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
-                    );
-                    query_aln_bed_records.push((q_name.clone(), cqe, qs, bed_annotation));
-                    //println!("G {} {} {} {}", t_name, ts, te, p_target);
-                    c_target = next_target;
-                    cqs = qs;
-                    cqe = qe;
-                } else if qe <= cqe {
-                    let bed_annotation = format!(
-                        "QD:{}>{}:{}:{}:{}:{}:{}",
-                        c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
-                    );
-                    query_duplicate_blocks.insert(match_block);
-                    query_aln_bed_records.push((q_name.clone(), qs, qe, bed_annotation));
-                    //println!("D {} {} {} {}", t_name, ts, te, p_target);
-                } else {
-                    let bed_annotation = format!(
-                        "QO:{}>{}:{}:{}:{}:{}:{}",
-                        c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
-                    );
-                    query_overlap_blocks.insert(match_block);
-                    query_aln_bed_records.push((q_name.clone(), qs, cqe, bed_annotation));
-                    //println!("O {} {} {} {}", t_name, ts, te, p_target);
-                    c_target = next_target;
-                    cqe = qe;
-                }
-            });
+            match_blocks
+                .iter()
+                .for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
+                    //println!("Q {} {} {} {} {} {} {}", t_name, ts, te, q_idx, qs, qe, orientation);
+                    let (t_idx, ts, te, _q_idx, qs, qe, orientation) = match_block;
+                    let next_target = target_name.get(&t_idx).unwrap();
+                    if qs > cqe {
+                        let bed_annotation = format!(
+                            "QG:{}>{}:{}:{}:{}:{}:{}",
+                            c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
+                        );
+                        query_aln_bed_records.push((q_name.clone(), cqe, qs, bed_annotation));
+                        //println!("G {} {} {} {}", t_name, ts, te, p_target);
+                        c_target = next_target;
+                        cqs = qs;
+                        cqe = qe;
+                    } else if qe <= cqe {
+                        let bed_annotation = format!(
+                            "QD:{}>{}:{}:{}:{}:{}:{}",
+                            c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
+                        );
+                        query_duplicate_blocks.insert(match_block);
+                        query_aln_bed_records.push((q_name.clone(), qs, qe, bed_annotation));
+                        //println!("D {} {} {} {}", t_name, ts, te, p_target);
+                    } else {
+                        let bed_annotation = format!(
+                            "QO:{}>{}:{}:{}:{}:{}:{}",
+                            c_target, next_target, ts, te, ctg_len, orientation, ctg_orientation
+                        );
+                        query_overlap_blocks.insert(match_block);
+                        query_aln_bed_records.push((q_name.clone(), qs, cqe, bed_annotation));
+                        //println!("O {} {} {} {}", t_name, ts, te, p_target);
+                        c_target = next_target;
+                        cqe = qe;
+                    }
+                });
             let next_target = &String::from("END");
             let bed_annotation = format!("QG:{}>{}", c_target, next_target);
             let q_len = *query_len.get(q_idx).unwrap() as u32;
@@ -706,8 +753,10 @@ fn main() -> Result<(), std::io::Error> {
     in_aln_sv_cnd_records.iter().for_each(
         |((t_idx, ts, te, q_idx, qs, qe, orientation), diff_type, ctg_orientation)| {
             let q_name = query_name.get(q_idx).unwrap();
-            let bed_annotation =
-                format!("SVC:{}:{}:{}:{}:{}:{}", q_name, qs, qe, orientation, ctg_orientation, diff_type);
+            let bed_annotation = format!(
+                "SVC:{}:{}:{}:{}:{}:{}",
+                q_name, qs, qe, orientation, ctg_orientation, diff_type
+            );
             let t_name = target_name.get(t_idx).unwrap();
             in_aln_sv_and_bed_records.push((t_name.clone(), ts + 1, te + 1, bed_annotation));
         },
@@ -725,41 +774,87 @@ fn main() -> Result<(), std::io::Error> {
     });
 
     // output ctgmap file
+
+    let mut ctgmap_records = Vec::<CtgMapRec>::new();
     target_aln_blocks
         .into_iter()
         .for_each(|(t_idx, match_blocks)| {
             let t_name = target_name.get(&t_idx).unwrap();
-            match_blocks.iter().for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
-                let (_t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
-                let q_name = query_name.get(&q_idx).unwrap();
-                let t_dup = if target_duplicate_blocks.contains(&match_block) {
-                    1
-                } else {
-                    0
-                };
-                let t_ovlp = if target_overlap_blocks.contains(&match_block) {
-                    1
-                } else {
-                    0
-                };
-                let q_dup = if query_duplicate_blocks.contains(&match_block) {
-                    1
-                } else {
-                    0
-                };
-                let q_ovlp = if query_overlap_blocks.contains(&match_block) {
-                    1
-                } else {
-                    0
-                };
-                writeln!(
-                    out_ctgmap,
-                    "{}\t{}\t{}\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
-                    t_name, ts, te, q_name, qs, qe, ctg_len, orientation, ctg_orientation, t_dup, t_ovlp, q_dup, q_ovlp
-                )
-                .expect("can't write ctgmap file");
-            });
+            match_blocks
+                .iter()
+                .for_each(|&(_aln_idx, match_block, ctg_len, ctg_orientation)| {
+                    let (_t_idx, ts, te, q_idx, qs, qe, orientation) = match_block;
+                    let q_name = query_name.get(&q_idx).unwrap();
+                    let t_dup = if target_duplicate_blocks.contains(&match_block) {
+                        1
+                    } else {
+                        0
+                    };
+                    let t_ovlp = if target_overlap_blocks.contains(&match_block) {
+                        1
+                    } else {
+                        0
+                    };
+                    let q_dup = if query_duplicate_blocks.contains(&match_block) {
+                        1
+                    } else {
+                        0
+                    };
+                    let q_ovlp = if query_overlap_blocks.contains(&match_block) {
+                        1
+                    } else {
+                        0
+                    };
+                    ctgmap_records.push(CtgMapRec {
+                        t_name: t_name.clone(),
+                        ts,
+                        te,
+                        q_name: q_name.clone(),
+                        qs,
+                        qe,
+                        ctg_len,
+                        orientation,
+                        ctg_orientation,
+                        t_dup: t_dup == 1,
+                        t_ovlp: t_ovlp == 1,
+                        q_dup: q_dup == 1,
+                        q_ovlp: q_ovlp == 1,
+                    });
+                    writeln!(
+                        out_ctgmap,
+                        "{}\t{}\t{}\t{}:{}:{}:{}:{}:{}:{}:{}:{}:{}",
+                        t_name,
+                        ts,
+                        te,
+                        q_name,
+                        qs,
+                        qe,
+                        ctg_len,
+                        orientation,
+                        ctg_orientation,
+                        t_dup,
+                        t_ovlp,
+                        q_dup,
+                        q_ovlp
+                    )
+                    .expect("can't write ctgmap file");
+                });
         });
+
+        let query_length = query_len.into_iter().map(|(id, length)| {
+            (id, query_name.get(&id).unwrap().clone(), length as u32)
+         }).collect::<Vec<_>>();
+        let target_length = target_len.into_iter().map(|(id, length)| {
+            (id, target_name.get(&id).unwrap().clone(), length as u32)
+         }).collect::<Vec<_>>();
+        let ctg_map_set = CtgMapSet {
+            records: ctgmap_records,
+            query_length,
+            target_length, 
+        };
+
+        let ctgmap_json = serde_json::to_string(&ctg_map_set).expect("fail to construct JSON for ctg map");
+        writeln!(out_ctgmap_json, "{}", ctgmap_json).expect("fail to write ctg map json file");
 
     query_aln_bed_records.sort();
     query_aln_bed_records.into_iter().for_each(|r| {
@@ -836,7 +931,11 @@ fn main() -> Result<(), std::io::Error> {
                             aln_idx, tn, ts, te, qn, qs, qe, orientation
                         )
                     }
-                    Record::SvCnd(((t_idx, ts, te, q_idx, qs, qe, orientation), diff, ctg_orientation)) => {
+                    Record::SvCnd((
+                        (t_idx, ts, te, q_idx, qs, qe, orientation),
+                        diff,
+                        ctg_orientation,
+                    )) => {
                         let diff_type = match diff {
                             AlnDiff::FailAln => 'A',
                             AlnDiff::FailEndMatch => 'E',
@@ -850,7 +949,16 @@ fn main() -> Result<(), std::io::Error> {
 
                         format!(
                             "{:06}\tS\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                            aln_idx, tn, ts, te, qn, qs, qe, orientation, ctg_orientation, diff_type
+                            aln_idx,
+                            tn,
+                            ts,
+                            te,
+                            qn,
+                            qs,
+                            qe,
+                            orientation,
+                            ctg_orientation,
+                            diff_type
                         )
                     }
                     Record::Variant(match_block, td, qd, tc, vt, tvs, qvs) => {
