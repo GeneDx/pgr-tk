@@ -353,8 +353,8 @@ fn main() -> Result<(), std::io::Error> {
             let te = te * scaling_factor;
             let qs = qs * scaling_factor;
             let qe = qe * scaling_factor;
-            println!("{:?}", record);
-            println!("{} {} {} {}", ts, te, qs, qe);
+            // println!("{:?}", record);
+            // println!("{} {} {} {}", ts, te, qs, qe);
 
             let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
             let y = 10.0 + y_offset;
