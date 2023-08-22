@@ -463,16 +463,18 @@ fn main() -> Result<(), std::io::Error> {
                             .into_iter()
                             .map(|v| {
                                 let mut output_records = Vec::<Record>::new();
-                                let bgn_rec = v[0].clone();
+                                let ((ts, te), (qs, qe), orientation, _diff) = v[0].clone();; 
+                                let qs = if orientation == 0 { qs } else { qs - kmer_size };
+                                let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                 output_records.push(Record::Bgn(
                                     (
                                         t_idx,
-                                        bgn_rec.0 .0,
-                                        bgn_rec.0 .1,
+                                        ts,
+                                        te,
                                         q_idx as u32,
-                                        bgn_rec.1 .0,
-                                        bgn_rec.1 .1,
-                                        bgn_rec.2,
+                                        qs,
+                                        qe,
+                                        orientation,
                                     ),
                                     q_len as u32,
                                     *ctg_orientation,
@@ -525,15 +527,19 @@ fn main() -> Result<(), std::io::Error> {
                                         }
                                     },
                                 );
+
+                                let ((ts, te), (qs, qe), orientation, _diff) = v_last; 
+                                let qs = if orientation == 0 { qs } else { qs - kmer_size };
+                                let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                 output_records.push(Record::End(
                                     (
                                         t_idx,
-                                        v_last.0 .0,
-                                        v_last.0 .1,
+                                        ts,
+                                        te,
                                         q_idx as u32,
-                                        v_last.1 .0,
-                                        v_last.1 .1,
-                                        v_last.2,
+                                        qs,
+                                        qe,
+                                        orientation,
                                     ),
                                     q_len as u32,
                                     *ctg_orientation,
