@@ -430,7 +430,7 @@ fn main() -> Result<(), std::io::Error> {
                                                 AlnDiff::FailShortSeq
                                             } else if (s0str.len() as isize - s1str.len() as isize)
                                                 .abs()
-                                                >= 256
+                                                >= 128
                                             {
                                                 AlnDiff::FailLengthDiff
                                             } else if s0str[..16] != s1str[..16]
@@ -442,7 +442,7 @@ fn main() -> Result<(), std::io::Error> {
                                                 &s0str,
                                                 &s1str,
                                                 1,
-                                                Some(144),
+                                                Some(192),
                                                 3,
                                                 3,
                                                 1,
