@@ -181,7 +181,7 @@ fn main() -> Result<(), std::io::Error> {
             let path = element::Path::new()
                 .set("stroke", "#000")
                 .set("stroke-width", format!("{w}"))
-                .set("alpha", "0.7")
+                .set("opacity", "0.7")
                 .set("d", path_str);
             document.append(path);
 
@@ -268,7 +268,7 @@ fn main() -> Result<(), std::io::Error> {
                     .set("fill", color)
                     .set("stroke", "#000")
                     .set("stroke-width", "0.5")
-                    .set("alpha", "0.7")
+                    .set("opacity", "0.7")
                     .set("d", path_str);
                 document.append(path);
             });
