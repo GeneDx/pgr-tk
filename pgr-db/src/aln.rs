@@ -481,14 +481,15 @@ mod test {
         let max_gap = None;
         let out = sparse_aln(&mut hp, 8, 0.5_f32, max_gap, oriented);
         out.iter().for_each(|(s, v)| println!("{} {}", s, v.len()));
+        // TODO: Test the output properly
     }
 
     #[test]
     fn test_wfa_align_bases() {
         use crate::aln::{get_variants_from_aln_pair_map, wfa_align_bases, wfa_aln_pair_map};
         use log::debug;
-        use simple_logger::SimpleLogger;
-        SimpleLogger::new().init().unwrap();
+        //use simple_logger::SimpleLogger;
+        //SimpleLogger::new().init().unwrap();
         let t_str = "ACATACATGTGTGTGAAAAATATATAAGTAAAAAAAATGCATGAAACCCCAAAAGTTGCATGAAACATACATGAAAATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCATGAAACCCCATACATGAAAGTTGCATGAA";
         let q_str = "ACATACATGTGAAATATAATAAAAGTTGCATGAAAAAACATACATGAAAGTTGCATGAAACATACATGAAAAAAGTTGCAAAAGTTGCATGAAACATACATGAAAATGAAAAAACATACATGAAAGTTGCATGAA";
         if let Some((t_aln_str, q_aln_str)) = wfa_align_bases(t_str, q_str, 20, 2, 2, 1) {
@@ -500,6 +501,7 @@ mod test {
                 println!("{} {} {} {} {}", t_pos, q_pos, t, s1, s2);
             });
         }
+        // TODO: Test the output properly
     }
 
     #[test]
@@ -508,8 +510,8 @@ mod test {
             get_variant_segments, get_variants_from_aln_pair_map, wfa_align_bases, wfa_aln_pair_map,
         };
         use log::debug;
-        use simple_logger::SimpleLogger;
-        SimpleLogger::new().init().unwrap();
+        //use simple_logger::SimpleLogger;
+        //SimpleLogger::new().init().unwrap();
         let t_str =
             "ACGGAGGTGAGCCTGGGAGCATAGAGGTGGGCCTGGGAGCATGGCGGCGGGGGGGGGGCCTGGGAGCACAGGGCGGGCC";
         let q_str =
@@ -522,5 +524,6 @@ mod test {
                 .into_iter()
                 .for_each(|v| println!("{} {} {} {} {}", v.0, v.1, v.2, v.3, v.4));
         };
+        // TODO: Test the output properly
     }
 }
