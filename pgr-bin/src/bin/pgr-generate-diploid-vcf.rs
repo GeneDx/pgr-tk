@@ -3,9 +3,8 @@ use clap::{self, CommandFactory, Parser};
 use iset::set::IntervalSet;
 // use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 /// Generate diploid VCF field from paired alnmap file from two haplotype assembly
@@ -18,12 +17,16 @@ struct CmdOptions {
     hap0_path: String,
     /// path to the second haplotype alnmap file
     hap1_path: String,
+    /// path to a ctgmap.json file
+    ctgmap_json_path: String,
     /// the prefix of the output files
     output_path: String,
     /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
     #[clap(long, default_value_t = 0)]
     number_of_thread: usize,
 }
+
+type TargetSeqLength = Vec<(u32, String, u32)>;
 
 type ShimmerMatchBlock = (String, u32, u32, String, u32, u32, u32);
 type VariantRecord = (String, u32, u32, u8, String, String);
@@ -36,6 +39,16 @@ fn main() -> Result<(), std::io::Error> {
         .num_threads(args.number_of_thread)
         .build_global()
         .unwrap();
+
+    let mut ctgmap_json_file = BufReader::new(
+        File::open(Path::new(&args.ctgmap_json_path)).expect("can't open the input file"),
+    );
+    let mut buffer = Vec::new();
+    ctgmap_json_file.read_to_end(&mut buffer)?;
+    let mut target_length: TargetSeqLength = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
+        .expect("can't parse the ctgmap.json file");
+
+    target_length.sort();
 
     let hap0_alnmap_file = BufReader::new(File::open(Path::new(&args.hap0_path)).unwrap());
 
@@ -147,6 +160,12 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out_vcf = BufWriter::new(File::create(Path::new(&args.output_path)).unwrap());
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
+    target_length
+        .into_iter()
+        .for_each(|(_, t_name, t_len)| {
+            writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
+                .expect("fail to write the vcf file");
+        });
     writeln!(
         out_vcf,
         r#"##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">"#
@@ -165,7 +184,7 @@ fn main() -> Result<(), std::io::Error> {
         let mut al_idx_map = FxHashMap::<(u32, String, String), u32>::default();
         let mut al_idx = 0_u32;
 
-        let ref_name = records.first().unwrap().0.clone();        
+        let ref_name = records.first().unwrap().0.clone();
         records.iter().for_each(|(rec)| {
             let (_t_name, ts, tl, ht, vts, vqs) = rec;
             (0..*tl).for_each(|t_pos| {
@@ -174,11 +193,8 @@ fn main() -> Result<(), std::io::Error> {
             });
 
             let key = (*ts, vts.clone(), vqs.clone());
-            if !al_idx_map.contains_key(&key) {
-                al_idx += 1;
-                //writeln!(out_vcf, "{:?}, {}", key, al_idx);
-                al_idx_map.insert(key, al_idx);
-            };
+
+            al_idx_map.entry(key).or_insert_with(|| {al_idx +=1 ; al_idx}); 
 
             if *ht == 0 {
                 h0alleles.push((al_idx, rec.clone()));

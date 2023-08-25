@@ -96,9 +96,8 @@ struct CtgMapRec {
 struct CtgMapSet {
     records: Vec<CtgMapRec>,
     target_length: Vec<(u32, String, u32)>,
-    query_length: Vec<(u32, String, u32)>
+    query_length: Vec<(u32, String, u32)>,
 }
-
 
 fn filter_aln(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
     // the aln_segs should be sorted already
@@ -201,6 +200,14 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out_ctgmap_json = BufWriter::new(
         File::create(Path::new(&args.output_prefix).with_extension("ctgmap.json")).unwrap(),
+    );
+
+    let mut out_target_len = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("target_len.json")).unwrap(),
+    );
+
+    let mut out_query_len = BufWriter::new(
+        File::create(Path::new(&args.output_prefix).with_extension("query_len.json")).unwrap(),
     );
 
     let mut out_svcnd = BufWriter::new(
@@ -398,19 +405,11 @@ fn main() -> Result<(), std::io::Error> {
                             .into_iter()
                             .map(|v| {
                                 let mut output_records = Vec::<Record>::new();
-                                let ((ts, te), (qs, qe), orientation, _diff) = v[0].clone(); 
+                                let ((ts, te), (qs, qe), orientation, _diff) = v[0].clone();
                                 let qs = if orientation == 0 { qs } else { qs - kmer_size };
                                 let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                 output_records.push(Record::Bgn(
-                                    (
-                                        t_idx,
-                                        ts,
-                                        te,
-                                        q_idx as u32,
-                                        qs,
-                                        qe,
-                                        orientation,
-                                    ),
+                                    (t_idx, ts, te, q_idx as u32, qs, qe, orientation),
                                     q_len as u32,
                                     *ctg_orientation,
                                 ));
@@ -463,19 +462,11 @@ fn main() -> Result<(), std::io::Error> {
                                     },
                                 );
 
-                                let ((ts, te), (qs, qe), orientation, _diff) = v_last; 
+                                let ((ts, te), (qs, qe), orientation, _diff) = v_last;
                                 let qs = if orientation == 0 { qs } else { qs - kmer_size };
                                 let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                 output_records.push(Record::End(
-                                    (
-                                        t_idx,
-                                        ts,
-                                        te,
-                                        q_idx as u32,
-                                        qs,
-                                        qe,
-                                        orientation,
-                                    ),
+                                    (t_idx, ts, te, q_idx as u32, qs, qe, orientation),
                                     q_len as u32,
                                     *ctg_orientation,
                                 ));
@@ -782,20 +773,31 @@ fn main() -> Result<(), std::io::Error> {
                 });
         });
 
-        let query_length = query_len.into_iter().map(|(id, length)| {
-            (id, query_name.get(&id).unwrap().clone(), length as u32)
-         }).collect::<Vec<_>>();
-        let target_length = target_len.into_iter().map(|(id, length)| {
-            (id, target_name.get(&id).unwrap().clone(), length)
-         }).collect::<Vec<_>>();
-        let ctg_map_set = CtgMapSet {
-            records: ctgmap_records,
-            query_length,
-            target_length, 
-        };
+    let query_length = query_len
+        .into_iter()
+        .map(|(id, length)| (id, query_name.get(&id).unwrap().clone(), length as u32))
+        .collect::<Vec<_>>();
+    let target_length = target_len
+        .into_iter()
+        .map(|(id, length)| (id, target_name.get(&id).unwrap().clone(), length))
+        .collect::<Vec<_>>();
+    let ctg_map_set = CtgMapSet {
+        records: ctgmap_records,
+        query_length,
+        target_length,
+    };
 
-        let ctgmap_json = serde_json::to_string(&ctg_map_set).expect("fail to construct JSON for ctg map");
-        writeln!(out_ctgmap_json, "{}", ctgmap_json).expect("fail to write ctg map json file");
+    let ctgmap_json =
+        serde_json::to_string(&ctg_map_set).expect("fail to construct json for ctg map");
+    writeln!(out_ctgmap_json, "{}", ctgmap_json).expect("fail to write ctg map json file");
+
+    let target_length_json = serde_json::to_string(&ctg_map_set.target_length)
+        .expect("fail to construct json for ctg map");
+    writeln!(out_target_len, "{}", target_length_json).expect("fail to write ctg map json file");
+
+    let query_length_json = serde_json::to_string(&ctg_map_set.query_length)
+        .expect("fail to construct json for ctg map");
+    writeln!(out_query_len, "{}", query_length_json).expect("fail to write ctg map json file");
 
     query_aln_bed_records.sort();
     query_aln_bed_records.into_iter().for_each(|r| {
