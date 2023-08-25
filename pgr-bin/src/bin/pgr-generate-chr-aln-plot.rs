@@ -18,13 +18,13 @@ struct CtgMapRec {
     q_name: String,
     qs: u32,
     qe: u32,
-    _ctg_len: u32,
+    ctg_len: u32,
     orientation: u32,
     ctg_orientation: u32,
     t_dup: bool,
-    _t_ovlp: bool,
+    t_ovlp: bool,
     q_dup: bool,
-    _q_ovlp: bool,
+    q_ovlp: bool,
 }
 
 #[derive(Deserialize)]
