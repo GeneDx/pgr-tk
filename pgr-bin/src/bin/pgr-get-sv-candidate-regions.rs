@@ -442,7 +442,7 @@ fn main() -> Result<(), std::io::Error> {
                                                 &s0str,
                                                 &s1str,
                                                 1,
-                                                Some(192),
+                                                Some(384),
                                                 3,
                                                 3,
                                                 1,
