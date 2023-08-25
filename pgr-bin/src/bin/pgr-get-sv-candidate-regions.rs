@@ -942,6 +942,12 @@ fn main() -> Result<(), std::io::Error> {
         });
 
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
+    ctg_map_set.target_length
+    .into_iter()
+    .for_each(|(_, t_name, t_len)| {
+        writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
+            .expect("fail to write the vcf file");
+    });
     writeln!(
         out_vcf,
         r#"##FILTER=<ID=td,Description="variant from duplicated contig alignment on target">"#
