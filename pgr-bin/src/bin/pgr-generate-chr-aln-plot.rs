@@ -7,7 +7,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{BufReader, Read};
 use std::path::{self, Path};
-use svg::node::{element, Node, self};
+use svg::node::{self, element, Node};
 use svg::Document;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -133,7 +133,7 @@ fn main() -> Result<(), std::io::Error> {
         .iter()
         .flat_map(|(id, t_name, t_len)| {
             let mut q_len_sum = 0.0;
-            let mut q_set = FxHashSet::<String>::default(); 
+            let mut q_set = FxHashSet::<String>::default();
             tgt_to_records
                 .get(t_name)
                 .unwrap_or(&vec![])
@@ -158,14 +158,13 @@ fn main() -> Result<(), std::io::Error> {
 
     // start to construct the SVG element
     let mut document = Document::new()
-        .set("viewBox", (-100, -50, 1300, 250*14))
+        .set("viewBox", (-100, -50, 1300, 250 * 14))
         .set("width", 1400)
-        .set("height", 250*14)
+        .set("height", 250 * 14)
         .set("preserveAspectRatio", "none")
         .set("id", "WholeGenomeViwer");
 
     let scaling_factor = 1100.0 / offset;
-
 
     target_aln_blocks
         .iter()
@@ -174,7 +173,7 @@ fn main() -> Result<(), std::io::Error> {
 
             let b = t_offset * scaling_factor;
             let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
-            let w =  4.0 + ((target_aln_block_records.0+1) % 2) as f64 * 1.5;
+            let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
             let path_str = format!("M {b} 6 L {e} 6");
             let path = element::Path::new()
                 .set("stroke", "#000")
@@ -184,11 +183,11 @@ fn main() -> Result<(), std::io::Error> {
             document.append(path);
 
             let text = element::Text::new()
-            .set("x", b)
-            .set("y", 0)
-            .set("font-size", "6px")
-            .set("font-family", "monospace")
-            .add(node::Text::new(target_aln_block_records.1.clone()));
+                .set("x", b)
+                .set("y", 0)
+                .set("font-size", "6px")
+                .set("font-family", "monospace")
+                .add(node::Text::new(target_aln_block_records.1.clone()));
             document.append(text);
 
             let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
@@ -221,7 +220,7 @@ fn main() -> Result<(), std::io::Error> {
                         .set("opacity", "0.7")
                         .set("d", path_str);
                     document.append(path);
-                    
+
                     q_offset += *q_len as f64;
                 };
             });
@@ -272,125 +271,126 @@ fn main() -> Result<(), std::io::Error> {
             });
         });
 
-
     // per chromo plot
     let mut y_offset = 200.0;
     let scaling_factor = 1100.0 / offset * 12.0;
 
     target_aln_blocks
-    .iter()
-    .for_each(|target_aln_block_records| {
-        let t_offset = 0.0;
+        .iter()
+        .for_each(|target_aln_block_records| {
+            let t_offset = 0.0;
 
-        let b = t_offset * scaling_factor;
-        let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
-        let w =  4.0 + ((target_aln_block_records.0+1) % 2) as f64 * 1.5;
-        let y = y_offset + 6.0;
-        let path_str = format!("M {b} {y} L {e} {y}");
-        let path = element::Path::new()
-            .set("stroke", "#000")
-            .set("stroke-width", format!("{w}"))
-            .set("opacity", "0.7")
-            .set("d", path_str);
-        document.append(path);
-
-        let text = element::Text::new()
-        .set("x", 0.0)
-        .set("y", y-10.0)
-        .set("font-size", "20px")
-        .set("font-family", "monospace")
-        .add(node::Text::new(target_aln_block_records.1.clone()));
-        document.append(text);
-
-
-
-        
-     
-        let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
-        target_aln_block_records.4.iter().for_each(|record| {
-            let e = best_query_block
-                .entry(record.q_name.clone())
-                .or_insert(record.clone());
-            if (e.qs as i32 - e.qe as i32).abs() < (record.qs as i32 - record.qe as i32).abs() {
-                *e = record.clone();
-            }
-        });
-
-        let mut best_query_block = best_query_block.values().collect::<Vec<_>>();
-        best_query_block.sort_by_key(|&v| v.ts);
-        let mut q_offset = 0.0;
-        let mut q_offset_map = FxHashMap::<String, f64>::default();
-        best_query_block.into_iter().for_each(|record| {
-            let q_len = query_length.get(&record.q_name).unwrap();
-            if !q_offset_map.contains_key(&record.q_name) {
-                q_offset_map.insert(record.q_name.clone(), q_offset);
-
-                let b = (t_offset + q_offset) * scaling_factor;
-                let e = (t_offset + q_offset + *q_len as f64) * scaling_factor;
-                let y = 95.0 + y_offset;
-                let path_str = format!("M {b} {y} L {e} {y}");
-                let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
-                let path = element::Path::new()
-                    .set("stroke", color)
-                    .set("stroke-width", "5")
-                    .set("opacity", "0.7")
-                    .set("d", path_str);
-                document.append(path);
-                
-                q_offset += *q_len as f64;
-            };
-        });
-
-        target_aln_block_records.4.iter().for_each(|record| {
-            if record.t_dup {
-                return;
-            };
-
-            let q_len = query_length.get(&record.q_name).unwrap();
-
-            let ts = record.ts as f64 + t_offset;
-            let te = record.te as f64 + t_offset;
-
-            let (qs, qe) = if record.ctg_orientation == 1 {
-                (q_len - record.qe, q_len - record.qs)
-            } else {
-                (record.qs, record.qe)
-            };
-
-            // let qs = record.qs;
-            // let qe = record.qe;
-            let (qs, qe) = if record.orientation != record.ctg_orientation {
-                (qe, qs)
-            } else {
-                (qs, qe)
-            };
-            let offset = q_offset_map.get(&record.q_name).unwrap();
-            let qs = qs as f64 + t_offset + offset;
-            let qe = qe as f64 + t_offset + offset;
-            let ts = ts * scaling_factor;
-            let te = te * scaling_factor;
-            let qs = qs * scaling_factor;
-            let qe = qe * scaling_factor;
-            // println!("{:?}", record);
-            // println!("{} {} {} {}", ts, te, qs, qe);
-
-            let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
-            let y = 10.0 + y_offset;
-            let y2 = 90.0 + y_offset;
-            let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2}");
+            let b = t_offset * scaling_factor;
+            let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
+            let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
+            let y = y_offset + 6.0;
+            let path_str = format!("M {b} {y} L {e} {y}");
             let path = element::Path::new()
-                .set("fill", color)
                 .set("stroke", "#000")
-                .set("stroke-width", "0.5")
+                .set("stroke-width", format!("{w}"))
                 .set("opacity", "0.7")
                 .set("d", path_str);
             document.append(path);
+
+            let text = element::Text::new()
+                .set("x", 0.0)
+                .set("y", y - 10.0)
+                .set("font-size", "20px")
+                .set("font-family", "monospace")
+                .add(node::Text::new(target_aln_block_records.1.clone()));
+            document.append(text);
+
+            let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
+            target_aln_block_records.4.iter().for_each(|record| {
+                let e = best_query_block
+                    .entry(record.q_name.clone())
+                    .or_insert(record.clone());
+                if (e.qs as i32 - e.qe as i32).abs() < (record.qs as i32 - record.qe as i32).abs() {
+                    *e = record.clone();
+                }
+            });
+
+            let mut best_query_block = best_query_block.values().collect::<Vec<_>>();
+            best_query_block.sort_by_key(|&v| v.ts);
+            let mut q_offset = 0.0;
+            let mut q_offset_map = FxHashMap::<String, f64>::default();
+            best_query_block.into_iter().for_each(|record| {
+                let q_len = query_length.get(&record.q_name).unwrap();
+                if !q_offset_map.contains_key(&record.q_name) {
+                    q_offset_map.insert(record.q_name.clone(), q_offset);
+
+                    let b = (t_offset + q_offset) * scaling_factor;
+                    let e = (t_offset + q_offset + *q_len as f64) * scaling_factor;
+                    let y = 95.0 + y_offset;
+                    let path_str = format!("M {b} {y} L {e} {y}");
+                    let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
+                    let mut path = element::Path::new()
+                        .set("stroke", color)
+                        .set("stroke-width", "5")
+                        .set("opacity", "0.7")
+                        .set("d", path_str);
+                    path.append(element::Title::new().add(node::Text::new(record.q_name.clone())));
+                    document.append(path);
+
+                    q_offset += *q_len as f64;
+                };
+            });
+
+            target_aln_block_records.4.iter().for_each(|record| {
+                if record.t_dup {
+                    return;
+                };
+
+                let q_len = query_length.get(&record.q_name).unwrap();
+
+                let ts = record.ts as f64 + t_offset;
+                let te = record.te as f64 + t_offset;
+
+                let (qs, qe) = if record.ctg_orientation == 1 {
+                    (q_len - record.qe, q_len - record.qs)
+                } else {
+                    (record.qs, record.qe)
+                };
+
+                // let qs = record.qs;
+                // let qe = record.qe;
+                let (qs, qe) = if record.orientation != record.ctg_orientation {
+                    (qe, qs)
+                } else {
+                    (qs, qe)
+                };
+                let offset = q_offset_map.get(&record.q_name).unwrap();
+                let qs = qs as f64 + t_offset + offset;
+                let qe = qe as f64 + t_offset + offset;
+                let ts = ts * scaling_factor;
+                let te = te * scaling_factor;
+                let qs = qs * scaling_factor;
+                let qe = qe * scaling_factor;
+                // println!("{:?}", record);
+                // println!("{} {} {} {}", ts, te, qs, qe);
+
+                let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
+                let y = 10.0 + y_offset;
+                let y2 = 90.0 + y_offset;
+                let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2}");
+                let mut path = element::Path::new()
+                    .set("fill", color)
+                    .set("stroke", "#000")
+                    .set("stroke-width", "0.5")
+                    .set("opacity", "0.7")
+                    .set("d", path_str);
+                let orientation = if record.orientation == 0 { '+' } else { '-' };
+                path.append(element::Title::new().add(node::Text::new(format!(
+                    "{}:{}-{} @ {}:{}-{} {}",
+                    record.t_name, record.ts, record.te,
+                    record.q_name, record.qs, record.qe, 
+                    orientation
+                ))));
+
+                document.append(path);
+            });
+            y_offset += 125.0;
         });
-        y_offset += 125.0;
-    });
-
-
-
 
     let out_path = path::Path::new(&args.output_path);
     svg::save(out_path, &document).unwrap();
