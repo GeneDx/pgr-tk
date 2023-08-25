@@ -45,8 +45,9 @@ fn main() -> Result<(), std::io::Error> {
     );
     let mut buffer = Vec::new();
     ctgmap_json_file.read_to_end(&mut buffer)?;
-    let mut target_length: TargetSeqLength = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
-        .expect("can't parse the ctgmap.json file");
+    let mut target_length: TargetSeqLength =
+        serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
+            .expect("can't parse the ctgmap.json file");
 
     target_length.sort();
 
@@ -160,12 +161,10 @@ fn main() -> Result<(), std::io::Error> {
 
     let mut out_vcf = BufWriter::new(File::create(Path::new(&args.output_path)).unwrap());
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
-    target_length
-        .into_iter()
-        .for_each(|(_, t_name, t_len)| {
-            writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
-                .expect("fail to write the vcf file");
-        });
+    target_length.into_iter().for_each(|(_, t_name, t_len)| {
+        writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
+            .expect("fail to write the vcf file");
+    });
     writeln!(
         out_vcf,
         r#"##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">"#
@@ -194,7 +193,10 @@ fn main() -> Result<(), std::io::Error> {
 
             let key = (*ts, vts.clone(), vqs.clone());
 
-            al_idx_map.entry(key).or_insert_with(|| {al_idx +=1 ; al_idx}); 
+            al_idx_map.entry(key).or_insert_with(|| {
+                al_idx += 1;
+                al_idx
+            });
 
             if *ht == 0 {
                 h0alleles.push((al_idx, rec.clone()));
@@ -297,5 +299,20 @@ fn main() -> Result<(), std::io::Error> {
             }
             currrent_vg_end = Some((ref_name.clone(), ts + tl));
         });
+    if !variant_group.is_empty() {
+        // println!("X {} {} {} {}", ref_name, ts, tl, variant_group.len());
+        let (vcfrec_ref_name, ts0, ref_str, query_alleles, gt) =
+            convert_to_vcf_record(&variant_group);
+        writeln!(
+            out_vcf,
+            "{}\t{}\t.\t{}\t{}\t60\tPASS\t.\tGT\t{}",
+            vcfrec_ref_name,
+            ts0 + 1,
+            ref_str,
+            query_alleles,
+            gt,
+        )
+        .expect("fail to write the vcf file");
+    };
     Ok(())
 }
