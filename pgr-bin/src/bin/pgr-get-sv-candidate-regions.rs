@@ -170,71 +170,6 @@ fn filter_aln_rev(aln_segs: &AlignSegments) -> Vec<((u32, u32), (u32, u32))> {
 }
 
 type AlignmentResult = Vec<(u32, u32, char, String, String)>;
-pub fn get_variant_segments(
-    target_str: &[u8],
-    query_str: &[u8],
-    left_padding: usize,
-    max_wf_length: Option<u32>,
-    mismatch_penalty: i32,
-    open_penalty: i32,
-    extension_penalty: i32,
-) -> Option<AlignmentResult> {
-    let set_len_diff = (query_str.len() as i64 - target_str.len() as i64).unsigned_abs() as u32;
-    let max_wf_length = if let Some(max_wf_length) = max_wf_length {
-        max_wf_length
-    } else {
-        std::cmp::max(2 * set_len_diff, 128_u32)
-    };
-
-    // we need to reverse the string for alignment such the the gaps are on the left
-    // maybe we can do this in the stack for performance in the future
-    // we assume the left_padding base on the left side are identical
-    let mut r_t_str = target_str[left_padding..].to_vec();
-    let mut r_q_str = query_str[left_padding..].to_vec();
-    r_t_str.reverse();
-    r_q_str.reverse();
-    let r_t_str = String::from_utf8_lossy(&r_t_str[..]);
-    let r_q_str = String::from_utf8_lossy(&r_q_str[..]);
-    let t_len_minus_one = left_padding as u32 + r_t_str.len() as u32 - 1;
-    let q_len_minus_one = left_padding as u32 + r_q_str.len() as u32 - 1;
-
-    if let Some((aln_target_str, aln_query_str)) = aln::wfa_align_bases(
-        &r_t_str,
-        &r_q_str,
-        max_wf_length,
-        mismatch_penalty,
-        open_penalty,
-        extension_penalty,
-    ) {
-        let mut aln_pairs = aln::wfa_aln_pair_map(&aln_target_str, &aln_query_str);
-        // assume the base on the left are identical  ( # of base = left_padding)
-        (0..left_padding).for_each(|delta| {
-            aln_pairs.push((
-                (r_t_str.len() + delta) as u32,
-                (r_q_str.len() + delta) as u32,
-                'M',
-            ));
-        });
-        // convert the coordinate from the reverse to the forward sequence
-        aln_pairs.iter_mut().for_each(|(t_pos, q_pos, _c)| {
-            *t_pos = t_len_minus_one - *t_pos;
-            *q_pos = q_len_minus_one - *q_pos;
-        });
-        aln_pairs.reverse();
-
-        // compute the VCF like variant representation
-        let target_str = String::from_utf8_lossy(target_str);
-        let query_str = String::from_utf8_lossy(query_str);
-        Some(aln::get_variants_from_aln_pair_map(
-            &aln_pairs,
-            &target_str,
-            &query_str,
-        ))
-    } else {
-        None
-    }
-}
-
 fn main() -> Result<(), std::io::Error> {
     CmdOptions::command().version(VERSION_STRING).get_matches();
     let args = CmdOptions::parse();
@@ -438,7 +373,7 @@ fn main() -> Result<(), std::io::Error> {
                                                     != s1str[s1str.len() - 16..]
                                             {
                                                 AlnDiff::FailEndMatch
-                                            } else if let Some(aln_res) = get_variant_segments(
+                                            } else if let Some(aln_res) = aln::get_variant_segments(
                                                 &s0str,
                                                 &s1str,
                                                 1,
@@ -463,7 +398,7 @@ fn main() -> Result<(), std::io::Error> {
                             .into_iter()
                             .map(|v| {
                                 let mut output_records = Vec::<Record>::new();
-                                let ((ts, te), (qs, qe), orientation, _diff) = v[0].clone();; 
+                                let ((ts, te), (qs, qe), orientation, _diff) = v[0].clone(); 
                                 let qs = if orientation == 0 { qs } else { qs - kmer_size };
                                 let qe = if orientation == 0 { qe } else { qe - kmer_size };
                                 output_records.push(Record::Bgn(
@@ -851,7 +786,7 @@ fn main() -> Result<(), std::io::Error> {
             (id, query_name.get(&id).unwrap().clone(), length as u32)
          }).collect::<Vec<_>>();
         let target_length = target_len.into_iter().map(|(id, length)| {
-            (id, target_name.get(&id).unwrap().clone(), length as u32)
+            (id, target_name.get(&id).unwrap().clone(), length)
          }).collect::<Vec<_>>();
         let ctg_map_set = CtgMapSet {
             records: ctgmap_records,
