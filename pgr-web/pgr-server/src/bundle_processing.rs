@@ -211,7 +211,7 @@ pub fn get_target_and_principal_bundle_decomposition(
         Some(128),
         Some(0),
         None,
-        false
+        false,
     );
 
     let aln_range = if let Some(qr) = query_results {
@@ -472,7 +472,7 @@ pub fn get_target_and_principal_bundle_decomposition(
                 let bid = p[0].1;
                 *ctg_bundle_count.entry(bid).or_insert_with(|| 0) += 1;
             });
-            let pbundle_bed_records = smp_partitions
+            smp_partitions
                 .into_iter()
                 .map(|p| {
                     let b = p[0].0 .2;
@@ -504,8 +504,7 @@ pub fn get_target_and_principal_bundle_decomposition(
                         r_type: is_repeat.to_string(),
                     }
                 })
-                .collect::<Vec<PrincipalBundleBedRecord>>();
-            pbundle_bed_records
+                .collect::<Vec<PrincipalBundleBedRecord>>()
         })
         .collect::<Vec<Vec<PrincipalBundleBedRecord>>>();
 
@@ -525,10 +524,7 @@ pub fn pb_data_to_html_string(targets: &TargetMatchPrincipalBundles) -> String {
         .collect::<Vec<u32>>();
 
     target_lengths.sort();
-    let max_length = target_lengths
-        .last()
-        .unwrap_or(&200000);
-
+    let max_length = target_lengths.last().unwrap_or(&200000);
 
     let ctg_data_vec = targets.bundle_bed_records.iter().map(|v| {
         let b_segements = v

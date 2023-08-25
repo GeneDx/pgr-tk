@@ -18,13 +18,13 @@ struct CtgMapRec {
     q_name: String,
     qs: u32,
     qe: u32,
-    ctg_len: u32,
+    _ctg_len: u32,
     orientation: u32,
     ctg_orientation: u32,
     t_dup: bool,
-    t_ovlp: bool,
+    _t_ovlp: bool,
     q_dup: bool,
-    q_ovlp: bool,
+    _q_ovlp: bool,
 }
 
 #[derive(Deserialize)]
@@ -127,8 +127,6 @@ fn main() -> Result<(), std::io::Error> {
     });
 
     let target_padding = 1.5e6;
-    let query_padding = 1.5e5;
-    let mut target_offset = Vec::<f64>::new();
     let mut offset = 0_f64;
     let target_aln_blocks = ctgmap_set
         .target_length
