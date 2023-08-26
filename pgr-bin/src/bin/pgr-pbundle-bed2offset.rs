@@ -41,6 +41,7 @@ enum AlnType {
     Insertion,
 }
 
+#[allow(clippy::type_complexity)]
 fn align_bundles(
     q_bundles: &Vec<BundleSegement>,
     t_bundles: &Vec<BundleSegement>,

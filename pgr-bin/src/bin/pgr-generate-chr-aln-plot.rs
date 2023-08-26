@@ -10,6 +10,7 @@ use std::path::{self, Path};
 use svg::node::{self, element, Node};
 use svg::Document;
 
+#[allow(dead_code)] // need the standard names for deserization if they are not use 
 #[derive(Deserialize, Clone, Debug)]
 struct CtgMapRec {
     t_name: String,

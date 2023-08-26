@@ -358,7 +358,7 @@ fn main() -> Result<(), std::io::Error> {
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
                             let target_seq_name =
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
-
+                            #[allow(clippy::write_literal)]
                             if args.bed_summary {
                                 writeln!(
                                     hit_file,

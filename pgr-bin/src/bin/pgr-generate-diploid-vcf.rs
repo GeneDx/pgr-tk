@@ -55,6 +55,7 @@ fn main() -> Result<(), std::io::Error> {
 
     let hap1_alnmap_file = BufReader::new(File::open(Path::new(&args.hap1_path)).unwrap());
 
+    #[allow(clippy::type_complexity)]
     let get_variant_recs = |f: BufReader<File>,
                             hap_type: u8|
      -> (
@@ -184,7 +185,7 @@ fn main() -> Result<(), std::io::Error> {
         let mut al_idx = 0_u32;
 
         let ref_name = records.first().unwrap().0.clone();
-        records.iter().for_each(|(rec)| {
+        records.iter().for_each(|rec| {
             let (_t_name, ts, tl, ht, vts, vqs) = rec;
             (0..*tl).for_each(|t_pos| {
                 let vts = vts.chars().collect::<Vec<_>>();

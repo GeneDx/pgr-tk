@@ -320,6 +320,7 @@ fn main() -> Result<(), std::io::Error> {
     // generate the bundle path elements
     let mut bundle_class_styles = FxHashMap::<String, String>::default();
     #[allow(clippy::needless_collect)] // we do need to evaluate as we depend on the side effect to set y_offset right
+    #[allow(clippy::type_complexity)] // we do need to evaluate as we depend on the side effect to set y_offset right
     let ctg_with_svg_paths: Vec<(String, (Vec<element::Group>, Vec<element::Group>, element::Text))> = ctg_data_vec
         .into_iter()
         .map(|(ctg, annotation,bundle_segment, annotation_segments)| {

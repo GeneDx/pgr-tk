@@ -167,6 +167,7 @@ fn main() -> Result<(), std::io::Error> {
                 .read_to_end(&mut s)
                 .expect("pdb input file reading error");
 
+            #[allow(clippy::type_complexity)]
             let (
                 (
                     w,
@@ -427,6 +428,7 @@ fn main() -> Result<(), std::io::Error> {
             );
         });
     });
+    #[allow(clippy::write_literal)]
     let _ = writeln!(
         output_ctg_summary_file,
         "#{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",

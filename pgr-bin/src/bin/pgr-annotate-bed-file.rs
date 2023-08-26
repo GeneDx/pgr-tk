@@ -2,7 +2,7 @@ const VERSION_STRING: &str = env!("VERSION_STRING");
 use clap::{self, CommandFactory, Parser};
 use flate2::bufread::MultiGzDecoder;
 use iset::IntervalMap;
-use rayon::prelude::*;
+//use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
