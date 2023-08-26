@@ -329,10 +329,13 @@ fn main() -> Result<(), std::io::Error> {
                     cyto_records.iter().for_each(|(cs, ce, c_name, band )| {
                         let b = (t_offset + *cs as f64)  * scaling_factor;
                         let e = (t_offset + *ce as f64) * scaling_factor;
-                        let color = if band.starts_with("gpos") {
+                        let mut color = if band.starts_with("gpos") {
                             "#000"
                         } else {
                             "#AAA"
+                        };
+                        if band == "acen" {
+                            color = "#FF0";
                         };
                         let path_str = format!("M {b} {y} L {e} {y}");
                         let mut path = element::Path::new()
