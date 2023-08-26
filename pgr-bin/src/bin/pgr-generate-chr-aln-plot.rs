@@ -363,8 +363,18 @@ fn main() -> Result<(), std::io::Error> {
                     if let Some(qry_to_alt_tgt_records) = qry_to_alt_tgt_records.get(&record.q_name)
                     {
                         qry_to_alt_tgt_records.iter().for_each(|record| {
-                            let b = (t_offset + q_offset + record.qs as f64) * scaling_factor;
-                            let e = (t_offset + q_offset + record.qe as f64) * scaling_factor;
+                            let qe = if record.ctg_orientation == 0 {
+                                record.qs
+                            } else {
+                                q_len - record.qs
+                            };
+                            let qs = if record.ctg_orientation == 0 {
+                                record.qe
+                            } else {
+                                q_len - record.qe
+                            };
+                            let b = (t_offset + q_offset + qs as f64) * scaling_factor;
+                            let e = (t_offset + q_offset + qe as f64) * scaling_factor;
                             let y = 105.0 + y_offset;
                             let path_str = format!("M {b} {y} L {e} {y}");
                             let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
