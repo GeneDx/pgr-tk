@@ -10,7 +10,7 @@ use std::path::{self, Path};
 use svg::node::{self, element, Node};
 use svg::Document;
 
-#[allow(dead_code)] // need the standard names for deserization if they are not use 
+#[allow(dead_code)] // need the standard names for deserization if they are not use
 #[derive(Deserialize, Clone, Debug)]
 struct CtgMapRec {
     t_name: String,
@@ -116,11 +116,14 @@ fn main() -> Result<(), std::io::Error> {
     });
 
     let mut tgt_to_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
+    let mut ctg_to_alt_tgt_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
     ctgmap_set.records.iter().for_each(|r| {
         if r.q_dup {
             return;
         };
         if *ctg2tgt.get(&r.q_name).unwrap() != r.t_name {
+            let e = ctg_to_alt_tgt_records.entry(r.q_name.clone()).or_default();
+            e.push((*r).clone());
             return;
         }
         let e = tgt_to_records.entry(r.t_name.clone()).or_default();
@@ -327,11 +330,32 @@ fn main() -> Result<(), std::io::Error> {
                     let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                     let mut path = element::Path::new()
                         .set("stroke", color)
-                        .set("stroke-width", "5")
+                        .set("stroke-width", "8")
                         .set("opacity", "0.7")
                         .set("d", path_str);
                     path.append(element::Title::new().add(node::Text::new(record.q_name.clone())));
                     document.append(path);
+
+                    if let Some(ctg_to_alt_tgt_records) = ctg_to_alt_tgt_records.get(&record.q_name)
+                    {
+                        ctg_to_alt_tgt_records.iter().for_each(|record| {
+                            let b = (t_offset + q_offset + record.qs as f64) * scaling_factor;
+                            let e = (t_offset + q_offset + record.qe as f64) * scaling_factor;
+                            let y = 105.0 + y_offset;
+                            let path_str = format!("M {b} {y} L {e} {y}");
+                            let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
+                            let mut path = element::Path::new()
+                                .set("stroke", color)
+                                .set("stroke-width", "8")
+                                .set("opacity", "0.7")
+                                .set("d", path_str);
+                            path.append(element::Title::new().add(node::Text::new(format!(
+                                "{}@{}:{}-{}",
+                                record.q_name, record.t_name, record.ts, record.te
+                            ))));
+                            document.append(path);
+                        });
+                    };
 
                     q_offset += *q_len as f64;
                 };
@@ -383,14 +407,18 @@ fn main() -> Result<(), std::io::Error> {
                 let orientation = if record.orientation == 0 { '+' } else { '-' };
                 path.append(element::Title::new().add(node::Text::new(format!(
                     "{}:{}-{} @ {}:{}-{} {}",
-                    record.t_name, record.ts, record.te,
-                    record.q_name, record.qs, record.qe, 
+                    record.t_name,
+                    record.ts,
+                    record.te,
+                    record.q_name,
+                    record.qs,
+                    record.qe,
                     orientation
                 ))));
 
                 document.append(path);
             });
-            y_offset += 125.0;
+            y_offset += 130.0;
         });
 
     let out_path = path::Path::new(&args.output_path);
