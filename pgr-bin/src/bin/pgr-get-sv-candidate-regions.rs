@@ -48,6 +48,10 @@ struct CmdOptions {
     /// the span of the chain for building the sparse alignment directed acyclic graph
     #[clap(long, default_value_t = 8)]
     max_aln_chain_span: u32,
+
+    /// generate fasta files for the sequence covering the SV candidates
+    #[clap(long, default_value_t = false)]
+    generate_sv_candidate_fasta_file: bool,
 }
 
 type ShimmerMatchBlock = (u32, u32, u32, u32, u32, u32, u32);
@@ -217,6 +221,20 @@ fn main() -> Result<(), std::io::Error> {
     let mut out_ctgsv = BufWriter::new(
         File::create(Path::new(&args.output_prefix).with_extension("ctgsv.bed")).unwrap(),
     );
+    let mut out_sv_qry_seq_file = if args.generate_sv_candidate_fasta_file {
+        Some(BufWriter::new(
+            File::create(Path::new(&args.output_prefix).with_extension("svcnd.q.fasta")).unwrap(),
+        ))
+    } else {
+        None
+    };
+    let mut out_sv_ref_seq_file = if args.generate_sv_candidate_fasta_file {
+        Some(BufWriter::new(
+            File::create(Path::new(&args.output_prefix).with_extension("svcnd.ref.fasta")).unwrap(),
+        ))
+    } else {
+        None
+    };
 
     let mut query_seqs: Vec<SeqRec> = vec![];
     let mut add_seqs = |seq_iter: &mut dyn Iterator<Item = io::Result<SeqRec>>| {
@@ -271,7 +289,7 @@ fn main() -> Result<(), std::io::Error> {
         .collect::<FxHashMap<_, _>>();
 
     let all_records = query_seqs
-        .into_par_iter()
+        .par_iter()
         .enumerate()
         .map(|(q_idx, seq_rec)| {
             // let q_name = String::from_utf8_lossy(&seq_rec.id);
@@ -292,7 +310,7 @@ fn main() -> Result<(), std::io::Error> {
         })
         .flat_map(|(q_idx, seq_rec, query_results)| {
             if let Some(qr) = query_results {
-                let query_seq = seq_rec.seq;
+                let query_seq = &seq_rec.seq;
                 let q_len: usize = query_seq.len();
                 let mut target_id_to_mapped_regions = FxHashMap::default();
                 let mut target_id_to_orientation_len_count = FxHashMap::default();
@@ -691,7 +709,51 @@ fn main() -> Result<(), std::io::Error> {
             );
             let t_name = target_name.get(t_idx).unwrap();
             in_aln_sv_and_bed_records.push((t_name.clone(), ts + 1, te + 1, bed_annotation));
-        },
+            if let Some(out_sv_qry_seq_file) = out_sv_qry_seq_file.as_mut() {
+            writeln!(
+                out_sv_qry_seq_file,
+                ">{}:{}-{}:{}@{}:{}-{}",
+                q_name, qs, qe, orientation, t_name, ts, te
+            )
+            .expect("writing fasta for SV candidate fail");
+            if *orientation == 1 {
+                writeln!(
+                    out_sv_qry_seq_file,
+                    "{}",
+                    String::from_utf8_lossy(&reverse_complement(
+                        &query_seqs[*q_idx as usize].seq[*qs as usize..*qe as usize]
+                    ))
+                )
+                .expect("writing fasta for SV candidate fail");
+            } else {
+                writeln!(
+                    out_sv_qry_seq_file,
+                    "{}",
+                    String::from_utf8_lossy(
+                        &query_seqs[*q_idx as usize].seq[*qs as usize..*qe as usize]
+                    )
+                )
+                .expect("writing fasta for SV candidate fail");
+            };
+        };
+        if let Some(out_sv_ref_seq_file) = out_sv_ref_seq_file.as_mut() {
+            writeln!(
+                out_sv_ref_seq_file,
+                ">{}:{}-{}@{}:{}-{}:{}",
+                t_name, ts, te, q_name, qs, qe, orientation
+            )
+            .expect("writing fasta for SV candidate fail");
+            writeln!(
+                out_sv_ref_seq_file,
+                "{}",
+                String::from_utf8_lossy(
+                    &ref_seq_index_db
+                        .get_sub_seq_by_id(*t_idx, *ts as usize, *te as usize)
+                        .unwrap()[..]
+                )
+            )
+            .expect("writing fasta for SV candidate fail");
+        }}
     );
 
     let mut all_bed_records = Vec::<_>::new();
@@ -942,12 +1004,13 @@ fn main() -> Result<(), std::io::Error> {
         });
 
     writeln!(out_vcf, "##fileformat=VCFv4.2").expect("fail to write the vcf file");
-    ctg_map_set.target_length
-    .into_iter()
-    .for_each(|(_, t_name, t_len)| {
-        writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
-            .expect("fail to write the vcf file");
-    });
+    ctg_map_set
+        .target_length
+        .into_iter()
+        .for_each(|(_, t_name, t_len)| {
+            writeln!(out_vcf, r#"##contig=<ID={},length={}>"#, t_name, t_len)
+                .expect("fail to write the vcf file");
+        });
     writeln!(
         out_vcf,
         r#"##FILTER=<ID=td,Description="variant from duplicated contig alignment on target">"#
