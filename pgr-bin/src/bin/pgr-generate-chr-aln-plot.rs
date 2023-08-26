@@ -35,6 +35,12 @@ struct CtgMapSet {
     query_length: Vec<(u32, String, u32)>,
 }
 
+type CytoRecord = (u32, u32, String, String);
+#[derive(Deserialize)]
+struct CytoBands {
+    cytobands: FxHashMap<String, Vec<CytoRecord>>,
+}
+
 /// generate align block plot from ctgmap.json file
 #[derive(Parser, Debug)]
 #[clap(name = "pgr-generate-chr-aln-plot")]
@@ -46,6 +52,9 @@ struct CmdOptions {
     ctgmap_json_path: String,
     /// the prefix of the output files
     output_prefix: String,
+    /// draw the reference track with cytoband
+    #[clap(long)]
+    cytoband_json: Option<String>,
 }
 
 static CMAP: [&str; 97] = [
@@ -81,6 +90,19 @@ fn main() -> Result<(), std::io::Error> {
     ctgmap_json_file.read_to_end(&mut buffer)?;
     let mut ctgmap_set: CtgMapSet = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
         .expect("can't parse the ctgmap.json file");
+
+    let cytobands = if let Some(cytoband_path) = args.cytoband_json {
+        let mut cytoband_file = BufReader::new(
+            File::open(Path::new(&cytoband_path)).expect("can't open the cytoband json file"),
+        );
+        let mut buffer = Vec::new();
+        cytoband_file.read_to_end(&mut buffer)?;
+        let cytobands: CytoBands = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
+            .expect("can't parse the cytoband json file");
+        Some(cytobands)
+    } else {
+        None
+    };
 
     ctgmap_set.query_length.sort();
     ctgmap_set.target_length.sort();
@@ -284,36 +306,66 @@ fn main() -> Result<(), std::io::Error> {
 
     target_aln_blocks
         .iter()
-        .for_each(|target_aln_block_records| {
+        .for_each(|target_aln_block_record| {
             let t_offset = 0.0;
+            let t_name = target_aln_block_record.1.clone();
+            let t_len = target_aln_block_record.2; 
 
-            let b = t_offset * scaling_factor;
-            let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
-            // let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
             let y = y_offset + 6.0;
-            let path_str = format!("M {b} {y} L {e} {y}");
-            let path = element::Path::new()
-                .set("stroke", "#000")
-                .set("stroke-width", "6")
-                .set("opacity", "0.7")
-                .set("d", path_str);
-            document.append(path);
+            let mut draw_plain_ref_track = || { 
+                let b = t_offset * scaling_factor;
+                let e = (t_offset + t_len as f64) * scaling_factor;
+                // let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
+                let path_str = format!("M {b} {y} L {e} {y}");
+                let path = element::Path::new()
+                    .set("stroke", "#000")
+                    .set("stroke-width", "8")
+                    .set("opacity", "0.7")
+                    .set("d", path_str);
+                document.append(path);};
+
+            if let Some(cytobands) = cytobands.as_ref() {
+                if let Some(cyto_records) = cytobands.cytobands.get(&t_name) {
+                    cyto_records.iter().for_each(|(cs, ce, c_name, band )| {
+                        let b = (t_offset + *cs as f64)  * scaling_factor;
+                        let e = (t_offset + *ce as f64) * scaling_factor;
+                        let color = if band.starts_with("gpos") {
+                            "#000"
+                        } else {
+                            "#AAA"
+                        };
+                        let path_str = format!("M {b} {y} L {e} {y}");
+                        let mut path = element::Path::new()
+                            .set("stroke", color)
+                            .set("stroke-width", "8")
+                            .set("opacity", "0.7")
+                            .set("d", path_str);
+                        path.append(element::Title::new().add(node::Text::new(c_name.clone())));
+                        document.append(path);
+
+                    } )
+                } else {
+                    draw_plain_ref_track()
+                };
+            } else {
+                draw_plain_ref_track()
+            }
 
             let text = element::Text::new()
                 .set("x", 0.0)
                 .set("y", y - 10.0)
                 .set("font-size", "20px")
                 .set("font-family", "monospace")
-                .add(node::Text::new(target_aln_block_records.1.clone()));
+                .add(node::Text::new(target_aln_block_record.1.clone()));
             document.append(text);
             if let Some(tgt_to_alt_qry_records) =
-                tgt_to_alt_qry_records.get(&target_aln_block_records.1)
+                tgt_to_alt_qry_records.get(&target_aln_block_record.1)
             {
                 let t_offset = 0.0;
                 tgt_to_alt_qry_records.iter().for_each(|record| {
                     let b = (t_offset + record.ts as f64) * scaling_factor;
                     let e = (t_offset + record.te as f64) * scaling_factor;
-                    let y = y_offset + 12.0;
+                    let y = y_offset + 14.0;
                     let path_str = format!("M {b} {y} L {e} {y}");
                     let mut path = element::Path::new()
                         .set("stroke", "#000")
@@ -329,7 +381,7 @@ fn main() -> Result<(), std::io::Error> {
             };
 
             let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
-            target_aln_block_records.4.iter().for_each(|record| {
+            target_aln_block_record.4.iter().for_each(|record| {
                 let e = best_query_block
                     .entry(record.q_name.clone())
                     .or_insert(record.clone());
@@ -396,7 +448,7 @@ fn main() -> Result<(), std::io::Error> {
                 };
             });
 
-            target_aln_block_records.4.iter().for_each(|record| {
+            target_aln_block_record.4.iter().for_each(|record| {
                 if record.t_dup {
                     return;
                 };
@@ -430,8 +482,8 @@ fn main() -> Result<(), std::io::Error> {
                 // println!("{} {} {} {}", ts, te, qs, qe);
 
                 let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
-                let y = 10.0 + y_offset;
-                let y2 = 90.0 + y_offset;
+                let y = 14.0 + y_offset;
+                let y2 = 88.0 + y_offset;
                 let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2} Z");
                 let mut path = element::Path::new()
                     .set("fill", color)
