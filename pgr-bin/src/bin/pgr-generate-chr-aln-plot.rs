@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{self, Path};
 use svg::node::{self, element, Node};
 use svg::Document;
@@ -45,7 +45,7 @@ struct CmdOptions {
     /// path to a ctgmap.json file
     ctgmap_json_path: String,
     /// the prefix of the output files
-    output_path: String,
+    output_prefix: String,
 }
 
 static CMAP: [&str; 97] = [
@@ -116,13 +116,16 @@ fn main() -> Result<(), std::io::Error> {
     });
 
     let mut tgt_to_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
-    let mut ctg_to_alt_tgt_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
+    let mut qry_to_alt_tgt_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
+    let mut tgt_to_alt_qry_records = FxHashMap::<String, Vec<CtgMapRec>>::default();
     ctgmap_set.records.iter().for_each(|r| {
         if r.q_dup {
             return;
         };
         if *ctg2tgt.get(&r.q_name).unwrap() != r.t_name {
-            let e = ctg_to_alt_tgt_records.entry(r.q_name.clone()).or_default();
+            let e = qry_to_alt_tgt_records.entry(r.q_name.clone()).or_default();
+            e.push((*r).clone());
+            let e = tgt_to_alt_qry_records.entry(r.t_name.clone()).or_default();
             e.push((*r).clone());
             return;
         }
@@ -264,7 +267,7 @@ fn main() -> Result<(), std::io::Error> {
 
                 let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
 
-                let path_str = format!("M {ts} 10 L {te} 10 L {qe} 90 L {qs} 90");
+                let path_str = format!("M {ts} 10 L {te} 10 L {qe} 90 L {qs} 90 Z");
                 let path = element::Path::new()
                     .set("fill", color)
                     .set("stroke", "#000")
@@ -286,12 +289,12 @@ fn main() -> Result<(), std::io::Error> {
 
             let b = t_offset * scaling_factor;
             let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
-            let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
+            // let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
             let y = y_offset + 6.0;
             let path_str = format!("M {b} {y} L {e} {y}");
             let path = element::Path::new()
                 .set("stroke", "#000")
-                .set("stroke-width", format!("{w}"))
+                .set("stroke-width", "6")
                 .set("opacity", "0.7")
                 .set("d", path_str);
             document.append(path);
@@ -303,6 +306,27 @@ fn main() -> Result<(), std::io::Error> {
                 .set("font-family", "monospace")
                 .add(node::Text::new(target_aln_block_records.1.clone()));
             document.append(text);
+            if let Some(tgt_to_alt_qry_records) =
+                tgt_to_alt_qry_records.get(&target_aln_block_records.1)
+            {
+                let t_offset = 0.0;
+                tgt_to_alt_qry_records.iter().for_each(|record| {
+                    let b = (t_offset + record.ts as f64) * scaling_factor;
+                    let e = (t_offset + record.te as f64) * scaling_factor;
+                    let y = y_offset + 12.0;
+                    let path_str = format!("M {b} {y} L {e} {y}");
+                    let mut path = element::Path::new()
+                        .set("stroke", "#000")
+                        .set("stroke-width", "8")
+                        .set("opacity", "0.7")
+                        .set("d", path_str);
+                    path.append(element::Title::new().add(node::Text::new(format!(
+                        "{}@{}:{}-{}",
+                        record.t_name, record.q_name, record.qs, record.qe
+                    ))));
+                    document.append(path);
+                })
+            };
 
             let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
             target_aln_block_records.4.iter().for_each(|record| {
@@ -336,9 +360,9 @@ fn main() -> Result<(), std::io::Error> {
                     path.append(element::Title::new().add(node::Text::new(record.q_name.clone())));
                     document.append(path);
 
-                    if let Some(ctg_to_alt_tgt_records) = ctg_to_alt_tgt_records.get(&record.q_name)
+                    if let Some(qry_to_alt_tgt_records) = qry_to_alt_tgt_records.get(&record.q_name)
                     {
-                        ctg_to_alt_tgt_records.iter().for_each(|record| {
+                        qry_to_alt_tgt_records.iter().for_each(|record| {
                             let b = (t_offset + q_offset + record.qs as f64) * scaling_factor;
                             let e = (t_offset + q_offset + record.qe as f64) * scaling_factor;
                             let y = 105.0 + y_offset;
@@ -397,7 +421,7 @@ fn main() -> Result<(), std::io::Error> {
                 let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                 let y = 10.0 + y_offset;
                 let y2 = 90.0 + y_offset;
-                let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2}");
+                let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2} Z");
                 let mut path = element::Path::new()
                     .set("fill", color)
                     .set("stroke", "#000")
@@ -421,8 +445,21 @@ fn main() -> Result<(), std::io::Error> {
             y_offset += 130.0;
         });
 
-    let out_path = path::Path::new(&args.output_path);
-    svg::save(out_path, &document).unwrap();
+    let mut out_file = BufWriter::new(
+        File::create(path::Path::new(&args.output_prefix).with_extension("html"))
+            .expect("can't create the HTML output file"),
+    );
+    //svg::save(out_path, &document).unwrap();
+    writeln!(out_file, "<html><body>").expect("can't write the output html file");
+    let mut svg_elment = BufWriter::new(Vec::new());
+    svg::write(&mut svg_elment, &document).unwrap();
+    writeln!(
+        out_file,
+        "{}",
+        String::from_utf8_lossy(&svg_elment.into_inner().unwrap())
+    )
+    .expect("can't write the output html file");
 
+    writeln!(out_file, "</body></html>").expect("can't write the output html file");
     Ok(())
 }
