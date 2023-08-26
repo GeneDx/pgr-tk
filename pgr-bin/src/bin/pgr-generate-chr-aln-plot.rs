@@ -345,6 +345,7 @@ fn main() -> Result<(), std::io::Error> {
             best_query_block.into_iter().for_each(|record| {
                 let q_len = query_length.get(&record.q_name).unwrap();
                 if !q_offset_map.contains_key(&record.q_name) {
+                    let ctg_aln_orientation = record.ctg_orientation;
                     q_offset_map.insert(record.q_name.clone(), q_offset);
 
                     let b = (t_offset + q_offset) * scaling_factor;
@@ -363,12 +364,12 @@ fn main() -> Result<(), std::io::Error> {
                     if let Some(qry_to_alt_tgt_records) = qry_to_alt_tgt_records.get(&record.q_name)
                     {
                         qry_to_alt_tgt_records.iter().for_each(|record| {
-                            let qe = if record.ctg_orientation == 0 {
+                            let qe = if ctg_aln_orientation == 0 {
                                 record.qs
                             } else {
                                 q_len - record.qs
                             };
-                            let qs = if record.ctg_orientation == 0 {
+                            let qs = if ctg_aln_orientation == 0 {
                                 record.qe
                             } else {
                                 q_len - record.qe
