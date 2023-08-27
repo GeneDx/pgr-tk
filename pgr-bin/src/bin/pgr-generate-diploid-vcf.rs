@@ -18,7 +18,7 @@ struct CmdOptions {
     /// path to the second haplotype alnmap file
     hap1_path: String,
     /// path to a ctgmap.json file
-    ctgmap_json_path: String,
+    target_len_json_path: String,
     /// the prefix of the output files
     output_path: String,
     /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
@@ -40,14 +40,14 @@ fn main() -> Result<(), std::io::Error> {
         .build_global()
         .unwrap();
 
-    let mut ctgmap_json_file = BufReader::new(
-        File::open(Path::new(&args.ctgmap_json_path)).expect("can't open the input file"),
+    let mut target_length_json_file = BufReader::new(
+        File::open(Path::new(&args.target_len_json_path)).expect("can't open the input file"),
     );
     let mut buffer = Vec::new();
-    ctgmap_json_file.read_to_end(&mut buffer)?;
+    target_length_json_file.read_to_end(&mut buffer)?;
     let mut target_length: TargetSeqLength =
         serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
-            .expect("can't parse the ctgmap.json file");
+            .expect("can't parse the target_len.json file");
 
     target_length.sort();
 
