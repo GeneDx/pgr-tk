@@ -21,6 +21,9 @@ struct CmdOptions {
     target_len_json_path: String,
     /// the prefix of the output files
     output_path: String,
+    /// the prefix of the output files
+    #[clap(long, default_value = "Sample")]
+    sample_name: String,
     /// number of threads used in parallel (more memory usage), default to "0" using all CPUs available or the number set by RAYON_NUM_THREADS
     #[clap(long, default_value_t = 0)]
     number_of_thread: usize,
@@ -171,9 +174,10 @@ fn main() -> Result<(), std::io::Error> {
         r#"##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">"#
     )
     .expect("fail to write the vcf file");
+    
     writeln!(
         out_vcf,
-        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tSAMPLE"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{}", args.sample_name
     )
     .expect("fail to write the vcf file");
 
