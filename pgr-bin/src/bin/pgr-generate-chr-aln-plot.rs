@@ -425,9 +425,11 @@ fn main() -> Result<(), std::io::Error> {
                         .set("stroke-width", "8")
                         .set("opacity", "0.7")
                         .set("d", path_str);
+                    let na = "N/A".to_string(); 
+                    let q_tgt = ctg2tgt.get(&record.q_name).unwrap_or(&na);
                     path.append(element::Title::new().add(node::Text::new(format!(
-                        "{}@{}:{}-{}",
-                        record.t_name, record.q_name, record.qs, record.qe
+                        "{} to {} with {}:{}-{}",
+                        record.t_name, q_tgt, record.q_name, record.qs, record.qe
                     ))));
                     document.append(path);
                 })
