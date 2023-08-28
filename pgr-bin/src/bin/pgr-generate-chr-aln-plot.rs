@@ -276,7 +276,8 @@ fn main() -> Result<(), std::io::Error> {
                 let path = element::Path::new()
                     .set("stroke", "#000")
                     .set("stroke-width", format!("{w}"))
-                    .set("opacity", "0.7")
+                    .set("opacity", 0.7)
+                    .set("stroke-opacity", 0.7)
                     .set("d", path_str);
                 document.append(path);
 
@@ -297,7 +298,8 @@ fn main() -> Result<(), std::io::Error> {
                             let path = element::Path::new()
                                 .set("stroke", "#F00")
                                 .set("stroke-width", 6)
-                                .set("opacity", "0.7")
+                                .set("opacity", 0.7)
+                                .set("stroke-opacity", 0.7)
                                 .set("d", path_str);
                             document.append(path);
                         });
@@ -333,7 +335,8 @@ fn main() -> Result<(), std::io::Error> {
                         let path = element::Path::new()
                             .set("stroke", color)
                             .set("stroke-width", "5")
-                            .set("opacity", "0.7")
+                            .set("opacity", 0.7)
+                            .set("stroke-opacity", 0.7)
                             .set("d", path_str);
                         document.append(path);
 
@@ -342,7 +345,7 @@ fn main() -> Result<(), std::io::Error> {
                 });
 
                 target_aln_block_records.4.iter().for_each(|record| {
-                    if record.t_dup {
+                    if record.t_dup && record.q_dup {
                         return;
                     };
 
@@ -380,8 +383,9 @@ fn main() -> Result<(), std::io::Error> {
                     let path = element::Path::new()
                         .set("fill", color)
                         .set("stroke", "#000")
-                        .set("stroke-width", "0.5")
-                        .set("opacity", "0.7")
+                        .set("stroke-width", 0.25)
+                        .set("opacity", 0.7)
+                        .set("stroke-opacity", 0.4)
                         .set("d", path_str);
                     document.append(path);
                 });
@@ -425,8 +429,9 @@ fn main() -> Result<(), std::io::Error> {
                 let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                 let path = element::Path::new()
                     .set("stroke", "#000")
-                    .set("stroke-width", "8")
-                    .set("opacity", "0.7")
+                    .set("stroke-width", 8)
+                    .set("opacity", 0.7)
+                    .set("stroke-opacity",0.7)
                     .set("d", path_str);
                 document.append(path);
             };
@@ -447,8 +452,9 @@ fn main() -> Result<(), std::io::Error> {
                         let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                         let mut path = element::Path::new()
                             .set("stroke", color)
-                            .set("stroke-width", "8")
-                            .set("opacity", "0.7")
+                            .set("stroke-width", 8)
+                            .set("opacity", 0.7)
+                            .set("stroke-opacity", 0.7)
                             .set("d", path_str);
                         path.append(element::Title::new().add(node::Text::new(c_name.clone())));
                         document.append(path);
@@ -470,7 +476,8 @@ fn main() -> Result<(), std::io::Error> {
                         let mut path = element::Path::new()
                             .set("stroke", "#F00")
                             .set("stroke-width", 6)
-                            .set("opacity", "0.7")
+                            .set("opacity", 0.7)
+                            .set("stroke-opacity", 0.7)
                             .set("d", path_str);
                         path.append(element::Title::new().add(node::Text::new(format!("{}-{}", bgn, end))));
                         document.append(path);
@@ -496,8 +503,9 @@ fn main() -> Result<(), std::io::Error> {
                     let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                     let mut path = element::Path::new()
                         .set("stroke", "#000")
-                        .set("stroke-width", "8")
-                        .set("opacity", "0.7")
+                        .set("stroke-width", 8)
+                        .set("opacity", 0.7)
+                        .set("stroke-opacity", 0.7)
                         .set("d", path_str);
                     let na = "N/A".to_string();
                     let q_tgt = ctg2tgt.get(&record.q_name).unwrap_or(&na);
@@ -536,8 +544,9 @@ fn main() -> Result<(), std::io::Error> {
                     let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                     let mut path = element::Path::new()
                         .set("stroke", color)
-                        .set("stroke-width", "8")
-                        .set("opacity", "0.7")
+                        .set("stroke-width", 8)
+                        .set("opacity", 0.7)
+                        .set("stroke-opacity", 0.7)
                         .set("d", path_str);
                     path.append(element::Title::new().add(node::Text::new(record.q_name.clone())));
                     document.append(path);
@@ -562,8 +571,9 @@ fn main() -> Result<(), std::io::Error> {
                             let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                             let mut path = element::Path::new()
                                 .set("stroke", color)
-                                .set("stroke-width", "8")
-                                .set("opacity", "0.7")
+                                .set("stroke-width", 8)
+                                .set("opacity", 0.7)
+                                .set("stroke-opacity", 0.7)
                                 .set("d", path_str);
                             path.append(element::Title::new().add(node::Text::new(format!(
                                 "{}@{}:{}-{}",
@@ -578,7 +588,7 @@ fn main() -> Result<(), std::io::Error> {
             });
 
             target_aln_block_record.4.iter().for_each(|record| {
-                if record.t_dup {
+                if record.t_dup && record.q_dup {
                     return;
                 };
 
@@ -617,19 +627,24 @@ fn main() -> Result<(), std::io::Error> {
                 let mut path = element::Path::new()
                     .set("fill", color)
                     .set("stroke", "#000")
-                    .set("stroke-width", "0.5")
+                    .set("stroke-width", "0.25")
                     .set("opacity", "0.7")
+                    .set("stroke-opacity", "0.4")
                     .set("d", path_str);
                 let orientation = if record.orientation == 0 { '+' } else { '-' };
+                let t_dup_mark = if record.t_dup {1} else {0}; 
+                let q_dup_mark = if record.q_dup {1} else {0}; 
                 path.append(element::Title::new().add(node::Text::new(format!(
-                    "{}:{}-{} @ {}:{}-{} {}",
+                    "{}:{}-{} @ {}:{}-{} {}:{}:{}",
                     record.t_name,
                     record.ts,
                     record.te,
                     record.q_name,
                     record.qs,
                     record.qe,
-                    orientation
+                    orientation,
+                    t_dup_mark,
+                    q_dup_mark
                 ))));
 
                 document.append(path);
