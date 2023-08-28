@@ -5,7 +5,7 @@ use serde::Deserialize;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::{self, Path};
 use svg::node::{self, element, Node};
 use svg::Document;
@@ -50,25 +50,30 @@ struct CytoBands {
 struct CmdOptions {
     /// path to a ctgmap.json file
     ctgmap_json_path: String,
-    
+
     /// the prefix of the output files
     output_prefix: String,
-    
+
     /// if given, we will use this to determine the plot scale, this is useful for generate many plot in the same scale
     #[clap(long)]
     total_target_bases: Option<f64>,
-    
+
     /// set the panel width
-    #[clap(long, default_value_t=1400.0)]
+    #[clap(long, default_value_t = 1400.0)]
     panel_width: f64,
-    
+
     /// draw the reference track with cytoband
     #[clap(long)]
     cytoband_json: Option<String>,
-    
+
     /// if given, we will only generate plot for the specified contig in the reference
     #[clap(long)]
     ctg: Option<String>,
+
+    /// if given, it will highlight regions specified by the bed file in the reference(target) track
+    #[clap(long)]
+    ref_annotation_bed: Option<String>,
+
     /// generate SVG instead of HTML
     #[clap(long)]
     svg: bool,
@@ -103,6 +108,7 @@ fn main() -> Result<(), std::io::Error> {
     let mut ctgmap_json_file = BufReader::new(
         File::open(Path::new(&args.ctgmap_json_path)).expect("can't open the input file"),
     );
+
     let mut buffer = Vec::new();
     ctgmap_json_file.read_to_end(&mut buffer)?;
     let mut ctgmap_set: CtgMapSet = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
@@ -117,6 +123,31 @@ fn main() -> Result<(), std::io::Error> {
         let cytobands: CytoBands = serde_json::from_str(&String::from_utf8_lossy(&buffer[..]))
             .expect("can't parse the cytoband json file");
         Some(cytobands)
+    } else {
+        None
+    };
+
+    let ref_highlight = if let Some(ref_annotation_bed) = args.ref_annotation_bed {
+        let bed_file_path = path::Path::new(&ref_annotation_bed);
+        let bed_file = BufReader::new(File::open(bed_file_path).expect("can't open the bed file"));
+        let mut ref_highlight = FxHashMap::<String, Vec<(u32, u32)>>::default();
+        let bed_file_parse_err_msg = "bed file parsing error";
+        bed_file.lines().for_each(|line| {
+            let line = line.unwrap().trim().to_string();
+            if line.is_empty() {
+                return;
+            }
+            if &line[0..1] == "#" {
+                return;
+            }
+            let bed_fields = line.split('\t').collect::<Vec<&str>>();
+            let ctg: String = bed_fields[0].to_string();
+            let bgn: u32 = bed_fields[1].parse().expect(bed_file_parse_err_msg);
+            let end: u32 = bed_fields[2].parse().expect(bed_file_parse_err_msg);
+            let e = ref_highlight.entry(ctg).or_insert_with(Vec::new);
+            e.push((bgn, end));
+        });
+        Some(ref_highlight)
     } else {
         None
     };
@@ -211,16 +242,24 @@ fn main() -> Result<(), std::io::Error> {
 
     // start to construct the SVG element
     let mut document = Document::new()
-        .set("viewBox", (-args.panel_width*0.05, -50, args.panel_width*0.95, svg_box_height))
+        .set(
+            "viewBox",
+            (
+                -args.panel_width * 0.05,
+                -50,
+                args.panel_width * 0.95,
+                svg_box_height,
+            ),
+        )
         .set("width", args.panel_width)
         .set("height", svg_box_height)
         .set("preserveAspectRatio", "none")
         .set("id", "WholeGenomeViwer");
 
     let scaling_factor = if let Some(total_target_bases) = args.total_target_bases {
-        args.panel_width*0.8 / total_target_bases
+        args.panel_width * 0.8 / total_target_bases
     } else {
-        args.panel_width*0.8 / offset
+        args.panel_width * 0.8 / offset
     };
 
     let mut plot_overview = || {
@@ -228,11 +267,12 @@ fn main() -> Result<(), std::io::Error> {
             .iter()
             .for_each(|target_aln_block_records| {
                 let t_offset = target_aln_block_records.3;
+                let t_name = target_aln_block_records.1.clone();
 
                 let b = t_offset * scaling_factor;
                 let e = (t_offset + target_aln_block_records.2 as f64) * scaling_factor;
                 let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
-                let path_str = format!("M {b} 6 L {e} 6");
+                let path_str = format!("M {b:0.4} 6 L {e:0.4} 6");
                 let path = element::Path::new()
                     .set("stroke", "#000")
                     .set("stroke-width", format!("{w}"))
@@ -247,6 +287,22 @@ fn main() -> Result<(), std::io::Error> {
                     .set("font-family", "monospace")
                     .add(node::Text::new(target_aln_block_records.1.clone()));
                 document.append(text);
+
+                if let Some(ref_highlight) = &ref_highlight {
+                    if let Some(regions) = ref_highlight.get(&t_name) {
+                        regions.iter().for_each(|(bgn, end)| {
+                            let b = (t_offset + *bgn as f64) * scaling_factor;
+                            let e = (t_offset + *end as f64) * scaling_factor;
+                            let path_str = format!("M {b:0.4} 3 L {e:0.4} 3");
+                            let path = element::Path::new()
+                                .set("stroke", "#F00")
+                                .set("stroke-width", 6)
+                                .set("opacity", "0.7")
+                                .set("d", path_str);
+                            document.append(path);
+                        });
+                    }
+                };
 
                 let mut best_query_block = FxHashMap::<String, CtgMapRec>::default();
                 target_aln_block_records.4.iter().for_each(|record| {
@@ -272,7 +328,7 @@ fn main() -> Result<(), std::io::Error> {
                         let b = (t_offset + q_offset) * scaling_factor;
                         let e = (t_offset + q_offset + *q_len as f64) * scaling_factor;
                         let y = 95.0;
-                        let path_str = format!("M {b} {y} L {e} {y}");
+                        let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                         let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                         let path = element::Path::new()
                             .set("stroke", color)
@@ -320,7 +376,7 @@ fn main() -> Result<(), std::io::Error> {
 
                     let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
 
-                    let path_str = format!("M {ts} 10 L {te} 10 L {qe} 90 L {qs} 90 Z");
+                    let path_str = format!("M {ts:0.4} 10 L {te:0.4} 10 L {qe:0.4} 90 L {qs:0.4} 90 Z");
                     let path = element::Path::new()
                         .set("fill", color)
                         .set("stroke", "#000")
@@ -366,7 +422,7 @@ fn main() -> Result<(), std::io::Error> {
                 let b = t_offset * scaling_factor;
                 let e = (t_offset + t_len as f64) * scaling_factor;
                 // let w = 4.0 + ((target_aln_block_records.0 + 1) % 2) as f64 * 1.5;
-                let path_str = format!("M {b} {y} L {e} {y}");
+                let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                 let path = element::Path::new()
                     .set("stroke", "#000")
                     .set("stroke-width", "8")
@@ -388,7 +444,7 @@ fn main() -> Result<(), std::io::Error> {
                         if band == "acen" {
                             color = "#FF0";
                         };
-                        let path_str = format!("M {b} {y} L {e} {y}");
+                        let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                         let mut path = element::Path::new()
                             .set("stroke", color)
                             .set("stroke-width", "8")
@@ -403,6 +459,24 @@ fn main() -> Result<(), std::io::Error> {
             } else {
                 draw_plain_ref_track()
             }
+
+            if let Some(ref_highlight) = ref_highlight.as_ref() {
+                if let Some(regions) = ref_highlight.get(&t_name) {
+                    let y2 = y - 8.0;
+                    regions.iter().for_each(|(bgn, end)| {
+                        let b = (t_offset + *bgn as f64) * scaling_factor;
+                        let e = (t_offset + *end as f64) * scaling_factor;
+                        let path_str = format!("M {b:0.4} {y2:0.4} L {e:0.4} {y2:0.4}");
+                        let mut path = element::Path::new()
+                            .set("stroke", "#F00")
+                            .set("stroke-width", 6)
+                            .set("opacity", "0.7")
+                            .set("d", path_str);
+                        path.append(element::Title::new().add(node::Text::new(format!("{}-{}", bgn, end))));
+                        document.append(path);
+                    });
+                }
+            };
 
             let text = element::Text::new()
                 .set("x", 0.0)
@@ -419,13 +493,13 @@ fn main() -> Result<(), std::io::Error> {
                     let b = (t_offset + record.ts as f64) * scaling_factor;
                     let e = (t_offset + record.te as f64) * scaling_factor;
                     let y = y_offset + 14.0;
-                    let path_str = format!("M {b} {y} L {e} {y}");
+                    let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                     let mut path = element::Path::new()
                         .set("stroke", "#000")
                         .set("stroke-width", "8")
                         .set("opacity", "0.7")
                         .set("d", path_str);
-                    let na = "N/A".to_string(); 
+                    let na = "N/A".to_string();
                     let q_tgt = ctg2tgt.get(&record.q_name).unwrap_or(&na);
                     path.append(element::Title::new().add(node::Text::new(format!(
                         "{} to {} with {}:{}-{}",
@@ -458,7 +532,7 @@ fn main() -> Result<(), std::io::Error> {
                     let b = (t_offset + q_offset) * scaling_factor;
                     let e = (t_offset + q_offset + *q_len as f64) * scaling_factor;
                     let y = 95.0 + y_offset;
-                    let path_str = format!("M {b} {y} L {e} {y}");
+                    let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                     let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                     let mut path = element::Path::new()
                         .set("stroke", color)
@@ -484,7 +558,7 @@ fn main() -> Result<(), std::io::Error> {
                             let b = (t_offset + q_offset + qs as f64) * scaling_factor;
                             let e = (t_offset + q_offset + qe as f64) * scaling_factor;
                             let y = 105.0 + y_offset;
-                            let path_str = format!("M {b} {y} L {e} {y}");
+                            let path_str = format!("M {b:0.4} {y:0.4} L {e:0.4} {y:0.4}");
                             let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                             let mut path = element::Path::new()
                                 .set("stroke", color)
@@ -539,7 +613,7 @@ fn main() -> Result<(), std::io::Error> {
                 let color = CMAP[(calculate_hash(&record.q_name) % 97) as usize];
                 let y = 14.0 + y_offset;
                 let y2 = 88.0 + y_offset;
-                let path_str = format!("M {ts} {y} L {te} {y} L {qe} {y2} L {qs} {y2} Z");
+                let path_str = format!("M {ts:0.4} {y:0.4} L {te:0.4} {y:0.4} L {qe:0.4} {y2:0.4} L {qs:0.4} {y2:0.4} Z");
                 let mut path = element::Path::new()
                     .set("fill", color)
                     .set("stroke", "#000")
