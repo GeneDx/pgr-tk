@@ -148,6 +148,8 @@ fn main() -> Result<(), std::io::Error> {
                     Some(args.max_query_count),
                     Some(args.max_target_count),
                     Some(args.max_aln_chain_span),
+                    None,
+                    false
                 )
             } else {
                 seq_index_db.query_fragment_to_hps(
@@ -157,6 +159,8 @@ fn main() -> Result<(), std::io::Error> {
                     Some(args.max_query_count),
                     Some(args.max_target_count),
                     Some(args.max_aln_chain_span),
+                    None,
+                    false
                 )
             };
 
@@ -354,7 +358,7 @@ fn main() -> Result<(), std::io::Error> {
                             let base = Path::new(&src).file_stem().unwrap().to_string_lossy();
                             let target_seq_name =
                                 format!("{}::{}_{}_{}_{}", base, ctg, b, e, orientation);
-
+                            #[allow(clippy::write_literal)]
                             if args.bed_summary {
                                 writeln!(
                                     hit_file,

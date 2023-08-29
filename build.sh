@@ -1,9 +1,3 @@
-#pushd WFA2-lib
-#make all
-#popd
-
-
-
 rustup default stable
 
 ## if necessary, you can instal libclang / clang using Anaconda 

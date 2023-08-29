@@ -7,6 +7,7 @@ use std::io::{self, BufReader, BufWriter, Read, Write};
 
 use flate2::bufread::MultiGzDecoder;
 use pgr_db::fasta_io::{FastaReader, SeqRec};
+#[allow(clippy::large_enum_variant)]
 enum GZFastaReader {
     GZFile(FastaReader<BufReader<MultiGzDecoder<BufReader<File>>>>),
     RegularFile(FastaReader<BufReader<BufReader<File>>>),

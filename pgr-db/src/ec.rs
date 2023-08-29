@@ -540,6 +540,8 @@ pub fn shmmr_sparse_aln_consensus_with_sdb(
             Some(32),
             Some(32),
             Some(33),
+            None,
+            true
         );
 
         let mut hit_map = FxHashMap::<(u32, u32, u8), Vec<(u32, (u32, u32, u8))>>::default();
